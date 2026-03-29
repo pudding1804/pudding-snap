@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { convertFileSrc } from '@tauri-apps/api/core'
@@ -89,8 +89,24 @@ function App() {
   const [logs, setLogs] = useState(['应用启动...'])
   const [noteText, setNoteText] = useState('')
   const [currentTheme, setCurrentTheme] = useState('night')
+  
+  // 分页相关状态
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  
+  // 多选删除相关状态
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
+  const [selectedScreenshots, setSelectedScreenshots] = useState([])
+  
+  // 文件夹相关状态
+  const [storagePath, setStoragePath] = useState('')
+  const [isMigrating, setIsMigrating] = useState(false)
+  const [migrationProgress, setMigrationProgress] = useState(0)
 
   const theme = themes[currentTheme].colors
+  const gridRef = useRef(null)
 
   const addLog = (msg) => {
     const time = new Date().toLocaleTimeString()
@@ -109,19 +125,26 @@ function App() {
     }
   }
 
+  const loadStoragePath = async () => {
+    try {
+      const path = await invoke('get_storage_path')
+      setStoragePath(path || '程序目录/screenshot-data/')
+    } catch (e) {
+      addLog(`获取存储路径失败: ${e}`)
+    }
+  }
+
   useEffect(() => {
     addLog('useEffect 初始化')
     
     const loadData = async () => {
       addLog('开始加载数据')
       try {
-        addLog('调用 get_screenshots')
-        const ssData = await invoke('get_screenshots', { gameId: null, sortOrder: 'desc' })
-        addLog(`截图数据: ${ssData ? ssData.length : 0} 条`)
-        setScreenshots(ssData || [])
+        await loadStoragePath()
+        await loadScreenshotsWithPagination(1, null)
       } catch (e) {
-        addLog(`截图加载失败: ${e}`)
-        setError('加载截图失败: ' + String(e))
+        addLog(`数据加载失败: ${e}`)
+        setError('加载数据失败: ' + String(e))
       }
       
       await loadGames()
@@ -134,7 +157,7 @@ function App() {
 
     const unlisten = listen('screenshot-taken', () => {
       addLog('收到截图事件，重新加载数据')
-      loadData()
+      loadScreenshotsWithPagination(1, selectedGame?.game_id || null)
     })
 
     const unlistenTray = listen('tray-click', async () => {
@@ -166,40 +189,76 @@ function App() {
     }
   }, [])
 
-  const loadScreenshots = async (gameId = null) => {
+  const loadScreenshotsWithPagination = async (page, gameId = null) => {
     setIsLoading(true)
     try {
-      const data = await invoke('get_screenshots', { gameId, sortOrder })
-      setScreenshots(data || [])
+      addLog(`调用 get_screenshots_with_pagination, 页码: ${page}, 游戏ID: ${gameId || 'null'}`)
+      const data = await invoke('get_screenshots_with_pagination', {
+        gameId,
+        sortOrder,
+        page,
+        pageSize
+      })
+      addLog(`截图数据: ${data.screenshots ? data.screenshots.length : 0} 条, 总页数: ${data.total_pages}`)
+      setScreenshots(data.screenshots || [])
+      setCurrentPage(page)
+      setTotalPages(data.total_pages || 1)
     } catch (e) {
+      addLog(`截图加载失败: ${e}`)
       setError('加载截图失败: ' + String(e))
     }
     setIsLoading(false)
   }
 
+  const loadMoreScreenshots = async () => {
+    if (isLoadingMore || currentPage >= totalPages) return
+    
+    setIsLoadingMore(true)
+    try {
+      addLog(`加载更多截图，页码: ${currentPage + 1}`)
+      const data = await invoke('get_screenshots_with_pagination', {
+        gameId: selectedGame?.game_id || null,
+        sortOrder,
+        page: currentPage + 1,
+        pageSize
+      })
+      setScreenshots(prev => [...prev, ...(data.screenshots || [])])
+      setCurrentPage(currentPage + 1)
+    } catch (e) {
+      addLog(`加载更多截图失败: ${e}`)
+    }
+    setIsLoadingMore(false)
+  }
+
   const toggleSort = async () => {
     const newOrder = sortOrder === 'desc' ? 'asc' : 'desc'
     setSortOrder(newOrder)
-    await loadScreenshots(selectedGame?.game_id || null)
+    await loadScreenshotsWithPagination(1, selectedGame?.game_id || null)
   }
 
   const selectGame = async (game) => {
     setSelectedGame(game)
     setCurrentView('game-detail')
-    await loadScreenshots(game.game_id)
+    await loadScreenshotsWithPagination(1, game.game_id)
   }
 
   const backToGames = async () => {
     setSelectedGame(null)
     setCurrentView('games')
     await loadGames()
-    loadScreenshots(null)
+    await loadScreenshotsWithPagination(1, null)
   }
 
   const switchToGames = async () => {
     setCurrentView('games')
     setSelectedGame(null)
     await loadGames()
+  }
+
+  const switchToTimeView = async () => {
+    setCurrentView('time')
+    setSelectedGame(null)
+    await loadScreenshotsWithPagination(1, null)
   }
 
   const formatDate = (timestamp) => {
@@ -211,8 +270,7 @@ function App() {
     try {
       await invoke('update_note', { id, note })
       addLog(`附注保存成功: ID=${id}`)
-      const data = await invoke('get_screenshots', { gameId: selectedGame?.game_id || null, sortOrder })
-      setScreenshots(data || [])
+      await loadScreenshotsWithPagination(currentPage, selectedGame?.game_id || null)
       setNotification({ title: '保存成功', body: '附注已保存' })
       setTimeout(() => setNotification(null), 2000)
     } catch (e) {
@@ -226,12 +284,70 @@ function App() {
     try {
       await invoke('delete_screenshot', { id })
       addLog(`截图删除成功: ID=${id}`)
-      const data = await invoke('get_screenshots', { gameId: selectedGame?.game_id || null, sortOrder })
-      setScreenshots(data || [])
+      await loadScreenshotsWithPagination(currentPage, selectedGame?.game_id || null)
       setSelectedScreenshot(null)
     } catch (e) {
       addLog(`截图删除失败: ${e}`)
       setError('删除截图失败: ' + String(e))
+    }
+  }
+
+  const deleteSelectedScreenshots = async () => {
+    if (selectedScreenshots.length === 0) return
+    
+    if (!confirm(`确定要删除 ${selectedScreenshots.length} 张截图吗？`)) return
+    
+    try {
+      await invoke('delete_screenshots', { ids: selectedScreenshots })
+      addLog(`批量删除成功: ${selectedScreenshots.length} 张`)
+      await loadScreenshotsWithPagination(currentPage, selectedGame?.game_id || null)
+      setIsMultiSelectMode(false)
+      setSelectedScreenshots([])
+      setNotification({ title: '删除成功', body: `已删除 ${selectedScreenshots.length} 张截图` })
+      setTimeout(() => setNotification(null), 2000)
+    } catch (e) {
+      addLog(`批量删除失败: ${e}`)
+      setError('批量删除失败: ' + String(e))
+    }
+  }
+
+  const toggleSelectScreenshot = (id) => {
+    setSelectedScreenshots(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(sid => sid !== id)
+      } else {
+        return [...prev, id]
+      }
+    })
+  }
+
+  const changeStoragePath = async () => {
+    try {
+      // 使用简单的 prompt 暂时替代 dialog
+      const newPath = prompt('请输入新的存储目录路径:');
+      
+      if (newPath) {
+        setIsMigrating(true)
+        setMigrationProgress(0)
+        
+        addLog(`开始迁移数据到: ${newPath}`)
+        const result = await invoke('migrate_data', { newPath })
+        
+        if (result.success) {
+          setStoragePath(newPath)
+          setNotification({ title: '迁移成功', body: '数据已成功迁移到新目录' })
+          await loadScreenshotsWithPagination(1, selectedGame?.game_id || null)
+          await loadGames()
+        } else {
+          setError('迁移失败: ' + (result.error || '未知错误'))
+        }
+      }
+    } catch (e) {
+      addLog(`更改存储路径失败: ${e}`)
+      setError('更改存储路径失败: ' + String(e))
+    } finally {
+      setIsMigrating(false)
+      setMigrationProgress(0)
     }
   }
 
@@ -241,6 +357,17 @@ function App() {
     } catch (e) {
       addLog(`图片路径转换失败: ${e}`)
       return ''
+    }
+  }
+
+  const handleScroll = () => {
+    if (!gridRef.current) return
+    
+    const { scrollTop, scrollHeight, clientHeight } = gridRef.current
+    const threshold = 100
+    
+    if (scrollHeight - scrollTop - clientHeight < threshold && !isLoadingMore && currentPage < totalPages) {
+      loadMoreScreenshots()
     }
   }
 
@@ -256,14 +383,16 @@ function App() {
     btn: { padding: '8px 16px', background: theme.accent, border: 'none', borderRadius: 6, color: theme.text, cursor: 'pointer' },
     btnPrimary: { padding: '8px 16px', background: theme.primary, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontWeight: 'bold' },
     btnDanger: { padding: '8px 16px', background: theme.danger, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer' },
+    btnDisabled: { padding: '8px 16px', background: theme.accent, border: 'none', borderRadius: 6, color: theme.textMuted, cursor: 'not-allowed', opacity: 0.6 },
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 },
-    card: { background: theme.card, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s' },
+    card: { background: theme.card, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' },
     cardImage: { width: '100%', height: 150, objectFit: 'cover', background: theme.accent },
     cardInfo: { padding: 12 },
     cardTitle: { fontSize: 14, fontWeight: 'bold', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     cardDate: { fontSize: 12, color: theme.textMuted },
     gameCard: { background: theme.card, borderRadius: 8, padding: 16, cursor: 'pointer', textAlign: 'center', transition: 'transform 0.2s' },
-    gameIcon: { width: 80, height: 80, borderRadius: 12, background: theme.accent, margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 },
+    gameIcon: { width: 80, height: 80, borderRadius: 12, background: theme.accent, margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, overflow: 'hidden' },
+    gameIconImage: { width: '100%', height: '100%', objectFit: 'cover' },
     gameTitle: { fontWeight: 'bold', marginBottom: 4 },
     gameCount: { fontSize: 12, color: theme.textMuted },
     modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
@@ -279,6 +408,17 @@ function App() {
     loading: { textAlign: 'center', padding: 48, color: theme.primary },
     themeBtn: { padding: '10px 16px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', transition: 'transform 0.2s' },
     themeBtnActive: { transform: 'scale(1.05)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' },
+    pagination: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24, padding: 16, background: theme.card, borderRadius: 8 },
+    paginationBtn: { padding: '6px 12px', background: theme.accent, border: 'none', borderRadius: 4, color: theme.text, cursor: 'pointer' },
+    paginationBtnActive: { background: theme.primary, color: '#fff' },
+    paginationInfo: { fontSize: 14, color: theme.textMuted },
+    selectCheckbox: { position: 'absolute', top: 8, right: 8, width: 16, height: 16, border: `2px solid ${theme.border}`, borderRadius: 3, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+    selectCheckboxChecked: { background: theme.primary, borderColor: theme.primary },
+    selectCheckboxInner: { width: 8, height: 8, background: '#fff' },
+    cardWithCheckbox: { position: 'relative' },
+    cardSelected: { transform: 'scale(0.98)', boxShadow: `0 0 0 2px ${theme.primary}` },
+    migrationProgress: { width: '100%', height: 8, background: theme.accent, borderRadius: 4, overflow: 'hidden', marginTop: 12 },
+    migrationProgressBar: { height: '100%', background: theme.primary, transition: 'width 0.3s ease' },
   }
 
   return (
@@ -288,7 +428,7 @@ function App() {
         
         <div 
           style={{ ...styles.navItem, ...(currentView === 'time' ? styles.navItemActive : {}) }}
-          onClick={() => { setCurrentView('time'); setSelectedGame(null); loadScreenshots(null); }}
+          onClick={switchToTimeView}
         >
           按时间浏览
         </div>
@@ -312,7 +452,7 @@ function App() {
         </div>
       </nav>
 
-      <main style={styles.main}>
+      <main style={styles.main} ref={gridRef} onScroll={handleScroll}>
         {notification && (
           <div style={styles.notification}>
             {notification.title}: {notification.body}
@@ -325,9 +465,34 @@ function App() {
           <div>
             <div style={styles.header}>
               <h1 style={styles.title}>按时间浏览</h1>
-              <button style={styles.btn} onClick={toggleSort}>
-                排序: {sortOrder === 'desc' ? '从新到旧' : '从旧到新'}
-              </button>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {isMultiSelectMode ? (
+                  <>
+                    <button style={styles.btn} onClick={() => {
+                      setIsMultiSelectMode(false)
+                      setSelectedScreenshots([])
+                    }}>
+                      取消选定
+                    </button>
+                    <button 
+                      style={selectedScreenshots.length > 0 ? styles.btnDanger : styles.btnDisabled}
+                      onClick={deleteSelectedScreenshots}
+                      disabled={selectedScreenshots.length === 0}
+                    >
+                      确定删除 ({selectedScreenshots.length})
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button style={styles.btn} onClick={toggleSort}>
+                      排序: {sortOrder === 'desc' ? '从新到旧' : '从旧到新'}
+                    </button>
+                    <button style={styles.btn} onClick={() => setIsMultiSelectMode(true)}>
+                      多选删除
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
             
             {screenshots.length === 0 ? (
@@ -336,23 +501,89 @@ function App() {
                 <p style={{ fontSize: 12, marginTop: 8 }}>按 PrintScreen 或 F12 进行截图</p>
               </div>
             ) : (
-              <div style={styles.grid}>
-                {screenshots.map(ss => (
-                  <div key={ss.id} style={styles.card} onClick={() => { setSelectedScreenshot(ss); setNoteText(ss.note || ''); }}>
-                    <img 
-                      src={getImageSrc(ss.thumbnail_path)} 
-                      alt="截图缩略图" 
-                      style={styles.cardImage}
-                      onError={(e) => { e.target.style.background = theme.accent; e.target.style.display = 'none'; }}
-                    />
-                    <div style={styles.cardInfo}>
-                      <div style={styles.cardTitle}>{ss.display_title || ss.game_title}</div>
-                      <div style={styles.cardDate}>{formatDate(ss.timestamp)}</div>
-                      {ss.note && <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ss.note}</div>}
+              <>
+                <div style={styles.grid}>
+                  {screenshots.map(ss => (
+                    <div 
+                      key={ss.id} 
+                      style={{ 
+                        ...styles.card, 
+                        ...(isMultiSelectMode ? styles.cardWithCheckbox : {}),
+                        ...(isMultiSelectMode && selectedScreenshots.includes(ss.id) ? styles.cardSelected : {})
+                      }}
+                      onClick={() => {
+                        if (isMultiSelectMode) {
+                          toggleSelectScreenshot(ss.id)
+                        } else {
+                          setSelectedScreenshot(ss)
+                          setNoteText(ss.note || '')
+                        }
+                      }}
+                    >
+                      {isMultiSelectMode && (
+                        <div style={{
+                          ...styles.selectCheckbox,
+                          ...(selectedScreenshots.includes(ss.id) ? styles.selectCheckboxChecked : {})
+                        }}>
+                          {selectedScreenshots.includes(ss.id) && (
+                            <div style={styles.selectCheckboxInner} />
+                          )}
+                        </div>
+                      )}
+                      <img 
+                        src={getImageSrc(ss.thumbnail_path)} 
+                        alt="截图缩略图" 
+                        style={styles.cardImage}
+                        onError={(e) => { e.target.style.background = theme.accent; e.target.style.display = 'none'; }}
+                        loading="lazy"
+                      />
+                      <div style={styles.cardInfo}>
+                        <div style={styles.cardTitle}>{ss.display_title || ss.game_title}</div>
+                        <div style={styles.cardDate}>{formatDate(ss.timestamp)}</div>
+                        {ss.note && <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ss.note}</div>}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                
+                {isLoadingMore && (
+                  <div style={styles.loading}>加载更多...</div>
+                )}
+                
+                <div style={styles.pagination}>
+                  <button 
+                    style={styles.paginationBtn}
+                    onClick={() => loadScreenshotsWithPagination(1, null)}
+                    disabled={currentPage === 1}
+                  >
+                    首页
+                  </button>
+                  <button 
+                    style={styles.paginationBtn}
+                    onClick={() => loadScreenshotsWithPagination(Math.max(1, currentPage - 1), null)}
+                    disabled={currentPage === 1}
+                  >
+                    上一页
+                  </button>
+                  <span style={styles.paginationInfo}>
+                    第 {currentPage} 页，共 {totalPages} 页
+                  </span>
+                  <button 
+                    style={styles.paginationBtn}
+                    onClick={() => loadScreenshotsWithPagination(Math.min(totalPages, currentPage + 1), null)}
+                    disabled={currentPage === totalPages}
+                  >
+                    下一页
+                  </button>
+                  <button 
+                    style={styles.paginationBtn}
+                    onClick={() => loadScreenshotsWithPagination(totalPages, null)}
+                    disabled={currentPage === totalPages}
+                  >
+                    末页
+                  </button>
+                </div>
+              </>
             )}
           </div>
         ) : currentView === 'games' ? (
@@ -371,7 +602,19 @@ function App() {
                 {games.map(game => (
                   <div key={game.game_id} style={styles.gameCard} onClick={() => selectGame(game)}>
                     <div style={styles.gameIcon}>
-                      {game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?'}
+                      {game.game_icon_path ? (
+                        <img 
+                          src={getImageSrc(game.game_icon_path)} 
+                          alt={`${game.display_title || game.game_title} 图标`}
+                          style={styles.gameIconImage}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.parentElement.innerHTML = game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?';
+                          }}
+                        />
+                      ) : (
+                        game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?'
+                      )}
                     </div>
                     <div style={styles.gameTitle}>{game.display_title || game.game_title}</div>
                     <div style={styles.gameCount}>{game.count} 张截图</div>
@@ -386,29 +629,137 @@ function App() {
         ) : currentView === 'game-detail' ? (
           <div>
             <div style={styles.header}>
-              <h1 style={styles.title}>{selectedGame?.display_title || selectedGame?.game_title}</h1>
-              <button style={styles.btn} onClick={backToGames}>返回游戏列表</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {selectedGame?.game_icon_path ? (
+                  <div style={{ width: 40, height: 40, borderRadius: 6, overflow: 'hidden' }}>
+                    <img 
+                      src={getImageSrc(selectedGame.game_icon_path)} 
+                      alt={`${selectedGame.display_title || selectedGame.game_title} 图标`}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={(e) => e.target.style.display = 'none'}
+                    />
+                  </div>
+                ) : null}
+                <h1 style={styles.title}>{selectedGame?.display_title || selectedGame?.game_title}</h1>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {isMultiSelectMode ? (
+                  <>
+                    <button style={styles.btn} onClick={() => {
+                      setIsMultiSelectMode(false)
+                      setSelectedScreenshots([])
+                    }}>
+                      取消选定
+                    </button>
+                    <button 
+                      style={selectedScreenshots.length > 0 ? styles.btnDanger : styles.btnDisabled}
+                      onClick={deleteSelectedScreenshots}
+                      disabled={selectedScreenshots.length === 0}
+                    >
+                      确定删除 ({selectedScreenshots.length})
+                    </button>
+                    <button style={styles.btn} onClick={backToGames}>
+                      返回游戏列表
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button style={styles.btn} onClick={() => setIsMultiSelectMode(true)}>
+                      多选删除
+                    </button>
+                    <button style={styles.btn} onClick={backToGames}>
+                      返回游戏列表
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
             
             {screenshots.length === 0 ? (
               <div style={styles.empty}>该游戏没有截图</div>
             ) : (
-              <div style={styles.grid}>
-                {screenshots.map(ss => (
-                  <div key={ss.id} style={styles.card} onClick={() => { setSelectedScreenshot(ss); setNoteText(ss.note || ''); }}>
-                    <img 
-                      src={getImageSrc(ss.thumbnail_path)} 
-                      alt="截图缩略图" 
-                      style={styles.cardImage}
-                      onError={(e) => { e.target.style.background = theme.accent; e.target.style.display = 'none'; }}
-                    />
-                    <div style={styles.cardInfo}>
-                      <div style={styles.cardDate}>{formatDate(ss.timestamp)}</div>
-                      {ss.note && <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>{ss.note.slice(0, 30)}...</div>}
+              <>
+                <div style={styles.grid}>
+                  {screenshots.map(ss => (
+                    <div 
+                      key={ss.id} 
+                      style={{ 
+                        ...styles.card, 
+                        ...(isMultiSelectMode ? styles.cardWithCheckbox : {}),
+                        ...(isMultiSelectMode && selectedScreenshots.includes(ss.id) ? styles.cardSelected : {})
+                      }}
+                      onClick={() => {
+                        if (isMultiSelectMode) {
+                          toggleSelectScreenshot(ss.id)
+                        } else {
+                          setSelectedScreenshot(ss)
+                          setNoteText(ss.note || '')
+                        }
+                      }}
+                    >
+                      {isMultiSelectMode && (
+                        <div style={{
+                          ...styles.selectCheckbox,
+                          ...(selectedScreenshots.includes(ss.id) ? styles.selectCheckboxChecked : {})
+                        }}>
+                          {selectedScreenshots.includes(ss.id) && (
+                            <div style={styles.selectCheckboxInner} />
+                          )}
+                        </div>
+                      )}
+                      <img 
+                        src={getImageSrc(ss.thumbnail_path)} 
+                        alt="截图缩略图" 
+                        style={styles.cardImage}
+                        onError={(e) => { e.target.style.background = theme.accent; e.target.style.display = 'none'; }}
+                        loading="lazy"
+                      />
+                      <div style={styles.cardInfo}>
+                        <div style={styles.cardDate}>{formatDate(ss.timestamp)}</div>
+                        {ss.note && <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>{ss.note.slice(0, 30)}...</div>}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                
+                {isLoadingMore && (
+                  <div style={styles.loading}>加载更多...</div>
+                )}
+                
+                <div style={styles.pagination}>
+                  <button 
+                    style={styles.paginationBtn}
+                    onClick={() => loadScreenshotsWithPagination(1, selectedGame?.game_id)}
+                    disabled={currentPage === 1}
+                  >
+                    首页
+                  </button>
+                  <button 
+                    style={styles.paginationBtn}
+                    onClick={() => loadScreenshotsWithPagination(Math.max(1, currentPage - 1), selectedGame?.game_id)}
+                    disabled={currentPage === 1}
+                  >
+                    上一页
+                  </button>
+                  <span style={styles.paginationInfo}>
+                    第 {currentPage} 页，共 {totalPages} 页
+                  </span>
+                  <button 
+                    style={styles.paginationBtn}
+                    onClick={() => loadScreenshotsWithPagination(Math.min(totalPages, currentPage + 1), selectedGame?.game_id)}
+                    disabled={currentPage === totalPages}
+                  >
+                    下一页
+                  </button>
+                  <button 
+                    style={styles.paginationBtn}
+                    onClick={() => loadScreenshotsWithPagination(totalPages, selectedGame?.game_id)}
+                    disabled={currentPage === totalPages}
+                  >
+                    末页
+                  </button>
+                </div>
+              </>
             )}
           </div>
         ) : (
@@ -437,9 +788,26 @@ function App() {
               
               <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
                 <h3 style={{ marginBottom: 12 }}>存储位置</h3>
-                <p style={{ color: theme.textMuted, fontSize: 14 }}>
-                  截图保存在: 程序目录/screenshot-data/
+                <p style={{ color: theme.textMuted, fontSize: 14, marginBottom: 12 }}>
+                  当前存储位置: {storagePath}
                 </p>
+                <button 
+                  style={styles.btnPrimary} 
+                  onClick={changeStoragePath}
+                  disabled={isMigrating}
+                >
+                  {isMigrating ? '迁移中...' : '更改存储位置'}
+                </button>
+                {isMigrating && (
+                  <div style={styles.migrationProgress}>
+                    <div 
+                      style={{
+                        ...styles.migrationProgressBar,
+                        width: `${migrationProgress}%`
+                      }}
+                    />
+                  </div>
+                )}
                 <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
                   数据库和截图在同一目录，可直接复制整个文件夹到其他电脑使用
                 </p>

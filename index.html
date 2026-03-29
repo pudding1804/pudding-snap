@@ -31,6 +31,10 @@
         <p style="color: #4ade80;">如果你一直看到这个页面，说明 JavaScript 没有执行</p>
       </div>
     </div>
+    <script>
+      console.log('内联脚本开始执行');
+      document.querySelector('.fallback p').textContent = 'JavaScript 正在执行...';
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

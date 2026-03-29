@@ -60,6 +60,45 @@ fn update_note(id: i32, note: String, state: State<AppState>) -> Result<(), Stri
 }
 
 #[tauri::command]
+fn get_screenshots_with_pagination(
+    game_id: Option<String>,
+    sort_order: String,
+    page: i32,
+    page_size: i32,
+    state: State<AppState>,
+) -> Result<PaginationResult, String> {
+    let conn = state.db.lock().unwrap();
+    let gid_ref = game_id.as_deref();
+    db::get_screenshots_with_pagination(&conn, gid_ref, &sort_order, page, page_size).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_screenshots(ids: Vec<i32>, state: State<AppState>) -> Result<(), String> {
+    let conn = state.db.lock().unwrap();
+    
+    if let Ok(ss_list) = db::get_screenshots(&conn, None, "desc") {
+        for id in &ids {
+            if let Some(ss) = ss_list.iter().find(|s| s.id == *id) {
+                let _ = std::fs::remove_file(&ss.file_path);
+                let _ = std::fs::remove_file(&ss.thumbnail_path);
+            }
+        }
+    }
+
+    db::delete_screenshots(&conn, &ids).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_storage_path() -> Result<String, String> {
+    Ok(db::get_storage_path())
+}
+
+#[tauri::command]
+fn migrate_data(new_path: String) -> Result<MigrationResult, String> {
+    db::migrate_data(&new_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn show_window(app: AppHandle, state: State<AppState>) -> Result<(), String> {
     let mut window_shown = state.window_shown.lock().unwrap();
     *window_shown = true;
@@ -282,9 +321,13 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_screenshots,
+            get_screenshots_with_pagination,
             get_games,
             delete_screenshot,
+            delete_screenshots,
             update_note,
+            get_storage_path,
+            migrate_data,
             show_window,
             hide_window
         ])
