@@ -107,6 +107,13 @@ function App() {
   
   // 鼠标捕捉设置
   const [captureMouse, setCaptureMouse] = useState(false)
+  
+  // 开机自启动设置
+  const [autostart, setAutostart] = useState(false)
+  
+  // 刷新防抖
+  const refreshDebounceRef = useRef(null)
+  const isRefreshingRef = useRef(false)
 
   const theme = themes[currentTheme].colors
   const gridRef = useRef(null)
@@ -156,6 +163,32 @@ function App() {
     }
   }
 
+  const loadAutostart = async () => {
+    try {
+      const { isEnabled } = await import('@tauri-apps/plugin-autostart')
+      const enabled = await isEnabled()
+      setAutostart(enabled)
+      addLog(`开机自启动状态: ${enabled}`)
+    } catch (e) {
+      addLog(`获取开机自启动设置失败: ${e}`)
+    }
+  }
+
+  const saveAutostart = async (enabled) => {
+    try {
+      const { enable, disable } = await import('@tauri-apps/plugin-autostart')
+      if (enabled) {
+        await enable()
+      } else {
+        await disable()
+      }
+      setAutostart(enabled)
+      addLog(`开机自启动设置已保存: ${enabled}`)
+    } catch (e) {
+      addLog(`保存开机自启动设置失败: ${e}`)
+    }
+  }
+
   useEffect(() => {
     addLog('useEffect 初始化')
     
@@ -164,6 +197,7 @@ function App() {
       try {
         await loadStoragePath()
         await loadCaptureMouse()
+        await loadAutostart()
         await loadScreenshotsWithPagination(1, null)
       } catch (e) {
         addLog(`数据加载失败: ${e}`)
@@ -179,8 +213,31 @@ function App() {
     loadData()
 
     const unlisten = listen('screenshot-taken', () => {
-      addLog('收到截图事件，重新加载数据')
-      loadScreenshotsWithPagination(1, selectedGame?.game_id || null)
+      addLog('收到截图事件，准备刷新')
+      
+      if (refreshDebounceRef.current) {
+        clearTimeout(refreshDebounceRef.current)
+      }
+      
+      refreshDebounceRef.current = setTimeout(async () => {
+        if (isRefreshingRef.current) {
+          addLog('刷新进行中，跳过')
+          return
+        }
+        
+        isRefreshingRef.current = true
+        addLog('开始刷新数据')
+        
+        try {
+          await loadScreenshotsWithPagination(1, selectedGame?.game_id || null)
+          await loadGames()
+          addLog('数据刷新完成')
+        } catch (e) {
+          addLog(`刷新失败: ${e}`)
+        } finally {
+          isRefreshingRef.current = false
+        }
+      }, 300)
     })
 
     const unlistenTray = listen('tray-click', async () => {
@@ -209,8 +266,43 @@ function App() {
       unlistenTray.then(f => f())
       unlistenNotify.then(f => f())
       unlistenSettings.then(f => f())
+      if (refreshDebounceRef.current) {
+        clearTimeout(refreshDebounceRef.current)
+      }
     }
   }, [])
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        addLog('窗口变为可见，检查是否需要刷新')
+        
+        if (refreshDebounceRef.current) {
+          clearTimeout(refreshDebounceRef.current)
+        }
+        
+        refreshDebounceRef.current = setTimeout(async () => {
+          if (isRefreshingRef.current) return
+          
+          isRefreshingRef.current = true
+          try {
+            await loadScreenshotsWithPagination(1, selectedGame?.game_id || null)
+            await loadGames()
+          } catch (e) {
+            addLog(`可见性刷新失败: ${e}`)
+          } finally {
+            isRefreshingRef.current = false
+          }
+        }, 200)
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [selectedGame?.game_id])
 
   const loadScreenshotsWithPagination = async (page, gameId = null) => {
     setIsLoading(true)
@@ -517,9 +609,25 @@ function App() {
                   </>
                 ) : (
                   <>
-                    <button style={styles.btn} onClick={toggleSort}>
-                      排序: {sortOrder === 'desc' ? '从新到旧' : '从旧到新'}
-                    </button>
+                    <select 
+                      value={sortOrder}
+                      onChange={(e) => {
+                        setSortOrder(e.target.value)
+                        loadScreenshotsWithPagination(1, null)
+                      }}
+                      style={{ 
+                        padding: '8px 12px', 
+                        background: theme.accent, 
+                        border: 'none', 
+                        borderRadius: 6, 
+                        color: theme.text, 
+                        cursor: 'pointer',
+                        fontSize: 14
+                      }}
+                    >
+                      <option value="desc">从新到旧</option>
+                      <option value="asc">从旧到新</option>
+                    </select>
                     <button style={styles.btn} onClick={() => setIsMultiSelectMode(true)}>
                       多选删除
                     </button>
@@ -661,8 +769,17 @@ function App() {
           </div>
         ) : currentView === 'game-detail' ? (
           <div>
-            <div style={styles.header}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ ...styles.header, position: 'relative' }}>
+              <button 
+                style={{ ...styles.btn, padding: '8px 12px' }} 
+                onClick={backToGames}
+                title="返回游戏列表"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+              </button>
+              <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 12 }}>
                 {selectedGame?.game_icon_path ? (
                   <div style={{ width: 40, height: 40, borderRadius: 6, overflow: 'hidden' }}>
                     <img 
@@ -675,7 +792,7 @@ function App() {
                 ) : null}
                 <h1 style={styles.title}>{selectedGame?.display_title || selectedGame?.game_title}</h1>
               </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
                 {isMultiSelectMode ? (
                   <>
                     <button style={styles.btn} onClick={() => {
@@ -691,19 +808,11 @@ function App() {
                     >
                       确定删除 ({selectedScreenshots.length})
                     </button>
-                    <button style={styles.btn} onClick={backToGames}>
-                      返回游戏列表
-                    </button>
                   </>
                 ) : (
-                  <>
-                    <button style={styles.btn} onClick={() => setIsMultiSelectMode(true)}>
-                      多选删除
-                    </button>
-                    <button style={styles.btn} onClick={backToGames}>
-                      返回游戏列表
-                    </button>
-                  </>
+                  <button style={styles.btn} onClick={() => setIsMultiSelectMode(true)}>
+                    多选删除
+                  </button>
                 )}
               </div>
             </div>
@@ -850,6 +959,25 @@ function App() {
                 <h3 style={{ marginBottom: 12 }}>快捷键</h3>
                 <p style={{ color: theme.textMuted, fontSize: 14 }}>PrintScreen - 截图</p>
                 <p style={{ color: theme.textMuted, fontSize: 14 }}>F12 - 测试截图（调试模式）</p>
+              </div>
+
+              <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
+                <h3 style={{ marginBottom: 12 }}>系统选项</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <input
+                    type="checkbox"
+                    id="autostart"
+                    checked={autostart}
+                    onChange={(e) => saveAutostart(e.target.checked)}
+                    style={{ width: 18, height: 18, cursor: 'pointer' }}
+                  />
+                  <label htmlFor="autostart" style={{ cursor: 'pointer', color: theme.text }}>
+                    开机自启动
+                  </label>
+                </div>
+                <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
+                  启用后，程序会在系统启动时自动运行
+                </p>
               </div>
 
               <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>

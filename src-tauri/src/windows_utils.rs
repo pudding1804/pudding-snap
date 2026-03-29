@@ -11,6 +11,58 @@ use std::ptr;
 use std::mem::size_of;
 use image::{ImageBuffer, Rgba};
 
+pub struct ForegroundProcessInfo {
+    pub process_name: String,
+    pub exe_path: Option<String>,
+}
+
+pub fn get_foreground_process_info() -> ForegroundProcessInfo {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_null() {
+            return ForegroundProcessInfo {
+                process_name: "Unknown".to_string(),
+                exe_path: None,
+            };
+        }
+
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+
+        let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid);
+        if handle.is_null() {
+            return ForegroundProcessInfo {
+                process_name: "Unknown".to_string(),
+                exe_path: None,
+            };
+        }
+
+        let mut name: [u16; 1024] = [0; 1024];
+        let name_len = GetModuleBaseNameW(handle, std::ptr::null_mut(), name.as_mut_ptr(), name.len() as u32);
+        
+        let process_name = if name_len > 0 {
+            let name = String::from_utf16_lossy(&name[..name_len as usize]);
+            name.trim_end_matches(".exe").to_string()
+        } else {
+            "Unknown".to_string()
+        };
+
+        let mut path: [u16; 1024] = [0; 1024];
+        let path_len = GetModuleFileNameExW(handle, std::ptr::null_mut(), path.as_mut_ptr(), path.len() as u32);
+        
+        let exe_path = if path_len > 0 {
+            Some(String::from_utf16_lossy(&path[..path_len as usize]))
+        } else {
+            None
+        };
+
+        ForegroundProcessInfo {
+            process_name,
+            exe_path,
+        }
+    }
+}
+
 pub fn get_foreground_process_name() -> String {
     unsafe {
         let hwnd = GetForegroundWindow();

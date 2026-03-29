@@ -7,6 +7,8 @@ mod screenshot;
 mod audio;
 
 use std::sync::{Arc, Mutex};
+use std::collections::VecDeque;
+use image::DynamicImage;
 use tauri::{Manager, State, Emitter, AppHandle, menu::{Menu, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState}};
 use rdev::{listen, Event, EventType, Key};
 use database as db;
@@ -21,9 +23,17 @@ const DEBUG_MODE: bool = true;
 #[cfg(not(debug_assertions))]
 const DEBUG_MODE: bool = false;
 
+struct ScreenshotTask {
+    image: DynamicImage,
+    exe_path: Option<String>,
+    process_name: String,
+}
+
 struct AppState {
     db: Arc<Mutex<rusqlite::Connection>>,
     window_shown: Arc<Mutex<bool>>,
+    screenshot_queue: Arc<Mutex<VecDeque<ScreenshotTask>>>,
+    is_processing: Arc<Mutex<bool>>,
 }
 
 #[tauri::command]
@@ -221,119 +231,6 @@ fn show_notification(app: &AppHandle, title: &str, body: &str) {
     }));
 }
 
-fn take_screenshot(app_handle: AppHandle, db: Arc<Mutex<rusqlite::Connection>>) {
-    println!("[截图] 开始截图...");
-    
-    let _ = play_shutter_sound();
-    
-    let capture_mouse = {
-        let conn = db.lock().unwrap();
-        db::get_capture_mouse(&conn)
-    };
-    println!("[截图] 捕捉鼠标: {}", capture_mouse);
-    
-    let app_handle_clone = app_handle.clone();
-    let db_clone = db.clone();
-    
-    std::thread::spawn(move || {
-        match capture_screenshot(capture_mouse) {
-            Ok(image) => {
-                println!("[截图] 屏幕捕获成功");
-                
-                let process_name = get_foreground_process_name();
-                println!("[截图] 检测到进程: {}", process_name);
-                
-                let game_id = db::generate_game_id(&process_name);
-                let game_dir = db::get_game_dir(&game_id);
-                let thumbnails_dir = db::get_thumbnails_dir();
-                println!("[截图] 游戏ID: {}, 目录: {:?}", game_id, game_dir);
-                
-                let filename = generate_filename();
-                let thumbnail_filename = generate_thumbnail_filename();
-                
-                let filepath = game_dir.join(&filename);
-                let thumbnail_path = thumbnails_dir.join(&thumbnail_filename);
-                
-                println!("[截图] 文件名: {}, 缩略图: {}", filename, thumbnail_filename);
-                
-                match save_as_webp(&image, &filepath, 80.0) {
-                    Ok(_) => {
-                        println!("[截图] WebP保存成功: {:?}", filepath);
-                        
-                        let thumbnail = create_thumbnail(&image, 320);
-                        match save_as_webp(&thumbnail, &thumbnail_path, 70.0) {
-                            Ok(_) => println!("[截图] 缩略图保存成功: {:?}", thumbnail_path),
-                            Err(e) => println!("[截图] 缩略图保存失败: {}", e),
-                        }
-                        
-                        let timestamp = chrono::Utc::now().timestamp();
-                        
-                        let conn = db_clone.lock().unwrap();
-                        if let (Some(file_path_str), Some(thumb_path_str)) = (filepath.to_str(), thumbnail_path.to_str()) {
-                            match db::insert_screenshot(&conn, file_path_str, thumb_path_str, &game_id, &process_name, timestamp) {
-                                Ok(id) => {
-                                    println!("[截图] 数据库记录成功! ID: {}", id);
-                                    
-                                    let has_icon = db::get_game_cache(&conn, &game_id)
-                                        .and_then(|c| c.icon_path)
-                                        .map(|p| std::path::Path::new(&p).exists())
-                                        .unwrap_or(false);
-                                    
-                                    if !has_icon {
-                                        drop(conn);
-                                        let db_for_icon = db_clone.clone();
-                                        std::thread::spawn(move || {
-                                            if let Some(exe_path) = get_process_exe_path() {
-                                                let icons_dir = db::get_icons_dir();
-                                                let icon_path = icons_dir.join(format!("{}.png", game_id));
-                                                
-                                                if let Ok(_) = extract_icon_from_exe(&exe_path, &icon_path) {
-                                                    let icon_path_str = icon_path.to_string_lossy().to_string();
-                                                    let conn = db_for_icon.lock().unwrap();
-                                                    let cache = GameCache {
-                                                        game_id: game_id.clone(),
-                                                        exe_path: Some(exe_path),
-                                                        icon_path: Some(icon_path_str),
-                                                        display_title: None,
-                                                        last_updated: chrono::Utc::now().timestamp(),
-                                                    };
-                                                    let _ = db::set_game_cache(&conn, &cache);
-                                                    println!("[图标] 游戏图标提取成功: {}", game_id);
-                                                }
-                                            }
-                                        });
-                                    }
-                                    
-                                    let _ = app_handle_clone.emit("screenshot-taken", ());
-                                    
-                                    if DEBUG_MODE {
-                                        show_notification(&app_handle_clone, "截图成功!", &format!("已保存到: {}", filepath.display()));
-                                    }
-                                }
-                                Err(e) => {
-                                    println!("[截图] 数据库插入失败: {}", e);
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        println!("[截图] WebP保存失败: {}", e);
-                        if DEBUG_MODE {
-                            show_notification(&app_handle_clone, "截图失败", &format!("WebP保存失败: {}", e));
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                println!("[截图] 屏幕捕获失败: {}", e);
-                if DEBUG_MODE {
-                    show_notification(&app_handle_clone, "截图失败", &format!("屏幕捕获失败: {}", e));
-                }
-            }
-        }
-    });
-}
-
 fn main() {
     println!("[启动] 截图管理器启动中...");
     if DEBUG_MODE {
@@ -354,6 +251,8 @@ fn main() {
     let db_arc = Arc::new(Mutex::new(db_conn));
     let db_clone = db_arc.clone();
     let window_shown = Arc::new(Mutex::new(false));
+    let screenshot_queue = Arc::new(Mutex::new(VecDeque::new()));
+    let is_processing = Arc::new(Mutex::new(false));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -361,12 +260,16 @@ fn main() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
-        .manage(AppState { db: db_arc, window_shown })
+        .manage(AppState { 
+            db: db_arc, 
+            window_shown,
+            screenshot_queue,
+            is_processing,
+        })
         .setup(move |app| {
             println!("[启动] Tauri应用设置中...");
             
             let app_handle = app.app_handle().clone();
-            let db = db_clone.clone();
 
             if let Some(window) = app.get_webview_window("main") {
                 println!("[启动] 初始隐藏窗口...");
@@ -430,6 +333,11 @@ fn main() {
             
             println!("[启动] 系统托盘创建成功");
 
+            let state = app.state::<AppState>();
+            let queue_clone = state.screenshot_queue.clone();
+            let processing_clone = state.is_processing.clone();
+            let db_for_hotkey = state.db.clone();
+
             std::thread::spawn(move || {
                 println!("[启动] 热键监听线程启动");
                 
@@ -437,13 +345,136 @@ fn main() {
                     if let EventType::KeyPress(key) = event.event_type {
                         if key == Key::PrintScreen {
                             println!("[热键] 检测到PrintScreen按键!");
-                            take_screenshot(app_handle.clone(), db.clone());
+                            
+                            let _ = play_shutter_sound();
+                            
+                            let capture_mouse = {
+                                let conn = db_for_hotkey.lock().unwrap();
+                                db::get_capture_mouse(&conn)
+                            };
+                            
+                            let process_info = get_foreground_process_info();
+                            println!("[截图] 进程: {}, exe: {:?}", process_info.process_name, process_info.exe_path);
+                            
+                            match capture_screenshot(capture_mouse) {
+                                Ok(image) => {
+                                    println!("[截图] 屏幕捕获成功");
+                                    
+                                    let task = ScreenshotTask {
+                                        image,
+                                        exe_path: process_info.exe_path,
+                                        process_name: process_info.process_name,
+                                    };
+                                    
+                                    {
+                                        let mut queue = queue_clone.lock().unwrap();
+                                        queue.push_back(task);
+                                        println!("[队列] 任务已加入队列，当前队列长度: {}", queue.len());
+                                    }
+                                    
+                                    let app_h = app_handle.clone();
+                                    let db_h = db_for_hotkey.clone();
+                                    let queue_h = queue_clone.clone();
+                                    let processing_h = processing_clone.clone();
+                                    
+                                    let mut processing = processing_h.lock().unwrap();
+                                    if *processing {
+                                        println!("[队列] 已有任务在处理中，跳过");
+                                        return;
+                                    }
+                                    *processing = true;
+                                    drop(processing);
+                                    
+                                    std::thread::spawn(move || {
+                                        loop {
+                                            let task = {
+                                                let mut q = queue_h.lock().unwrap();
+                                                q.pop_front()
+                                            };
+                                            
+                                            if let Some(task) = task {
+                                                println!("[队列] 处理任务: {}", task.process_name);
+                                                
+                                                let game_id = db::generate_game_id(&task.process_name);
+                                                let game_dir = db::get_game_dir(&game_id);
+                                                let thumbnails_dir = db::get_thumbnails_dir();
+                                                
+                                                let filename = generate_filename();
+                                                let thumbnail_filename = generate_thumbnail_filename();
+                                                
+                                                let filepath = game_dir.join(&filename);
+                                                let thumbnail_path = thumbnails_dir.join(&thumbnail_filename);
+                                                
+                                                match save_as_webp(&task.image, &filepath, 80.0) {
+                                                    Ok(_) => {
+                                                        let thumbnail = create_thumbnail(&task.image, 320);
+                                                        let _ = save_as_webp(&thumbnail, &thumbnail_path, 70.0);
+                                                        
+                                                        let timestamp = chrono::Utc::now().timestamp();
+                                                        
+                                                        let db_clone = db_h.clone();
+                                                        let conn = db_clone.lock().unwrap();
+                                                        if let (Some(file_path_str), Some(thumb_path_str)) = (filepath.to_str(), thumbnail_path.to_str()) {
+                                                            if let Ok(_id) = db::insert_screenshot(&conn, file_path_str, thumb_path_str, &game_id, &task.process_name, timestamp) {
+                                                                let has_icon = db::get_game_cache(&conn, &game_id)
+                                                                    .and_then(|c| c.icon_path)
+                                                                    .map(|p| std::path::Path::new(&p).exists())
+                                                                    .unwrap_or(false);
+                                                                
+                                                                if !has_icon {
+                                                                    drop(conn);
+                                                                    let db_for_icon = db_clone.clone();
+                                                                    let exe_path_for_icon = task.exe_path.clone();
+                                                                    let game_id_for_icon = game_id.clone();
+                                                                    std::thread::spawn(move || {
+                                                                        if let Some(exe_path) = exe_path_for_icon {
+                                                                            let icons_dir = db::get_icons_dir();
+                                                                            let icon_path = icons_dir.join(format!("{}.png", game_id_for_icon));
+                                                                            
+                                                                            if let Ok(_) = extract_icon_from_exe(&exe_path, &icon_path) {
+                                                                                let icon_path_str = icon_path.to_string_lossy().to_string();
+                                                                                let conn = db_for_icon.lock().unwrap();
+                                                                                let cache = GameCache {
+                                                                                    game_id: game_id_for_icon.clone(),
+                                                                                    exe_path: Some(exe_path),
+                                                                                    icon_path: Some(icon_path_str),
+                                                                                    display_title: None,
+                                                                                    last_updated: chrono::Utc::now().timestamp(),
+                                                                                };
+                                                                                let _ = db::set_game_cache(&conn, &cache);
+                                                                                println!("[图标] 游戏图标提取成功: {}", game_id_for_icon);
+                                                                            }
+                                                                        }
+                                                                    });
+                                                                }
+                                                                
+                                                                let _ = app_h.emit("screenshot-taken", ());
+                                                            }
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        println!("[截图] WebP保存失败: {}", e);
+                                                    }
+                                                }
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        
+                                        let mut processing = processing_h.lock().unwrap();
+                                        *processing = false;
+                                        println!("[队列] 处理完成");
+                                    });
+                                }
+                                Err(e) => {
+                                    println!("[截图] 屏幕捕获失败: {}", e);
+                                }
+                            }
                         }
                         
                         if DEBUG_MODE {
                             if key == Key::F12 {
                                 println!("[调试] 检测到F12测试按键!");
-                                take_screenshot(app_handle.clone(), db.clone());
                             }
                         }
                     }
