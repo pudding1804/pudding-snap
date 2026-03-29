@@ -1,14 +1,15 @@
 use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use std::path::PathBuf;
 use chrono::Utc;
-use scrap::{Capturer, Display};
 use webp::PixelLayout;
-use winapi::um::winuser::{GetForegroundWindow, GetWindowRect, GetClientRect, GetDC, ReleaseDC, GetDesktopWindow};
+use winapi::um::winuser::{GetForegroundWindow, GetWindowRect, GetClientRect, GetDC, ReleaseDC, GetDesktopWindow, GetCursorInfo, CURSORINFO, DrawIconEx, GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
 use winapi::um::wingdi::{BitBlt, SRCCOPY, CreateCompatibleDC, CreateCompatibleBitmap, SelectObject, DeleteDC, DeleteObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, GetDIBits};
 use winapi::shared::minwindef::UINT;
 use std::mem::size_of;
 
-pub fn capture_window() -> Result<DynamicImage, Box<dyn std::error::Error>> {
+const DI_NORMAL: UINT = 0x0001;
+
+pub fn capture_window(capture_mouse: bool) -> Result<DynamicImage, Box<dyn std::error::Error>> {
     unsafe {
         let hwnd = GetForegroundWindow();
         if hwnd.is_null() {
@@ -65,6 +66,28 @@ pub fn capture_window() -> Result<DynamicImage, Box<dyn std::error::Error>> {
             return Err("BitBlt failed".into());
         }
 
+        if capture_mouse {
+            let mut cursor_info: CURSORINFO = std::mem::zeroed();
+            cursor_info.cbSize = size_of::<CURSORINFO>() as UINT;
+            
+            if GetCursorInfo(&mut cursor_info) != 0 && cursor_info.flags != 0 {
+                let cursor_x = cursor_info.ptScreenPos.x - client_left;
+                let cursor_y = cursor_info.ptScreenPos.y - client_top;
+                
+                DrawIconEx(
+                    mem_dc,
+                    cursor_x,
+                    cursor_y,
+                    cursor_info.hCursor,
+                    0,
+                    0,
+                    0,
+                    std::ptr::null_mut(),
+                    DI_NORMAL,
+                );
+            }
+        }
+
         let mut bmi: BITMAPINFO = std::mem::zeroed();
         bmi.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as UINT;
         bmi.bmiHeader.biWidth = width as i32;
@@ -112,8 +135,8 @@ pub fn capture_window() -> Result<DynamicImage, Box<dyn std::error::Error>> {
     }
 }
 
-pub fn capture_screenshot() -> Result<DynamicImage, Box<dyn std::error::Error>> {
-    if let Ok(window_capture) = capture_window() {
+pub fn capture_screenshot(capture_mouse: bool) -> Result<DynamicImage, Box<dyn std::error::Error>> {
+    if let Ok(window_capture) = capture_window(capture_mouse) {
         let (w, h) = window_capture.dimensions();
         if w > 100 && h > 100 {
             println!("[截图] 使用窗口截图模式");
@@ -121,34 +144,116 @@ pub fn capture_screenshot() -> Result<DynamicImage, Box<dyn std::error::Error>> 
         }
     }
 
-    println!("[截图] 使用全屏截图模式");
-    let display = Display::primary()?;
-    let mut capturer = Capturer::new(display)?;
-    
-    let (width, height) = (capturer.width(), capturer.height());
-    
-    let buffer = loop {
-        if let Ok(buffer) = capturer.frame() {
-            break buffer;
-        }
-    };
+    println!("[截图] 使用全屏截图模式 (GDI)");
+    capture_fullscreen(capture_mouse)
+}
 
-    let mut img_buffer = ImageBuffer::new(width as u32, height as u32);
-    let stride = buffer.len() / height;
-    
-    for y in 0..height {
-        for x in 0..width {
-            let idx = y * stride + x * 4;
-            img_buffer.put_pixel(x as u32, y as u32, Rgba([
-                buffer[idx + 2],
-                buffer[idx + 1],
-                buffer[idx],
-                255
-            ]));
+pub fn capture_fullscreen(capture_mouse: bool) -> Result<DynamicImage, Box<dyn std::error::Error>> {
+    unsafe {
+        let width = GetSystemMetrics(SM_CXSCREEN);
+        let height = GetSystemMetrics(SM_CYSCREEN);
+
+        if width <= 0 || height <= 0 {
+            return Err("Failed to get screen dimensions".into());
         }
+
+        let width = width as u32;
+        let height = height as u32;
+
+        let desktop_hwnd = GetDesktopWindow();
+        let screen_dc = GetDC(desktop_hwnd);
+        if screen_dc.is_null() {
+            return Err("Failed to get screen DC".into());
+        }
+
+        let mem_dc = CreateCompatibleDC(screen_dc);
+        let hbitmap = CreateCompatibleBitmap(screen_dc, width as i32, height as i32);
+        let old_bitmap = SelectObject(mem_dc, hbitmap as *mut _);
+
+        let result = BitBlt(
+            mem_dc,
+            0,
+            0,
+            width as i32,
+            height as i32,
+            screen_dc,
+            0,
+            0,
+            SRCCOPY
+        );
+
+        if result == 0 {
+            SelectObject(mem_dc, old_bitmap);
+            DeleteObject(hbitmap as *mut _);
+            DeleteDC(mem_dc);
+            ReleaseDC(desktop_hwnd, screen_dc);
+            return Err("BitBlt failed".into());
+        }
+
+        if capture_mouse {
+            let mut cursor_info: CURSORINFO = std::mem::zeroed();
+            cursor_info.cbSize = size_of::<CURSORINFO>() as UINT;
+            
+            if GetCursorInfo(&mut cursor_info) != 0 && cursor_info.flags != 0 {
+                DrawIconEx(
+                    mem_dc,
+                    cursor_info.ptScreenPos.x,
+                    cursor_info.ptScreenPos.y,
+                    cursor_info.hCursor,
+                    0,
+                    0,
+                    0,
+                    std::ptr::null_mut(),
+                    DI_NORMAL,
+                );
+            }
+        }
+
+        let mut bmi: BITMAPINFO = std::mem::zeroed();
+        bmi.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as UINT;
+        bmi.bmiHeader.biWidth = width as i32;
+        bmi.bmiHeader.biHeight = -(height as i32);
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+
+        let mut pixels: Vec<u8> = vec![0; (width * height * 4) as usize];
+        
+        let get_result = GetDIBits(
+            mem_dc,
+            hbitmap,
+            0,
+            height,
+            pixels.as_mut_ptr() as *mut _,
+            &mut bmi,
+            DIB_RGB_COLORS,
+        );
+
+        SelectObject(mem_dc, old_bitmap);
+        DeleteObject(hbitmap as *mut _);
+        DeleteDC(mem_dc);
+        ReleaseDC(desktop_hwnd, screen_dc);
+
+        if get_result == 0 {
+            return Err("GetDIBits failed".into());
+        }
+
+        let mut img_buffer = ImageBuffer::new(width, height);
+        for y in 0..height as usize {
+            for x in 0..width as usize {
+                let idx = (y * width as usize + x) * 4;
+                img_buffer.put_pixel(x as u32, y as u32, Rgba([
+                    pixels[idx + 2],
+                    pixels[idx + 1],
+                    pixels[idx],
+                    255
+                ]));
+            }
+        }
+
+        println!("[截图] 全屏截图成功: {}x{}", width, height);
+        Ok(DynamicImage::ImageRgba8(img_buffer))
     }
-
-    Ok(DynamicImage::ImageRgba8(img_buffer))
 }
 
 pub fn create_thumbnail(image: &DynamicImage, max_size: u32) -> DynamicImage {

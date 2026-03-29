@@ -104,6 +104,9 @@ function App() {
   const [storagePath, setStoragePath] = useState('')
   const [isMigrating, setIsMigrating] = useState(false)
   const [migrationProgress, setMigrationProgress] = useState(0)
+  
+  // 鼠标捕捉设置
+  const [captureMouse, setCaptureMouse] = useState(false)
 
   const theme = themes[currentTheme].colors
   const gridRef = useRef(null)
@@ -134,6 +137,25 @@ function App() {
     }
   }
 
+  const loadCaptureMouse = async () => {
+    try {
+      const enabled = await invoke('get_capture_mouse')
+      setCaptureMouse(enabled)
+    } catch (e) {
+      addLog(`获取鼠标捕捉设置失败: ${e}`)
+    }
+  }
+
+  const saveCaptureMouse = async (enabled) => {
+    try {
+      await invoke('set_capture_mouse', { enabled })
+      setCaptureMouse(enabled)
+      addLog(`鼠标捕捉设置已保存: ${enabled}`)
+    } catch (e) {
+      addLog(`保存鼠标捕捉设置失败: ${e}`)
+    }
+  }
+
   useEffect(() => {
     addLog('useEffect 初始化')
     
@@ -141,6 +163,7 @@ function App() {
       addLog('开始加载数据')
       try {
         await loadStoragePath()
+        await loadCaptureMouse()
         await loadScreenshotsWithPagination(1, null)
       } catch (e) {
         addLog(`数据加载失败: ${e}`)
@@ -289,6 +312,16 @@ function App() {
     } catch (e) {
       addLog(`截图删除失败: ${e}`)
       setError('删除截图失败: ' + String(e))
+    }
+  }
+
+  const openInExplorer = async (filePath) => {
+    try {
+      await invoke('open_in_explorer', { filePath })
+      addLog(`打开文件夹: ${filePath}`)
+    } catch (e) {
+      addLog(`打开文件夹失败: ${e}`)
+      setError('打开文件夹失败: ' + String(e))
     }
   }
 
@@ -819,6 +852,25 @@ function App() {
                 <p style={{ color: theme.textMuted, fontSize: 14 }}>F12 - 测试截图（调试模式）</p>
               </div>
 
+              <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
+                <h3 style={{ marginBottom: 12 }}>截图选项</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <input
+                    type="checkbox"
+                    id="captureMouse"
+                    checked={captureMouse}
+                    onChange={(e) => saveCaptureMouse(e.target.checked)}
+                    style={{ width: 18, height: 18, cursor: 'pointer' }}
+                  />
+                  <label htmlFor="captureMouse" style={{ cursor: 'pointer', color: theme.text }}>
+                    捕捉鼠标光标
+                  </label>
+                </div>
+                <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
+                  启用后，截图时会包含鼠标光标
+                </p>
+              </div>
+
               <div style={{ background: theme.card, padding: 16, borderRadius: 8 }}>
                 <h3 style={{ marginBottom: 12 }}>关于</h3>
                 <p style={{ color: theme.textMuted, fontSize: 14 }}>极简游戏截图管理器 v0.1.0</p>
@@ -854,6 +906,7 @@ function App() {
                 <span style={{ fontSize: 14, color: theme.textMuted }}>游戏: {selectedScreenshot.display_title || selectedScreenshot.game_title}</span>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button style={styles.btnPrimary} onClick={() => saveNote(selectedScreenshot.id, noteText)}>保存附注</button>
+                  <button style={styles.btn} onClick={() => openInExplorer(selectedScreenshot.file_path)}>打开文件夹</button>
                   <button style={styles.btnDanger} onClick={() => deleteScreenshot(selectedScreenshot.id)}>删除</button>
                 </div>
               </div>

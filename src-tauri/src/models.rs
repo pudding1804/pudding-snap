@@ -35,3 +35,12 @@ pub struct MigrationResult {
     pub success: bool,
     pub error: Option<String>,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GameCache {
+    pub game_id: String,
+    pub exe_path: Option<String>,
+    pub icon_path: Option<String>,
+    pub display_title: Option<String>,
+    pub last_updated: i64,
+}

@@ -1,5 +1,5 @@
 use rusqlite::{params, Connection, Result};
-use crate::models::{ScreenshotRecord, GameSummary, PaginationResult, MigrationResult};
+use crate::models::{ScreenshotRecord, GameSummary, PaginationResult, MigrationResult, GameCache};
 use std::path::PathBuf;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -70,6 +70,14 @@ pub fn get_data_dir() -> PathBuf {
 
 pub fn get_screenshots_dir() -> PathBuf {
     get_data_dir()
+}
+
+pub fn get_thumbnails_dir() -> PathBuf {
+    let path = get_data_dir().join("thumbnails");
+    if !path.exists() {
+        let _ = std::fs::create_dir_all(&path);
+    }
+    path
 }
 
 pub fn get_db_path() -> PathBuf {
@@ -163,6 +171,25 @@ pub fn init_db() -> Result<Connection> {
         [],
     )?;
 
+    tx.execute(
+        "CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )",
+        [],
+    )?;
+
+    tx.execute(
+        "CREATE TABLE IF NOT EXISTS game_cache (
+            game_id TEXT PRIMARY KEY,
+            exe_path TEXT,
+            icon_path TEXT,
+            display_title TEXT,
+            last_updated INTEGER
+        )",
+        [],
+    )?;
+
     tx.commit()?;
 
     println!("[数据库] 数据库初始化成功");
@@ -198,17 +225,18 @@ pub fn get_screenshots(
     game_id: Option<&str>,
     sort_order: &str,
 ) -> Result<Vec<ScreenshotRecord>> {
+    let order = if sort_order.to_lowercase() == "asc" { "ASC" } else { "DESC" };
     let sql = if game_id.is_some() {
         format!(
             "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url
              FROM screenshots WHERE game_id = ?1 ORDER BY timestamp {}",
-            sort_order
+            order
         )
     } else {
         format!(
             "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url
              FROM screenshots ORDER BY timestamp {}",
-            sort_order
+            order
         )
     };
 
@@ -274,17 +302,18 @@ pub fn get_screenshots_with_pagination(
         (total_count + page_size - 1) / page_size
     };
     
+    let order = if sort_order.to_lowercase() == "asc" { "ASC" } else { "DESC" };
     let sql = if game_id.is_some() {
         format!(
             "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url
              FROM screenshots WHERE game_id = ?1 ORDER BY timestamp {} LIMIT ?2 OFFSET ?3",
-            sort_order
+            order
         )
     } else {
         format!(
             "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url
              FROM screenshots ORDER BY timestamp {} LIMIT ?1 OFFSET ?2",
-            sort_order
+            order
         )
     };
 
@@ -328,8 +357,11 @@ pub fn get_screenshots_with_pagination(
 
 pub fn get_games(conn: &Connection) -> Result<Vec<GameSummary>> {
     let mut stmt = conn.prepare(
-        "SELECT game_id, game_title, COALESCE(display_title, game_title), game_banner_url, COUNT(*) as count, MAX(timestamp) as last_timestamp
-         FROM screenshots GROUP BY game_id ORDER BY last_timestamp DESC",
+        "SELECT s.game_id, s.game_title, COALESCE(s.display_title, s.game_title), s.game_banner_url, COUNT(*) as count, MAX(s.timestamp) as last_timestamp,
+                gc.icon_path
+         FROM screenshots s
+         LEFT JOIN game_cache gc ON s.game_id = gc.game_id
+         GROUP BY s.game_id ORDER BY last_timestamp DESC",
     )?;
 
     let iter = stmt.query_map([], |row| {
@@ -338,9 +370,9 @@ pub fn get_games(conn: &Connection) -> Result<Vec<GameSummary>> {
             game_title: row.get(1)?,
             display_title: row.get(2)?,
             game_banner_url: row.get(3)?,
-            game_icon_path: None,
             count: row.get(4)?,
             last_timestamp: row.get(5)?,
+            game_icon_path: row.get(6)?,
         })
     })?;
 
@@ -433,4 +465,63 @@ fn copy_dir(src: &PathBuf, dst: &PathBuf) -> io::Result<()> {
     }
     
     Ok(())
+}
+
+pub fn get_setting(conn: &Connection, key: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT value FROM settings WHERE key = ?1",
+        params![key],
+        |row| row.get(0),
+    ).ok()
+}
+
+pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+        params![key, value],
+    )?;
+    Ok(())
+}
+
+pub fn get_capture_mouse(conn: &Connection) -> bool {
+    get_setting(conn, "capture_mouse")
+        .map(|v| v == "true")
+        .unwrap_or(false)
+}
+
+pub fn set_capture_mouse(conn: &Connection, enabled: bool) -> Result<()> {
+    set_setting(conn, "capture_mouse", if enabled { "true" } else { "false" })
+}
+
+pub fn get_game_cache(conn: &Connection, game_id: &str) -> Option<GameCache> {
+    conn.query_row(
+        "SELECT exe_path, icon_path, display_title, last_updated FROM game_cache WHERE game_id = ?1",
+        params![game_id],
+        |row| {
+            Ok(GameCache {
+                game_id: game_id.to_string(),
+                exe_path: row.get(0)?,
+                icon_path: row.get(1)?,
+                display_title: row.get(2)?,
+                last_updated: row.get(3)?,
+            })
+        },
+    ).ok()
+}
+
+pub fn set_game_cache(conn: &Connection, cache: &GameCache) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO game_cache (game_id, exe_path, icon_path, display_title, last_updated)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![cache.game_id, cache.exe_path, cache.icon_path, cache.display_title, cache.last_updated],
+    )?;
+    Ok(())
+}
+
+pub fn get_icons_dir() -> PathBuf {
+    let path = get_data_dir().join("icons");
+    if !path.exists() {
+        let _ = std::fs::create_dir_all(&path);
+    }
+    path
 }
