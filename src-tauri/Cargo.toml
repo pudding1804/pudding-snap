@@ -18,7 +18,7 @@ serde_json = "1"
 image = "0.25"
 webp = "0.3"
 rdev = "0.5"
-rusqlite = { version = "0.32", features = ["chrono"] }
+rusqlite = { version = "0.32", features = ["chrono", "bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5.0"
 winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "psapi"] }

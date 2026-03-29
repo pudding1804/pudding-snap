@@ -1,5 +1,4 @@
-use std::ffi::c_void;
-use winapi::um::winuser::{GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId};
+use winapi::um::winuser::{GetForegroundWindow, GetWindowThreadProcessId};
 use winapi::um::processthreadsapi::OpenProcess;
 use winapi::um::psapi::GetModuleBaseNameW;
 use winapi::um::winnt::PROCESS_QUERY_INFORMATION;
@@ -30,25 +29,5 @@ pub fn get_foreground_process_name() -> String {
         }
         
         "Unknown".to_string()
-    }
-}
-
-pub fn get_window_title() -> String {
-    unsafe {
-        let hwnd = GetForegroundWindow();
-        if hwnd.is_null() {
-            return "Unknown".to_string();
-        }
-
-        let len = GetWindowTextLengthW(hwnd);
-        if len == 0 {
-            return "Unknown".to_string();
-        }
-
-        let mut title: Vec<u16> = Vec::with_capacity((len + 1) as usize);
-        title.set_len((len + 1) as usize);
-        GetWindowTextW(hwnd, title.as_mut_ptr(), title.len() as i32);
-
-        String::from_utf16_lossy(&title[..len as usize])
     }
 }
