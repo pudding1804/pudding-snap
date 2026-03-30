@@ -121,6 +121,9 @@ function App() {
   const [steamSearchTerm, setSteamSearchTerm] = useState('')
   const [steamSearchResults, setSteamSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
+  const [isApplyingInfo, setIsApplyingInfo] = useState(false)
+  const [showApplySuccess, setShowApplySuccess] = useState(false)
+  const [appliedGameName, setAppliedGameName] = useState('')
   
   // 刷新防抖
   const refreshDebounceRef = useRef(null)
@@ -161,7 +164,10 @@ function App() {
         searching: '搜索中...',
         back: '返回',
         found_results: '找到 {count} 个结果',
-        no_results: '未找到相关游戏'
+        no_results: '未找到相关游戏',
+        applying: '拉取信息中...',
+        apply_success: '信息已拉取完成',
+        confirm: '确认'
       },
       empty: {
         no_screenshots: '还没有截图',
@@ -284,7 +290,10 @@ function App() {
         searching: 'Searching...',
         back: 'Back',
         found_results: 'Found {count} results',
-        no_results: 'No games found'
+        no_results: 'No games found',
+        applying: 'Fetching info...',
+        apply_success: 'Info fetched successfully',
+        confirm: 'OK'
       },
       empty: {
         no_screenshots: 'No screenshots yet',
@@ -407,7 +416,10 @@ function App() {
         searching: '検索中...',
         back: '戻る',
         found_results: '{count}件の結果が見つかりました',
-        no_results: '関連するゲームが見つかりません'
+        no_results: '関連するゲームが見つかりません',
+        applying: '情報を取得中...',
+        apply_success: '情報の取得が完了しました',
+        confirm: '確認'
       },
       empty: {
         no_screenshots: 'まだスクリーンショットはありません',
@@ -925,8 +937,9 @@ function App() {
     cardTitle: { fontSize: 14, fontWeight: 'bold', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     cardDate: { fontSize: 12, color: theme.textMuted },
     gameCard: { background: theme.card, borderRadius: 8, padding: 16, cursor: 'pointer', textAlign: 'center', transition: 'transform 0.2s' },
-    gameIcon: { width: 80, height: 80, borderRadius: 12, background: theme.accent, margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, overflow: 'hidden' },
+    gameIcon: { width: '100%', height: 60, borderRadius: 8, background: theme.accent, margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, overflow: 'hidden' },
     gameIconImage: { width: '100%', height: '100%', objectFit: 'cover' },
+    gameLogoImage: { width: '100%', height: '100%', objectFit: 'cover' },
     gameTitle: { fontWeight: 'bold', marginBottom: 4 },
     gameCount: { fontSize: 12, color: theme.textMuted },
     modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
@@ -1168,20 +1181,43 @@ function App() {
             ) : (
               <div style={styles.grid}>
                 {games.map(game => {
+                  const hasSteamLogo = !!game.steam_logo_path;
                   const iconSrc = game.steam_logo_path || game.game_icon_path;
                   return (
                   <div key={game.game_id} style={styles.gameCard} onClick={() => selectGame(game)}>
                     <div style={styles.gameIcon}>
                       {iconSrc ? (
-                        <img 
-                          src={getImageSrc(iconSrc)} 
-                          alt={`${game.display_title || game.game_title} 图标`}
-                          style={styles.gameIconImage}
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.parentElement.innerHTML = game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?';
-                          }}
-                        />
+                        hasSteamLogo ? (
+                          <img 
+                            src={getImageSrc(iconSrc)} 
+                            alt={`${game.display_title || game.game_title} 图标`}
+                            style={styles.gameLogoImage}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.parentElement.innerHTML = game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?';
+                            }}
+                          />
+                        ) : (
+                          <div style={{ 
+                            width: 48, 
+                            height: 48, 
+                            borderRadius: 8, 
+                            overflow: 'hidden',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <img 
+                              src={getImageSrc(iconSrc)} 
+                              alt={`${game.display_title || game.game_title} 图标`}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.parentElement.innerHTML = game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?';
+                              }}
+                            />
+                          </div>
+                        )
                       ) : (
                         game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?'
                       )}
@@ -1209,16 +1245,40 @@ function App() {
                 </svg>
               </button>
               <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 12 }}>
-                {(selectedGame?.steam_logo_path || selectedGame?.game_icon_path) ? (
-                  <div style={{ width: 40, height: 40, borderRadius: 6, overflow: 'hidden' }}>
+                <div style={{ 
+                  width: 40, 
+                  height: 40, 
+                  borderRadius: 6, 
+                  overflow: 'hidden',
+                  background: theme.accent,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {selectedGame?.game_icon_path ? (
                     <img 
-                      src={getImageSrc(selectedGame.steam_logo_path || selectedGame.game_icon_path)} 
+                      src={getImageSrc(selectedGame.game_icon_path)} 
                       alt={`${selectedGame.display_title || selectedGame.game_title} 图标`}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      onError={(e) => e.target.style.display = 'none'}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.parentElement.innerHTML = selectedGame.display_title?.charAt(0) || selectedGame.game_title?.charAt(0) || '?';
+                      }}
                     />
-                  </div>
-                ) : null}
+                  ) : selectedGame?.steam_logo_path ? (
+                    <img 
+                      src={getImageSrc(selectedGame.steam_logo_path)} 
+                      alt={`${selectedGame.display_title || selectedGame.game_title} 图标`}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.parentElement.innerHTML = selectedGame.display_title?.charAt(0) || selectedGame.game_title?.charAt(0) || '?';
+                      }}
+                    />
+                  ) : (
+                    selectedGame?.display_title?.charAt(0) || selectedGame?.game_title?.charAt(0) || '?'
+                  )}
+                </div>
                 <h1 style={styles.title}>{selectedGame?.display_title || selectedGame?.game_title}</h1>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
@@ -1649,64 +1709,122 @@ function App() {
             
             {searchModalStep === 'results' && (
               <div style={{ padding: 24 }}>
-                <p style={{ color: theme.textMuted, marginBottom: 16 }}>
-                  {t.search.found_results.replace('{count}', steamSearchResults.length)}
-                </p>
-                <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {steamSearchResults.map(result => (
-                    <div 
-                      key={result.appid}
-                      style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: 12, 
-                        padding: 12, 
-                        background: theme.accent, 
-                        borderRadius: 8, 
-                        cursor: 'pointer',
-                        transition: 'background 0.2s'
-                      }}
-                      onClick={async () => {
-                        try {
-                          addLog(`正在应用 ${result.name} 的信息...`)
-                          const info = await invoke('apply_steam_game_info', {
-                            gameId: selectedGame?.game_id,
-                            appid: result.appid
-                          })
-                          addLog(`已应用: ${info.name}`)
-                          setShowSearchModal(false)
-                          await loadGames()
-                          const updatedGame = games.find(g => g.game_id === selectedGame?.game_id)
-                          if (updatedGame) {
-                            setSelectedGame(updatedGame)
-                          }
-                        } catch (err) {
-                          addLog(`应用失败: ${err}`)
-                        }
-                      }}
-                    >
-                      {result.tiny_image && (
-                        <img 
-                          src={result.tiny_image} 
-                          alt={result.name}
-                          style={{ width: 60, height: 30, objectFit: 'cover', borderRadius: 4 }}
-                        />
-                      )}
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500 }}>{result.name}</div>
-                        <div style={{ fontSize: 12, color: theme.textMuted }}>AppID: {result.appid}</div>
-                      </div>
+                {isApplyingInfo ? (
+                  <div style={{ textAlign: 'center', padding: 32 }}>
+                    <div style={{ 
+                      width: 40, 
+                      height: 40, 
+                      border: `3px solid ${theme.border}`,
+                      borderTop: `3px solid ${theme.primary}`,
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite',
+                      margin: '0 auto 16px'
+                    }} />
+                    <style>{`
+                      @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                      }
+                    `}</style>
+                    <p style={{ color: theme.text }}>{t.search.applying}</p>
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ color: theme.textMuted, marginBottom: 16 }}>
+                      {t.search.found_results.replace('{count}', steamSearchResults.length)}
+                    </p>
+                    <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {steamSearchResults.map(result => (
+                        <div 
+                          key={result.appid}
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 12, 
+                            padding: 12, 
+                            background: theme.accent, 
+                            borderRadius: 8, 
+                            cursor: 'pointer',
+                            transition: 'background 0.2s'
+                          }}
+                          onClick={async () => {
+                            setIsApplyingInfo(true)
+                            try {
+                              addLog(`正在应用 ${result.name} 的信息...`)
+                              const info = await invoke('apply_steam_game_info', {
+                                gameId: selectedGame?.game_id,
+                                appid: result.appid
+                              })
+                              addLog(`已应用: ${info.name}`)
+                              setAppliedGameName(info.name)
+                              setShowSearchModal(false)
+                              setShowApplySuccess(true)
+                              await loadGames()
+                              const updatedGame = games.find(g => g.game_id === selectedGame?.game_id)
+                              if (updatedGame) {
+                                setSelectedGame(updatedGame)
+                              }
+                            } catch (err) {
+                              addLog(`应用失败: ${err}`)
+                            }
+                            setIsApplyingInfo(false)
+                          }}
+                        >
+                          {result.tiny_image && (
+                            <img 
+                              src={result.tiny_image} 
+                              alt={result.name}
+                              style={{ width: 60, height: 30, objectFit: 'cover', borderRadius: 4 }}
+                            />
+                          )}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 500 }}>{result.name}</div>
+                            <div style={{ fontSize: 12, color: theme.textMuted }}>AppID: {result.appid}</div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                <button 
-                  style={{ ...styles.btn, width: '100%', marginTop: 16 }}
-                  onClick={() => setSearchModalStep('steam')}
-                >
-                  {t.search.back}
-                </button>
+                    <button 
+                      style={{ ...styles.btn, width: '100%', marginTop: 16 }}
+                      onClick={() => setSearchModalStep('steam')}
+                    >
+                      {t.search.back}
+                    </button>
+                  </>
+                )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+      
+      {showApplySuccess && (
+        <div style={styles.modalOverlay} onClick={() => setShowApplySuccess(false)}>
+          <div style={{ ...styles.modalContent, maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: 32, textAlign: 'center' }}>
+              <div style={{ 
+                width: 60, 
+                height: 60, 
+                borderRadius: '50%', 
+                background: theme.primary,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px'
+              }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </div>
+              <h3 style={{ marginBottom: 8 }}>{t.search.apply_success}</h3>
+              <p style={{ color: theme.textMuted, marginBottom: 24 }}>{appliedGameName}</p>
+              <button 
+                style={{ ...styles.btnPrimary, padding: '12px 32px' }}
+                onClick={() => setShowApplySuccess(false)}
+              >
+                {t.search.confirm}
+              </button>
+            </div>
           </div>
         </div>
       )}
