@@ -223,6 +223,49 @@ fn extract_game_icon(game_id: String, exe_path: String, state: State<AppState>) 
     Ok(icon_path_str)
 }
 
+#[tauri::command]
+fn delete_all_data(state: State<AppState>) -> Result<(), String> {
+    println!("[删除] 开始删除所有数据...");
+    
+    // 首先关闭数据库连接
+    {
+        let mut db = state.db.lock().unwrap();
+        // 丢弃数据库连接
+        *db = rusqlite::Connection::open_in_memory().map_err(|e| e.to_string())?;
+        println!("[删除] 数据库连接已关闭");
+    }
+    
+    // 等待一小段时间确保文件句柄释放
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    
+    // 删除数据目录
+    let data_dir = db::get_data_dir();
+    if data_dir.exists() {
+        println!("[删除] 删除数据目录: {:?}", data_dir);
+        if let Err(e) = std::fs::remove_dir_all(&data_dir) {
+            return Err(format!("删除数据目录失败: {}", e));
+        }
+    }
+    
+    // 删除配置文件
+    let config_path = db::get_config_file_path();
+    if config_path.exists() {
+        println!("[删除] 删除配置文件: {:?}", config_path);
+        if let Err(e) = std::fs::remove_file(&config_path) {
+            return Err(format!("删除配置文件失败: {}", e));
+        }
+    }
+    
+    println!("[删除] 所有数据已删除");
+    Ok(())
+}
+
+#[tauri::command]
+fn restart_app(app: tauri::AppHandle) {
+    println!("[重启] 重启应用...");
+    app.restart();
+}
+
 fn show_notification(app: &AppHandle, title: &str, body: &str) {
     println!("[通知] {}: {}", title, body);
     let _ = app.emit("show-notification", serde_json::json!({
@@ -249,7 +292,6 @@ fn main() {
     };
     
     let db_arc = Arc::new(Mutex::new(db_conn));
-    let db_clone = db_arc.clone();
     let window_shown = Arc::new(Mutex::new(false));
     let screenshot_queue = Arc::new(Mutex::new(VecDeque::new()));
     let is_processing = Arc::new(Mutex::new(false));
@@ -503,7 +545,9 @@ fn main() {
             hide_window,
             open_in_explorer,
             get_game_icon,
-            extract_game_icon
+            extract_game_icon,
+            delete_all_data,
+            restart_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

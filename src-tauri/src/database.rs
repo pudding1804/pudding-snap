@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 static CUSTOM_DATA_DIR: once_cell::sync::Lazy<Arc<Mutex<Option<PathBuf>>>> = 
     once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(None)));
 
-fn get_config_file_path() -> PathBuf {
+pub fn get_config_file_path() -> PathBuf {
     let exe_dir = std::env::current_exe()
         .expect("Could not get exe path")
         .parent()

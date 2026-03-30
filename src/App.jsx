@@ -83,6 +83,7 @@ function App() {
   const [selectedGame, setSelectedGame] = useState(null)
   const [selectedScreenshot, setSelectedScreenshot] = useState(null)
   const [sortOrder, setSortOrder] = useState('desc')
+  const [gameSortOrder, setGameSortOrder] = useState('time_desc')
   const [isLoading, setIsLoading] = useState(true)
   const [notification, setNotification] = useState(null)
   const [error, setError] = useState(null)
@@ -111,11 +112,339 @@ function App() {
   // 开机自启动设置
   const [autostart, setAutostart] = useState(false)
   
+  // 语言设置
+  const [language, setLanguage] = useState('zh')
+  
   // 刷新防抖
   const refreshDebounceRef = useRef(null)
   const isRefreshingRef = useRef(false)
 
   const theme = themes[currentTheme].colors
+  
+  // 多语言支持
+  const t = {
+    'zh': {
+      nav: {
+        time: '按时间浏览',
+        games: '按游戏浏览',
+        settings: '设置'
+      },
+      header: {
+        sort_newest: '从新到旧',
+        sort_oldest: '从旧到新',
+        multi_select: '多选删除',
+        cancel_select: '取消选定',
+        confirm_delete: '确定删除',
+        game_sort_newest: '时间从新到旧',
+        game_sort_oldest: '时间从旧到新',
+        game_sort_alpha_asc: '按字母升序',
+        game_sort_alpha_desc: '按字母降序'
+      },
+      empty: {
+        no_screenshots: '还没有截图',
+        no_games: '还没有游戏记录',
+        no_game_screenshots: '该游戏没有截图',
+        screenshot_hint: '按 PrintScreen 或 F12 进行截图',
+        game_hint: '截图后会自动识别游戏'
+      },
+      settings: {
+        title: '设置',
+        theme: '主题',
+        storage: '存储位置',
+        current_path: '当前存储位置:',
+        change_path: '更改存储位置',
+        migrating: '迁移中...',
+        storage_hint: '数据库和截图在同一目录，可直接复制整个文件夹到其他电脑使用',
+        hotkeys: '快捷键',
+        hotkey_print: 'PrintScreen - 截图',
+        hotkey_f12: 'F12 - 测试截图（调试模式）',
+        system: '系统选项',
+        autostart: '开机自启动',
+        autostart_hint: '启用后，程序会在系统启动时自动运行',
+        screenshot: '截图选项',
+        capture_mouse: '捕捉鼠标光标',
+        capture_mouse_hint: '启用后，截图时会包含鼠标光标',
+        about: '关于',
+        version: '极简游戏截图管理器 v0.1.0',
+        tech: 'Rust + Tauri + React',
+        language: '语言',
+        delete_all: '删除所有数据',
+        delete_all_hint: '此操作将删除所有截图、数据库和设置，无法恢复',
+        delete_all_confirm: '确定要删除所有数据吗？此操作无法恢复！',
+        restart_required: '需要重启程序',
+        restart_now: '现在重启',
+        languages: {
+          zh: '中文',
+          en: 'English',
+          ja: '日本语'
+        }
+      },
+      game: {
+        last_updated: '最后更新于:',
+        screenshots: '张截图'
+      },
+      detail: {
+        note: '附注:',
+        save_note: '保存附注',
+        delete: '删除',
+        open_folder: '打开文件夹',
+        confirm_delete: '确定要删除这张截图吗？'
+      },
+      notifications: {
+        save_success: '保存成功',
+        note_saved: '附注已保存',
+        delete_success: '删除成功',
+        delete_failed: '删除失败',
+        folder_opened: '打开文件夹',
+        folder_failed: '打开文件夹失败',
+        storage_changed: '存储位置已更改',
+        storage_failed: '存储位置更改失败',
+        migration_failed: '数据迁移失败',
+        autostart_saved: '开机自启动设置已保存',
+        autostart_failed: '保存开机自启动设置失败',
+        mouse_capture_saved: '鼠标捕捉设置已保存',
+        mouse_capture_failed: '保存鼠标捕捉设置失败'
+      },
+      logs: {
+        app_start: '应用启动...',
+        navigate_settings: '导航到设置',
+        load_screenshots: '加载截图',
+        load_more: '加载更多截图',
+        load_games: '加载游戏列表',
+        screenshot_taken: '截图成功',
+        screenshot_failed: '截图失败',
+        note_saved: '附注保存成功',
+        note_failed: '附注保存失败',
+        delete_succeeded: '截图删除成功',
+        delete_failed: '截图删除失败',
+        folder_opened: '打开文件夹',
+        folder_failed: '打开文件夹失败',
+        storage_changed: '存储位置已更改',
+        storage_failed: '存储位置更改失败',
+        migration_failed: '数据迁移失败',
+        autostart_loaded: '获取开机自启动状态',
+        autostart_saved: '开机自启动设置已保存',
+        autostart_failed: '保存开机自启动设置失败',
+        mouse_capture_loaded: '获取鼠标捕捉设置',
+        mouse_capture_saved: '鼠标捕捉设置已保存',
+        mouse_capture_failed: '保存鼠标捕捉设置失败'
+      }
+    },
+    'en': {
+      nav: {
+        time: 'Browse by Time',
+        games: 'Browse by Game',
+        settings: 'Settings'
+      },
+      header: {
+        sort_newest: 'Newest First',
+        sort_oldest: 'Oldest First',
+        multi_select: 'Multi-select Delete',
+        cancel_select: 'Cancel Selection',
+        confirm_delete: 'Confirm Delete',
+        game_sort_newest: 'Newest First',
+        game_sort_oldest: 'Oldest First',
+        game_sort_alpha_asc: 'Alphabetical (A-Z)',
+        game_sort_alpha_desc: 'Alphabetical (Z-A)'
+      },
+      empty: {
+        no_screenshots: 'No screenshots yet',
+        no_games: 'No game records yet',
+        no_game_screenshots: 'No screenshots for this game',
+        screenshot_hint: 'Press PrintScreen or F12 to take a screenshot',
+        game_hint: 'Games will be automatically detected after taking screenshots'
+      },
+      settings: {
+        title: 'Settings',
+        theme: 'Theme',
+        storage: 'Storage Location',
+        current_path: 'Current storage location:',
+        change_path: 'Change Storage Location',
+        migrating: 'Migrating...',
+        storage_hint: 'Database and screenshots are in the same directory, you can directly copy the entire folder to another computer',
+        hotkeys: 'Hotkeys',
+        hotkey_print: 'PrintScreen - Take screenshot',
+        hotkey_f12: 'F12 - Test screenshot (debug mode)',
+        system: 'System Options',
+        autostart: 'Start on boot',
+        autostart_hint: 'When enabled, the program will automatically run when the system starts',
+        screenshot: 'Screenshot Options',
+        capture_mouse: 'Capture mouse cursor',
+        capture_mouse_hint: 'When enabled, screenshots will include the mouse cursor',
+        about: 'About',
+        version: 'Minimal Game Screenshot Manager v0.1.0',
+        tech: 'Rust + Tauri + React',
+        language: 'Language',
+        delete_all: 'Delete All Data',
+        delete_all_hint: 'This operation will delete all screenshots, database and settings, cannot be recovered',
+        delete_all_confirm: 'Are you sure you want to delete all data? This operation cannot be recovered!',
+        restart_required: 'Restart required',
+        restart_now: 'Restart Now',
+        languages: {
+          zh: '中文',
+          en: 'English',
+          ja: '日本语'
+        }
+      },
+      game: {
+        last_updated: 'Last updated:',
+        screenshots: 'screenshots'
+      },
+      detail: {
+        note: 'Note:',
+        save_note: 'Save Note',
+        delete: 'Delete',
+        open_folder: 'Open Folder',
+        confirm_delete: 'Are you sure you want to delete this screenshot?'
+      },
+      notifications: {
+        save_success: 'Save Success',
+        note_saved: 'Note saved',
+        delete_success: 'Delete Success',
+        delete_failed: 'Delete Failed',
+        folder_opened: 'Folder Opened',
+        folder_failed: 'Failed to open folder',
+        storage_changed: 'Storage location changed',
+        storage_failed: 'Failed to change storage location',
+        migration_failed: 'Data migration failed',
+        autostart_saved: 'Autostart setting saved',
+        autostart_failed: 'Failed to save autostart setting',
+        mouse_capture_saved: 'Mouse capture setting saved',
+        mouse_capture_failed: 'Failed to save mouse capture setting'
+      },
+      logs: {
+        app_start: 'App started...',
+        navigate_settings: 'Navigate to settings',
+        load_screenshots: 'Loading screenshots',
+        load_more: 'Loading more screenshots',
+        load_games: 'Loading games',
+        screenshot_taken: 'Screenshot taken',
+        screenshot_failed: 'Failed to take screenshot',
+        note_saved: 'Note saved successfully',
+        note_failed: 'Failed to save note',
+        delete_succeeded: 'Screenshot deleted successfully',
+        delete_failed: 'Failed to delete screenshot',
+        folder_opened: 'Folder opened',
+        folder_failed: 'Failed to open folder',
+        storage_changed: 'Storage location changed',
+        storage_failed: 'Failed to change storage location',
+        migration_failed: 'Data migration failed',
+        autostart_loaded: 'Getting autostart status',
+        autostart_saved: 'Autostart setting saved',
+        autostart_failed: 'Failed to save autostart setting',
+        mouse_capture_loaded: 'Getting mouse capture setting',
+        mouse_capture_saved: 'Mouse capture setting saved',
+        mouse_capture_failed: 'Failed to save mouse capture setting'
+      }
+    },
+    'ja': {
+      nav: {
+        time: '時間で参照',
+        games: 'ゲームで参照',
+        settings: '設定'
+      },
+      header: {
+        sort_newest: '新しい順',
+        sort_oldest: '古い順',
+        multi_select: '複数選択削除',
+        cancel_select: '選択をキャンセル',
+        confirm_delete: '削除を確認',
+        game_sort_newest: '新しい順',
+        game_sort_oldest: '古い順',
+        game_sort_alpha_asc: 'アルファベット順 (A-Z)',
+        game_sort_alpha_desc: 'アルファベット順 (Z-A)'
+      },
+      empty: {
+        no_screenshots: 'まだスクリーンショットはありません',
+        no_games: 'まだゲームの記録はありません',
+        no_game_screenshots: 'このゲームにはスクリーンショットがありません',
+        screenshot_hint: 'PrintScreen または F12 を押してスクリーンショットを撮ります',
+        game_hint: 'スクリーンショットを撮るとゲームが自動的に認識されます'
+      },
+      settings: {
+        title: '設定',
+        theme: 'テーマ',
+        storage: 'ストレージの場所',
+        current_path: '現在のストレージの場所:',
+        change_path: 'ストレージの場所を変更',
+        migrating: '移行中...',
+        storage_hint: 'データベースとスクリーンショットは同じディレクトリにあります。フォルダ全体を別のコンピュータに直接コピーできます',
+        hotkeys: 'ホットキー',
+        hotkey_print: 'PrintScreen - スクリーンショットを撮る',
+        hotkey_f12: 'F12 - テストスクリーンショット（デバッグモード）',
+        system: 'システムオプション',
+        autostart: '起動時に実行',
+        autostart_hint: '有効にすると、システムの起動時にプログラムが自動的に実行されます',
+        screenshot: 'スクリーンショットオプション',
+        capture_mouse: 'マウスカーソルをキャプチャ',
+        capture_mouse_hint: '有効にすると、スクリーンショットにマウスカーソルが含まれます',
+        about: 'について',
+        version: 'ミニマルゲームスクリーンショットマネージャー v0.1.0',
+        tech: 'Rust + Tauri + React',
+        language: '言語',
+        delete_all: 'すべてのデータを削除',
+        delete_all_hint: 'この操作により、すべてのスクリーンショット、データベース、設定が削除され、回復することはできません',
+        delete_all_confirm: '本当にすべてのデータを削除しますか？この操作は元に戻すことができません！',
+        restart_required: '再起動が必要',
+        restart_now: '今すぐ再起動',
+        languages: {
+          zh: '中文',
+          en: 'English',
+          ja: '日本语'
+        }
+      },
+      game: {
+        last_updated: '最終更新:',
+        screenshots: '枚のスクリーンショット'
+      },
+      detail: {
+        note: 'メモ:',
+        save_note: 'メモを保存',
+        delete: '削除',
+        open_folder: 'フォルダを開く',
+        confirm_delete: 'このスクリーンショットを削除してもよろしいですか？'
+      },
+      notifications: {
+        save_success: '保存成功',
+        note_saved: 'メモを保存しました',
+        delete_success: '削除成功',
+        delete_failed: '削除に失敗しました',
+        folder_opened: 'フォルダを開きました',
+        folder_failed: 'フォルダを開くことができませんでした',
+        storage_changed: 'ストレージの場所を変更しました',
+        storage_failed: 'ストレージの場所の変更に失敗しました',
+        migration_failed: 'データ移行に失敗しました',
+        autostart_saved: '起動時実行の設定を保存しました',
+        autostart_failed: '起動時実行の設定の保存に失敗しました',
+        mouse_capture_saved: 'マウスキャプチャの設定を保存しました',
+        mouse_capture_failed: 'マウスキャプチャの設定の保存に失敗しました'
+      },
+      logs: {
+        app_start: 'アプリ起動...',
+        navigate_settings: '設定に移動',
+        load_screenshots: 'スクリーンショットを読み込み中',
+        load_more: 'スクリーンショットをさらに読み込み中',
+        load_games: 'ゲームを読み込み中',
+        screenshot_taken: 'スクリーンショットを撮りました',
+        screenshot_failed: 'スクリーンショットの撮影に失敗しました',
+        note_saved: 'メモを保存しました',
+        note_failed: 'メモの保存に失敗しました',
+        delete_succeeded: 'スクリーンショットを削除しました',
+        delete_failed: 'スクリーンショットの削除に失敗しました',
+        folder_opened: 'フォルダを開きました',
+        folder_failed: 'フォルダを開くことができませんでした',
+        storage_changed: 'ストレージの場所を変更しました',
+        storage_failed: 'ストレージの場所の変更に失敗しました',
+        migration_failed: 'データ移行に失敗しました',
+        autostart_loaded: '起動時実行の状態を取得中',
+        autostart_saved: '起動時実行の設定を保存しました',
+        autostart_failed: '起動時実行の設定の保存に失敗しました',
+        mouse_capture_loaded: 'マウスキャプチャの設定を取得中',
+        mouse_capture_saved: 'マウスキャプチャの設定を保存しました',
+        mouse_capture_failed: 'マウスキャプチャの設定の保存に失敗しました'
+      }
+    }
+  }[language]
   const gridRef = useRef(null)
 
   const addLog = (msg) => {
@@ -124,12 +453,26 @@ function App() {
     setLogs(prev => [...prev.slice(-20), `[${time}] ${msg}`])
   }
 
-  const loadGames = async () => {
+  const loadGames = async (sortType = null) => {
     try {
       addLog('调用 get_games')
       const gData = await invoke('get_games')
       addLog(`游戏数据: ${gData ? gData.length : 0} 条`)
-      setGames(gData || [])
+      
+      let sortedGames = gData || []
+      const currentSort = sortType || gameSortOrder
+      
+      if (currentSort === 'alpha_asc') {
+        sortedGames.sort((a, b) => (a.display_title || a.game_title).localeCompare(b.display_title || b.game_title, 'zh-CN'))
+      } else if (currentSort === 'alpha_desc') {
+        sortedGames.sort((a, b) => (b.display_title || b.game_title).localeCompare(a.display_title || a.game_title, 'zh-CN'))
+      } else if (currentSort === 'time_asc') {
+        sortedGames.sort((a, b) => (a.last_timestamp || 0) - (b.last_timestamp || 0))
+      } else {
+        sortedGames.sort((a, b) => (b.last_timestamp || 0) - (a.last_timestamp || 0))
+      }
+      
+      setGames(sortedGames)
     } catch (e) {
       addLog(`游戏加载失败: ${e}`)
     }
@@ -304,13 +647,14 @@ function App() {
     }
   }, [selectedGame?.game_id])
 
-  const loadScreenshotsWithPagination = async (page, gameId = null) => {
+  const loadScreenshotsWithPagination = async (page, gameId = null, order = null) => {
     setIsLoading(true)
+    const currentOrder = order || sortOrder
     try {
-      addLog(`调用 get_screenshots_with_pagination, 页码: ${page}, 游戏ID: ${gameId || 'null'}`)
+      addLog(`调用 get_screenshots_with_pagination, 页码: ${page}, 游戏ID: ${gameId || 'null'}, 排序: ${currentOrder}`)
       const data = await invoke('get_screenshots_with_pagination', {
         gameId,
-        sortOrder,
+        sortOrder: currentOrder,
         page,
         pageSize
       })
@@ -345,16 +689,26 @@ function App() {
     setIsLoadingMore(false)
   }
 
-  const toggleSort = async () => {
-    const newOrder = sortOrder === 'desc' ? 'asc' : 'desc'
+  const handleSortChange = async (newOrder) => {
     setSortOrder(newOrder)
-    await loadScreenshotsWithPagination(1, selectedGame?.game_id || null)
+    await loadScreenshotsWithPagination(1, null, newOrder)
+  }
+
+  const handleGameSortChange = async (newOrder) => {
+    setGameSortOrder(newOrder)
+    if (selectedGame) {
+      const order = newOrder === 'alpha_asc' || newOrder === 'alpha_desc' ? 'desc' : (newOrder === 'time_asc' ? 'asc' : 'desc')
+      await loadScreenshotsWithPagination(1, selectedGame.game_id, order)
+    } else {
+      await loadGames(newOrder)
+    }
   }
 
   const selectGame = async (game) => {
     setSelectedGame(game)
     setCurrentView('game-detail')
-    await loadScreenshotsWithPagination(1, game.game_id)
+    const order = gameSortOrder === 'time_asc' ? 'asc' : 'desc'
+    await loadScreenshotsWithPagination(1, game.game_id, order)
   }
 
   const backToGames = async () => {
@@ -555,19 +909,19 @@ function App() {
           style={{ ...styles.navItem, ...(currentView === 'time' ? styles.navItemActive : {}) }}
           onClick={switchToTimeView}
         >
-          按时间浏览
+          {t.nav.time}
         </div>
         <div 
           style={{ ...styles.navItem, ...(currentView === 'games' || currentView === 'game-detail' ? styles.navItemActive : {}) }}
           onClick={switchToGames}
         >
-          按游戏浏览
+          {t.nav.games}
         </div>
         <div 
           style={{ ...styles.navItem, ...(currentView === 'settings' ? styles.navItemActive : {}) }}
           onClick={() => setCurrentView('settings')}
         >
-          设置
+          {t.nav.settings}
         </div>
 
         <div style={styles.debugPanel}>
@@ -589,7 +943,7 @@ function App() {
         ) : currentView === 'time' ? (
           <div>
             <div style={styles.header}>
-              <h1 style={styles.title}>按时间浏览</h1>
+              <h1 style={styles.title}>{t.nav.time}</h1>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {isMultiSelectMode ? (
                   <>
@@ -597,24 +951,21 @@ function App() {
                       setIsMultiSelectMode(false)
                       setSelectedScreenshots([])
                     }}>
-                      取消选定
+                      {t.header.cancel_select}
                     </button>
                     <button 
                       style={selectedScreenshots.length > 0 ? styles.btnDanger : styles.btnDisabled}
                       onClick={deleteSelectedScreenshots}
                       disabled={selectedScreenshots.length === 0}
                     >
-                      确定删除 ({selectedScreenshots.length})
+                      {t.header.confirm_delete} ({selectedScreenshots.length})
                     </button>
                   </>
                 ) : (
                   <>
                     <select 
                       value={sortOrder}
-                      onChange={(e) => {
-                        setSortOrder(e.target.value)
-                        loadScreenshotsWithPagination(1, null)
-                      }}
+                      onChange={(e) => handleSortChange(e.target.value)}
                       style={{ 
                         padding: '8px 12px', 
                         background: theme.accent, 
@@ -625,11 +976,11 @@ function App() {
                         fontSize: 14
                       }}
                     >
-                      <option value="desc">从新到旧</option>
-                      <option value="asc">从旧到新</option>
+                      <option value="desc">{t.header.sort_newest}</option>
+                      <option value="asc">{t.header.sort_oldest}</option>
                     </select>
                     <button style={styles.btn} onClick={() => setIsMultiSelectMode(true)}>
-                      多选删除
+                      {t.header.multi_select}
                     </button>
                   </>
                 )}
@@ -638,8 +989,8 @@ function App() {
             
             {screenshots.length === 0 ? (
               <div style={styles.empty}>
-                <p>还没有截图</p>
-                <p style={{ fontSize: 12, marginTop: 8 }}>按 PrintScreen 或 F12 进行截图</p>
+                <p>{t.empty.no_screenshots}</p>
+                <p style={{ fontSize: 12, marginTop: 8 }}>{t.empty.screenshot_hint}</p>
               </div>
             ) : (
               <>
@@ -730,13 +1081,31 @@ function App() {
         ) : currentView === 'games' ? (
           <div>
             <div style={styles.header}>
-              <h1 style={styles.title}>按游戏浏览</h1>
+              <h1 style={styles.title}>{t.nav.games}</h1>
+              <select 
+                value={gameSortOrder}
+                onChange={(e) => handleGameSortChange(e.target.value)}
+                style={{ 
+                  padding: '8px 12px', 
+                  background: theme.accent, 
+                  border: 'none', 
+                  borderRadius: 6, 
+                  color: theme.text, 
+                  cursor: 'pointer',
+                  fontSize: 14
+                }}
+              >
+                <option value="time_desc">{t.header.game_sort_newest}</option>
+                <option value="time_asc">{t.header.game_sort_oldest}</option>
+                <option value="alpha_asc">{t.header.game_sort_alpha_asc}</option>
+                <option value="alpha_desc">{t.header.game_sort_alpha_desc}</option>
+              </select>
             </div>
             
             {games.length === 0 ? (
               <div style={styles.empty}>
-                <p>还没有游戏记录</p>
-                <p style={{ fontSize: 12, marginTop: 8 }}>截图后会自动识别游戏</p>
+                <p>{t.empty.no_games}</p>
+                <p style={{ fontSize: 12, marginTop: 8 }}>{t.empty.game_hint}</p>
               </div>
             ) : (
               <div style={styles.grid}>
@@ -758,9 +1127,9 @@ function App() {
                       )}
                     </div>
                     <div style={styles.gameTitle}>{game.display_title || game.game_title}</div>
-                    <div style={styles.gameCount}>{game.count} 张截图</div>
+                    <div style={styles.gameCount}>{game.count} {t.game.screenshots}</div>
                     <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>
-                      最后更新于: {formatDate(game.last_timestamp)}
+                      {t.game.last_updated} {formatDate(game.last_timestamp)}
                     </div>
                   </div>
                 ))}
@@ -799,20 +1168,38 @@ function App() {
                       setIsMultiSelectMode(false)
                       setSelectedScreenshots([])
                     }}>
-                      取消选定
+                      {t.header.cancel_select}
                     </button>
                     <button 
                       style={selectedScreenshots.length > 0 ? styles.btnDanger : styles.btnDisabled}
                       onClick={deleteSelectedScreenshots}
                       disabled={selectedScreenshots.length === 0}
                     >
-                      确定删除 ({selectedScreenshots.length})
+                      {t.header.confirm_delete} ({selectedScreenshots.length})
                     </button>
                   </>
                 ) : (
-                  <button style={styles.btn} onClick={() => setIsMultiSelectMode(true)}>
-                    多选删除
-                  </button>
+                  <>
+                    <select 
+                      value={gameSortOrder}
+                      onChange={(e) => handleGameSortChange(e.target.value)}
+                      style={{ 
+                        padding: '8px 12px', 
+                        background: theme.accent, 
+                        border: 'none', 
+                        borderRadius: 6, 
+                        color: theme.text, 
+                        cursor: 'pointer',
+                        fontSize: 14
+                      }}
+                    >
+                      <option value="time_desc">{t.header.game_sort_newest}</option>
+                      <option value="time_asc">{t.header.game_sort_oldest}</option>
+                    </select>
+                    <button style={styles.btn} onClick={() => setIsMultiSelectMode(true)}>
+                      {t.header.multi_select}
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -906,10 +1293,30 @@ function App() {
           </div>
         ) : (
           <div>
-            <h1 style={styles.title}>设置</h1>
+            <h1 style={styles.title}>{t.settings.title}</h1>
             <div style={{ marginTop: 24 }}>
               <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
-                <h3 style={{ marginBottom: 12 }}>主题</h3>
+                <h3 style={{ marginBottom: 12 }}>{t.settings.language}</h3>
+                <select 
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  style={{ 
+                    padding: '8px 12px', 
+                    background: theme.primary, 
+                    border: 'none', 
+                    borderRadius: 6, 
+                    color: theme.text, 
+                    cursor: 'pointer',
+                    fontSize: 14
+                  }}
+                >
+                  <option value="zh">{t.settings.languages.zh}</option>
+                  <option value="en">{t.settings.languages.en}</option>
+                  <option value="ja">{t.settings.languages.ja}</option>
+                </select>
+              </div>
+              <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
+                <h3 style={{ marginBottom: 12 }}>{t.settings.theme}</h3>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   {Object.entries(themes).map(([key, t]) => (
                     <button
@@ -929,16 +1336,16 @@ function App() {
               </div>
               
               <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
-                <h3 style={{ marginBottom: 12 }}>存储位置</h3>
+                <h3 style={{ marginBottom: 12 }}>{t.settings.storage}</h3>
                 <p style={{ color: theme.textMuted, fontSize: 14, marginBottom: 12 }}>
-                  当前存储位置: {storagePath}
+                  {t.settings.current_path} {storagePath}
                 </p>
                 <button 
                   style={styles.btnPrimary} 
                   onClick={changeStoragePath}
                   disabled={isMigrating}
                 >
-                  {isMigrating ? '迁移中...' : '更改存储位置'}
+                  {isMigrating ? t.settings.migrating : t.settings.change_path}
                 </button>
                 {isMigrating && (
                   <div style={styles.migrationProgress}>
@@ -951,18 +1358,18 @@ function App() {
                   </div>
                 )}
                 <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
-                  数据库和截图在同一目录，可直接复制整个文件夹到其他电脑使用
+                  {t.settings.storage_hint}
                 </p>
               </div>
               
               <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
-                <h3 style={{ marginBottom: 12 }}>快捷键</h3>
-                <p style={{ color: theme.textMuted, fontSize: 14 }}>PrintScreen - 截图</p>
-                <p style={{ color: theme.textMuted, fontSize: 14 }}>F12 - 测试截图（调试模式）</p>
+                <h3 style={{ marginBottom: 12 }}>{t.settings.hotkeys}</h3>
+                <p style={{ color: theme.textMuted, fontSize: 14 }}>{t.settings.hotkey_print}</p>
+                <p style={{ color: theme.textMuted, fontSize: 14 }}>{t.settings.hotkey_f12}</p>
               </div>
 
               <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
-                <h3 style={{ marginBottom: 12 }}>系统选项</h3>
+                <h3 style={{ marginBottom: 12 }}>{t.settings.system}</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <input
                     type="checkbox"
@@ -972,16 +1379,16 @@ function App() {
                     style={{ width: 18, height: 18, cursor: 'pointer' }}
                   />
                   <label htmlFor="autostart" style={{ cursor: 'pointer', color: theme.text }}>
-                    开机自启动
+                    {t.settings.autostart}
                   </label>
                 </div>
                 <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
-                  启用后，程序会在系统启动时自动运行
+                  {t.settings.autostart_hint}
                 </p>
               </div>
 
               <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
-                <h3 style={{ marginBottom: 12 }}>截图选项</h3>
+                <h3 style={{ marginBottom: 12 }}>{t.settings.screenshot}</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <input
                     type="checkbox"
@@ -991,18 +1398,48 @@ function App() {
                     style={{ width: 18, height: 18, cursor: 'pointer' }}
                   />
                   <label htmlFor="captureMouse" style={{ cursor: 'pointer', color: theme.text }}>
-                    捕捉鼠标光标
+                    {t.settings.capture_mouse}
                   </label>
                 </div>
                 <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
-                  启用后，截图时会包含鼠标光标
+                  {t.settings.capture_mouse_hint}
                 </p>
               </div>
 
+              <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
+                <h3 style={{ marginBottom: 12 }}>{t.settings.delete_all}</h3>
+                <p style={{ color: theme.textMuted, fontSize: 14, marginBottom: 12 }}>
+                  {t.settings.delete_all_hint}
+                </p>
+                <button 
+                  style={{ 
+                    ...styles.btnDanger, 
+                    width: '100%',
+                    padding: '10px 16px',
+                    fontSize: 14
+                  }} 
+                  onClick={async () => {
+                    if (confirm(t.settings.delete_all_confirm)) {
+                      try {
+                        await invoke('delete_all_data')
+                        addLog('所有数据已删除')
+                        alert(t.settings.restart_required)
+                        await invoke('restart_app')
+                      } catch (e) {
+                        addLog(`删除所有数据失败: ${e}`)
+                        alert(`删除失败: ${e}`)
+                      }
+                    }
+                  }}
+                >
+                  {t.settings.delete_all}
+                </button>
+              </div>
+
               <div style={{ background: theme.card, padding: 16, borderRadius: 8 }}>
-                <h3 style={{ marginBottom: 12 }}>关于</h3>
-                <p style={{ color: theme.textMuted, fontSize: 14 }}>极简游戏截图管理器 v0.1.0</p>
-                <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>Rust + Tauri + React</p>
+                <h3 style={{ marginBottom: 12 }}>{t.settings.about}</h3>
+                <p style={{ color: theme.textMuted, fontSize: 14 }}>{t.settings.version}</p>
+                <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>{t.settings.tech}</p>
               </div>
             </div>
           </div>
