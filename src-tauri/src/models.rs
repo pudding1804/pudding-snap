@@ -20,6 +20,7 @@ pub struct GameSummary {
     pub display_title: String,
     pub game_banner_url: String,
     pub game_icon_path: Option<String>,
+    pub steam_logo_path: Option<String>,
     pub count: i32,
     pub last_timestamp: i64,
 }
@@ -43,4 +44,8 @@ pub struct GameCache {
     pub icon_path: Option<String>,
     pub display_title: Option<String>,
     pub last_updated: i64,
+    pub steam_appid: Option<u32>,
+    pub steam_name: Option<String>,
+    pub steam_logo_path: Option<String>,
+    pub steam_match_status: Option<String>,
 }

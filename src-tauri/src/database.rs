@@ -185,10 +185,28 @@ pub fn init_db() -> Result<Connection> {
             exe_path TEXT,
             icon_path TEXT,
             display_title TEXT,
-            last_updated INTEGER
+            last_updated INTEGER,
+            steam_appid INTEGER,
+            steam_name TEXT,
+            steam_logo_path TEXT,
+            steam_match_status TEXT
         )",
         [],
     )?;
+
+    let has_steam_appid: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('game_cache') WHERE name='steam_appid')",
+        [],
+        |row| row.get(0)
+    ).unwrap_or(false);
+
+    if !has_steam_appid {
+        println!("[数据库] 添加Steam相关字段...");
+        tx.execute("ALTER TABLE game_cache ADD COLUMN steam_appid INTEGER", [])?;
+        tx.execute("ALTER TABLE game_cache ADD COLUMN steam_name TEXT", [])?;
+        tx.execute("ALTER TABLE game_cache ADD COLUMN steam_logo_path TEXT", [])?;
+        tx.execute("ALTER TABLE game_cache ADD COLUMN steam_match_status TEXT", [])?;
+    }
 
     tx.commit()?;
 
@@ -358,7 +376,7 @@ pub fn get_screenshots_with_pagination(
 pub fn get_games(conn: &Connection) -> Result<Vec<GameSummary>> {
     let mut stmt = conn.prepare(
         "SELECT s.game_id, s.game_title, COALESCE(s.display_title, s.game_title), s.game_banner_url, COUNT(*) as count, MAX(s.timestamp) as last_timestamp,
-                gc.icon_path
+                gc.icon_path, gc.steam_logo_path
          FROM screenshots s
          LEFT JOIN game_cache gc ON s.game_id = gc.game_id
          GROUP BY s.game_id ORDER BY last_timestamp DESC",
@@ -373,6 +391,7 @@ pub fn get_games(conn: &Connection) -> Result<Vec<GameSummary>> {
             count: row.get(4)?,
             last_timestamp: row.get(5)?,
             game_icon_path: row.get(6)?,
+            steam_logo_path: row.get(7)?,
         })
     })?;
 
@@ -495,7 +514,7 @@ pub fn set_capture_mouse(conn: &Connection, enabled: bool) -> Result<()> {
 
 pub fn get_game_cache(conn: &Connection, game_id: &str) -> Option<GameCache> {
     conn.query_row(
-        "SELECT exe_path, icon_path, display_title, last_updated FROM game_cache WHERE game_id = ?1",
+        "SELECT exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status FROM game_cache WHERE game_id = ?1",
         params![game_id],
         |row| {
             Ok(GameCache {
@@ -504,6 +523,10 @@ pub fn get_game_cache(conn: &Connection, game_id: &str) -> Option<GameCache> {
                 icon_path: row.get(1)?,
                 display_title: row.get(2)?,
                 last_updated: row.get(3)?,
+                steam_appid: row.get(4)?,
+                steam_name: row.get(5)?,
+                steam_logo_path: row.get(6)?,
+                steam_match_status: row.get(7)?,
             })
         },
     ).ok()
@@ -511,10 +534,19 @@ pub fn get_game_cache(conn: &Connection, game_id: &str) -> Option<GameCache> {
 
 pub fn set_game_cache(conn: &Connection, cache: &GameCache) -> Result<()> {
     conn.execute(
-        "INSERT OR REPLACE INTO game_cache (game_id, exe_path, icon_path, display_title, last_updated)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![cache.game_id, cache.exe_path, cache.icon_path, cache.display_title, cache.last_updated],
+        "INSERT OR REPLACE INTO game_cache (game_id, exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![cache.game_id, cache.exe_path, cache.icon_path, cache.display_title, cache.last_updated, cache.steam_appid, cache.steam_name, cache.steam_logo_path, cache.steam_match_status],
     )?;
+    Ok(())
+}
+
+pub fn update_game_display_title(conn: &Connection, game_id: &str, display_title: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE screenshots SET display_title = ?1 WHERE game_id = ?2",
+        params![display_title, game_id],
+    )?;
+    println!("[数据库] 更新游戏 {} 的显示标题为: {}", game_id, display_title);
     Ok(())
 }
 

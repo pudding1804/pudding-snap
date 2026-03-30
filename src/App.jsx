@@ -115,6 +115,13 @@ function App() {
   // 语言设置
   const [language, setLanguage] = useState('zh')
   
+  // 检索信息弹窗状态
+  const [showSearchModal, setShowSearchModal] = useState(false)
+  const [searchModalStep, setSearchModalStep] = useState('source') // 'source' | 'steam' | 'results'
+  const [steamSearchTerm, setSteamSearchTerm] = useState('')
+  const [steamSearchResults, setSteamSearchResults] = useState([])
+  const [isSearching, setIsSearching] = useState(false)
+  
   // 刷新防抖
   const refreshDebounceRef = useRef(null)
   const isRefreshingRef = useRef(false)
@@ -138,7 +145,23 @@ function App() {
         game_sort_newest: '时间从新到旧',
         game_sort_oldest: '时间从旧到新',
         game_sort_alpha_asc: '按字母升序',
-        game_sort_alpha_desc: '按字母降序'
+        game_sort_alpha_desc: '按字母降序',
+        search_info: '检索信息',
+        steam_found: 'Steam信息检索成功',
+        steam_not_found: '未找到Steam信息',
+        steam_mismatch: 'Steam信息不匹配',
+        steam_searching: '正在检索Steam信息...'
+      },
+      search: {
+        title: '检索游戏信息',
+        select_source: '选择信息来源',
+        coming_soon: '即将推出',
+        placeholder: '输入游戏名称搜索...',
+        search: '搜索',
+        searching: '搜索中...',
+        back: '返回',
+        found_results: '找到 {count} 个结果',
+        no_results: '未找到相关游戏'
       },
       empty: {
         no_screenshots: '还没有截图',
@@ -245,7 +268,23 @@ function App() {
         game_sort_newest: 'Newest First',
         game_sort_oldest: 'Oldest First',
         game_sort_alpha_asc: 'Alphabetical (A-Z)',
-        game_sort_alpha_desc: 'Alphabetical (Z-A)'
+        game_sort_alpha_desc: 'Alphabetical (Z-A)',
+        search_info: 'Search Info',
+        steam_found: 'Steam info found',
+        steam_not_found: 'Steam info not found',
+        steam_mismatch: 'Steam info mismatch',
+        steam_searching: 'Searching Steam info...'
+      },
+      search: {
+        title: 'Search Game Info',
+        select_source: 'Select source',
+        coming_soon: 'Coming Soon',
+        placeholder: 'Enter game name to search...',
+        search: 'Search',
+        searching: 'Searching...',
+        back: 'Back',
+        found_results: 'Found {count} results',
+        no_results: 'No games found'
       },
       empty: {
         no_screenshots: 'No screenshots yet',
@@ -352,7 +391,23 @@ function App() {
         game_sort_newest: '新しい順',
         game_sort_oldest: '古い順',
         game_sort_alpha_asc: 'アルファベット順 (A-Z)',
-        game_sort_alpha_desc: 'アルファベット順 (Z-A)'
+        game_sort_alpha_desc: 'アルファベット順 (Z-A)',
+        search_info: '情報検索',
+        steam_found: 'Steam情報が見つかりました',
+        steam_not_found: 'Steam情報が見つかりません',
+        steam_mismatch: 'Steam情報が一致しません',
+        steam_searching: 'Steam情報を検索中...'
+      },
+      search: {
+        title: 'ゲーム情報検索',
+        select_source: '情報源を選択',
+        coming_soon: '近日公開',
+        placeholder: 'ゲーム名を入力して検索...',
+        search: '検索',
+        searching: '検索中...',
+        back: '戻る',
+        found_results: '{count}件の結果が見つかりました',
+        no_results: '関連するゲームが見つかりません'
       },
       empty: {
         no_screenshots: 'まだスクリーンショットはありません',
@@ -875,8 +930,11 @@ function App() {
     gameTitle: { fontWeight: 'bold', marginBottom: 4 },
     gameCount: { fontSize: 12, color: theme.textMuted },
     modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+    modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
     modalContent: { background: theme.card, borderRadius: 12, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' },
     modalHeader: { padding: 16, borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    modalTitle: { fontSize: 18, fontWeight: 'bold' },
+    closeBtn: { background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: theme.textMuted, padding: 0, lineHeight: 1 },
     modalBody: { padding: 16 },
     modalFooter: { padding: 16, borderTop: `1px solid ${theme.border}` },
     input: { width: '100%', padding: 8, background: theme.accent, border: `1px solid ${theme.border}`, borderRadius: 4, color: theme.text, boxSizing: 'border-box' },
@@ -1109,12 +1167,14 @@ function App() {
               </div>
             ) : (
               <div style={styles.grid}>
-                {games.map(game => (
+                {games.map(game => {
+                  const iconSrc = game.steam_logo_path || game.game_icon_path;
+                  return (
                   <div key={game.game_id} style={styles.gameCard} onClick={() => selectGame(game)}>
                     <div style={styles.gameIcon}>
-                      {game.game_icon_path ? (
+                      {iconSrc ? (
                         <img 
-                          src={getImageSrc(game.game_icon_path)} 
+                          src={getImageSrc(iconSrc)} 
                           alt={`${game.display_title || game.game_title} 图标`}
                           style={styles.gameIconImage}
                           onError={(e) => {
@@ -1132,7 +1192,7 @@ function App() {
                       {t.game.last_updated} {formatDate(game.last_timestamp)}
                     </div>
                   </div>
-                ))}
+                );})}
               </div>
             )}
           </div>
@@ -1149,10 +1209,10 @@ function App() {
                 </svg>
               </button>
               <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 12 }}>
-                {selectedGame?.game_icon_path ? (
+                {(selectedGame?.steam_logo_path || selectedGame?.game_icon_path) ? (
                   <div style={{ width: 40, height: 40, borderRadius: 6, overflow: 'hidden' }}>
                     <img 
-                      src={getImageSrc(selectedGame.game_icon_path)} 
+                      src={getImageSrc(selectedGame.steam_logo_path || selectedGame.game_icon_path)} 
                       alt={`${selectedGame.display_title || selectedGame.game_title} 图标`}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={(e) => e.target.style.display = 'none'}
@@ -1180,6 +1240,27 @@ function App() {
                   </>
                 ) : (
                   <>
+                    <button 
+                      style={{ 
+                        ...styles.btn, 
+                        padding: '8px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }} 
+                      onClick={() => {
+                        setShowSearchModal(true)
+                        setSearchModalStep('source')
+                        setSteamSearchTerm('')
+                        setSteamSearchResults([])
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35"/>
+                      </svg>
+                      {t.header.search_info}
+                    </button>
                     <select 
                       value={gameSortOrder}
                       onChange={(e) => handleGameSortChange(e.target.value)}
@@ -1476,6 +1557,156 @@ function App() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      
+      {showSearchModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowSearchModal(false)}>
+          <div style={{ ...styles.modalContent, maxWidth: 500, maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>{t.search.title}</h2>
+              <button style={styles.closeBtn} onClick={() => setShowSearchModal(false)}>×</button>
+            </div>
+            
+            {searchModalStep === 'source' && (
+              <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <p style={{ color: theme.textMuted, textAlign: 'center' }}>{t.search.select_source}</p>
+                <button 
+                  style={{ ...styles.btnPrimary, padding: 16, fontSize: 16 }}
+                  onClick={() => {
+                    setSearchModalStep('steam')
+                    setSteamSearchTerm(selectedGame?.display_title || selectedGame?.game_title || '')
+                  }}
+                >
+                  Steam
+                </button>
+                <button 
+                  style={{ ...styles.btn, padding: 16, fontSize: 16, opacity: 0.5, cursor: 'not-allowed' }}
+                  disabled
+                >
+                  Bangumi ({t.search.coming_soon})
+                </button>
+              </div>
+            )}
+            
+            {searchModalStep === 'steam' && (
+              <div style={{ padding: 24 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                  <input
+                    type="text"
+                    value={steamSearchTerm}
+                    onChange={e => setSteamSearchTerm(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter' && steamSearchTerm.trim()) {
+                        setIsSearching(true)
+                        try {
+                          const results = await invoke('search_steam_games', { searchTerm: steamSearchTerm })
+                          setSteamSearchResults(results)
+                          if (results.length > 0) {
+                            setSearchModalStep('results')
+                          }
+                        } catch (err) {
+                          addLog(`搜索失败: ${err}`)
+                        }
+                        setIsSearching(false)
+                      }
+                    }}
+                    placeholder={t.search.placeholder}
+                    style={{ ...styles.input, flex: 1 }}
+                    autoFocus
+                  />
+                  <button 
+                    style={styles.btnPrimary}
+                    onClick={async () => {
+                      if (steamSearchTerm.trim()) {
+                        setIsSearching(true)
+                        try {
+                          const results = await invoke('search_steam_games', { searchTerm: steamSearchTerm })
+                          setSteamSearchResults(results)
+                          if (results.length > 0) {
+                            setSearchModalStep('results')
+                          }
+                        } catch (err) {
+                          addLog(`搜索失败: ${err}`)
+                        }
+                        setIsSearching(false)
+                      }
+                    }}
+                    disabled={isSearching}
+                  >
+                    {isSearching ? t.search.searching : t.search.search}
+                  </button>
+                </div>
+                <button 
+                  style={{ ...styles.btn, width: '100%' }}
+                  onClick={() => setSearchModalStep('source')}
+                >
+                  {t.search.back}
+                </button>
+              </div>
+            )}
+            
+            {searchModalStep === 'results' && (
+              <div style={{ padding: 24 }}>
+                <p style={{ color: theme.textMuted, marginBottom: 16 }}>
+                  {t.search.found_results.replace('{count}', steamSearchResults.length)}
+                </p>
+                <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {steamSearchResults.map(result => (
+                    <div 
+                      key={result.appid}
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 12, 
+                        padding: 12, 
+                        background: theme.accent, 
+                        borderRadius: 8, 
+                        cursor: 'pointer',
+                        transition: 'background 0.2s'
+                      }}
+                      onClick={async () => {
+                        try {
+                          addLog(`正在应用 ${result.name} 的信息...`)
+                          const info = await invoke('apply_steam_game_info', {
+                            gameId: selectedGame?.game_id,
+                            appid: result.appid
+                          })
+                          addLog(`已应用: ${info.name}`)
+                          setShowSearchModal(false)
+                          await loadGames()
+                          const updatedGame = games.find(g => g.game_id === selectedGame?.game_id)
+                          if (updatedGame) {
+                            setSelectedGame(updatedGame)
+                          }
+                        } catch (err) {
+                          addLog(`应用失败: ${err}`)
+                        }
+                      }}
+                    >
+                      {result.tiny_image && (
+                        <img 
+                          src={result.tiny_image} 
+                          alt={result.name}
+                          style={{ width: 60, height: 30, objectFit: 'cover', borderRadius: 4 }}
+                        />
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 500 }}>{result.name}</div>
+                        <div style={{ fontSize: 12, color: theme.textMuted }}>AppID: {result.appid}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button 
+                  style={{ ...styles.btn, width: '100%', marginTop: 16 }}
+                  onClick={() => setSearchModalStep('steam')}
+                >
+                  {t.search.back}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
