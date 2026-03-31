@@ -759,6 +759,14 @@ function App() {
     if (!selectedScreenshot) return
     
     const handleKeyDown = (e) => {
+      const activeElement = document.activeElement
+      const isInputFocused = activeElement && (
+        activeElement.tagName === 'TEXTAREA' || 
+        activeElement.tagName === 'INPUT'
+      )
+      
+      if (isInputFocused) return
+      
       if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
         e.preventDefault()
         navigateScreenshot('prev')
@@ -2136,21 +2144,53 @@ function App() {
           <div 
             style={{
               ...styles.modalContent,
-              width: '90vw',
-              maxWidth: 1000,
-              maxHeight: '90vh',
+              width: '95vw',
+              maxWidth: 1200,
+              maxHeight: '95vh',
               display: 'flex',
-              flexDirection: 'column'
+              flexDirection: 'column',
+              padding: 0
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={styles.modalHeader}>
-              <h3>{formatDate(selectedScreenshot.timestamp)}</h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 14, color: theme.textMuted }}>
-                  {selectedScreenshotIndex + 1} / {screenshots.length}
+            <div style={{ 
+              padding: '8px 12px',
+              borderBottom: `1px solid ${theme.border}`,
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: theme.text, fontWeight: 500 }}>
+                  {formatDate(selectedScreenshot.timestamp)}
                 </span>
-                <button style={styles.btn} {...btnEvents} onClick={closeModal}>关闭</button>
+                <span style={{ fontSize: 12, color: theme.textMuted }}>|</span>
+                <span style={{ fontSize: 12, color: theme.textMuted }}>
+                  {selectedScreenshot.display_title || selectedScreenshot.game_title}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, color: theme.textMuted, background: theme.accent, padding: '2px 8px', borderRadius: 4 }}>
+                  {selectedScreenshotIndex + 1}/{screenshots.length}
+                </span>
+                <button 
+                  style={{ 
+                    background: 'transparent', 
+                    border: 'none', 
+                    color: theme.textMuted, 
+                    cursor: 'pointer', 
+                    fontSize: 20, 
+                    padding: '2px 6px',
+                    lineHeight: 1,
+                    transition: 'color 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = theme.text}
+                  onMouseLeave={e => e.currentTarget.style.color = theme.textMuted}
+                  onClick={closeModal}
+                >
+                  ✕
+                </button>
               </div>
             </div>
             
@@ -2159,7 +2199,7 @@ function App() {
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
-              padding: 16,
+              padding: 8,
               minHeight: 0
             }}>
               <img 
@@ -2167,55 +2207,103 @@ function App() {
                 alt="截图" 
                 style={{ 
                   maxWidth: '100%', 
-                  maxHeight: 'calc(90vh - 280px)',
+                  maxHeight: 'calc(95vh - 120px)',
                   objectFit: 'contain'
                 }} 
               />
             </div>
             
             <div style={{ 
-              padding: '8px 16px',
+              padding: '10px 16px',
               borderTop: `1px solid ${theme.border}`,
-              display: 'flex', 
-              justifyContent: 'center', 
-              alignItems: 'center', 
-              gap: 24 
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
+              flexShrink: 0
             }}>
-              <button
-                style={{
-                  ...styles.btn,
-                  opacity: selectedScreenshotIndex > 0 ? 1 : 0.5,
-                  cursor: selectedScreenshotIndex > 0 ? 'pointer' : 'not-allowed'
-                }}
-                {...(selectedScreenshotIndex > 0 ? btnEvents : {})}
-                onClick={() => navigateScreenshot('prev')}
-                disabled={selectedScreenshotIndex === 0}
-              >
-                ← 上一张
-              </button>
-              <span style={{ fontSize: 14, color: theme.textMuted, minWidth: 60, textAlign: 'center' }}>
-                {selectedScreenshotIndex + 1} / {screenshots.length}
-              </span>
-              <button
-                style={{
-                  ...styles.btn,
-                  opacity: selectedScreenshotIndex < screenshots.length - 1 ? 1 : 0.5,
-                  cursor: selectedScreenshotIndex < screenshots.length - 1 ? 'pointer' : 'not-allowed'
-                }}
-                {...(selectedScreenshotIndex < screenshots.length - 1 ? btnEvents : {})}
-                onClick={() => navigateScreenshot('next')}
-                disabled={selectedScreenshotIndex === screenshots.length - 1}
-              >
-                下一张 →
-              </button>
-            </div>
-            
-            <div style={styles.modalFooter}>
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <label style={{ fontSize: 12, color: theme.textMuted }}>{t.header.note_hint}</label>
-                  <span style={{ fontSize: 12, color: theme.textMuted }}>{t.header.note_shortcut}</span>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <button
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    background: selectedScreenshotIndex > 0 ? theme.accent : 'transparent',
+                    border: `1px solid ${selectedScreenshotIndex > 0 ? theme.border : 'transparent'}`,
+                    color: selectedScreenshotIndex > 0 ? theme.text : theme.textMuted,
+                    cursor: selectedScreenshotIndex > 0 ? 'pointer' : 'default',
+                    fontSize: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s',
+                    opacity: selectedScreenshotIndex > 0 ? 1 : 0.4
+                  }}
+                  onMouseEnter={e => {
+                    if (selectedScreenshotIndex > 0) {
+                      e.currentTarget.style.background = theme.border
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (selectedScreenshotIndex > 0) {
+                      e.currentTarget.style.background = theme.accent
+                    }
+                  }}
+                  onClick={() => navigateScreenshot('prev')}
+                  disabled={selectedScreenshotIndex === 0}
+                >
+                  ‹
+                </button>
+                <span style={{ 
+                  fontSize: 12, 
+                  color: theme.textMuted, 
+                  minWidth: 50, 
+                  textAlign: 'center',
+                  fontVariantNumeric: 'tabular-nums'
+                }}>
+                  {selectedScreenshotIndex + 1} / {screenshots.length}
+                </span>
+                <button
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    background: selectedScreenshotIndex < screenshots.length - 1 ? theme.accent : 'transparent',
+                    border: `1px solid ${selectedScreenshotIndex < screenshots.length - 1 ? theme.border : 'transparent'}`,
+                    color: selectedScreenshotIndex < screenshots.length - 1 ? theme.text : theme.textMuted,
+                    cursor: selectedScreenshotIndex < screenshots.length - 1 ? 'pointer' : 'default',
+                    fontSize: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s',
+                    opacity: selectedScreenshotIndex < screenshots.length - 1 ? 1 : 0.4
+                  }}
+                  onMouseEnter={e => {
+                    if (selectedScreenshotIndex < screenshots.length - 1) {
+                      e.currentTarget.style.background = theme.border
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (selectedScreenshotIndex < screenshots.length - 1) {
+                      e.currentTarget.style.background = theme.accent
+                    }
+                  }}
+                  onClick={() => navigateScreenshot('next')}
+                  disabled={selectedScreenshotIndex === screenshots.length - 1}
+                >
+                  ›
+                </button>
+              </div>
+              
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                flex: 1,
+                background: theme.accent,
+                borderRadius: 6,
+                border: `1px solid ${theme.border}`,
+                overflow: 'hidden'
+              }}>
                 <textarea
                   value={noteText}
                   onChange={e => setNoteText(e.target.value)}
@@ -2226,35 +2314,85 @@ function App() {
                     }
                   }}
                   maxLength={120}
-                  style={{ ...styles.input, height: 60, resize: 'none' }}
-                  placeholder="写下你的感悟..."
+                  placeholder="添加附注..."
+                  style={{ 
+                    flex: 1,
+                    height: 28, 
+                    resize: 'none',
+                    fontSize: 13,
+                    padding: '4px 10px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: theme.text,
+                    outline: 'none'
+                  }}
                 />
+                <button 
+                  style={{ 
+                    padding: '0 12px', 
+                    height: 28,
+                    background: theme.primary, 
+                    border: 'none', 
+                    color: '#fff', 
+                    cursor: 'pointer', 
+                    fontSize: 12,
+                    fontWeight: 500,
+                    transition: 'opacity 0.15s',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                  onClick={() => saveNote(selectedScreenshot.id, noteText)}
+                >
+                  保存
+                </button>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 14, color: theme.textMuted }}>游戏: {selectedScreenshot.display_title || selectedScreenshot.game_title}</span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button 
-                    style={styles.btnPrimary}
-                    {...btnEvents}
-                    onClick={() => saveNote(selectedScreenshot.id, noteText)}
-                  >
-                    保存附注
-                  </button>
-                  <button 
-                    style={styles.btn}
-                    {...btnEvents}
-                    onClick={() => openInExplorer(selectedScreenshot.file_path)}
-                  >
-                    打开文件夹
-                  </button>
-                  <button 
-                    style={styles.btnDanger}
-                    {...btnEvents}
-                    onClick={() => deleteScreenshot(selectedScreenshot.id)}
-                  >
-                    删除
-                  </button>
-                </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <button 
+                  style={{ 
+                    width: 28,
+                    height: 28,
+                    background: theme.accent, 
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 6, 
+                    color: theme.text, 
+                    cursor: 'pointer', 
+                    fontSize: 13,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = theme.border}
+                  onMouseLeave={e => e.currentTarget.style.background = theme.accent}
+                  onClick={() => openInExplorer(selectedScreenshot.file_path)}
+                  title="打开文件夹"
+                >
+                  📁
+                </button>
+                <button 
+                  style={{ 
+                    width: 28,
+                    height: 28,
+                    background: theme.danger, 
+                    border: 'none', 
+                    borderRadius: 6, 
+                    color: '#fff', 
+                    cursor: 'pointer', 
+                    fontSize: 13,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'opacity 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                  onClick={() => deleteScreenshot(selectedScreenshot.id)}
+                  title="删除截图"
+                >
+                  🗑
+                </button>
               </div>
             </div>
           </div>
