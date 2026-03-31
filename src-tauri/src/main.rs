@@ -162,6 +162,15 @@ fn hide_window(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn show_main_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn open_in_explorer(file_path: String) -> Result<(), String> {
     let path = std::path::Path::new(&file_path);
     if !path.exists() {
@@ -483,11 +492,6 @@ fn main() {
             
             let app_handle = app.app_handle().clone();
 
-            if let Some(window) = app.get_webview_window("main") {
-                println!("[启动] 初始隐藏窗口...");
-                let _ = window.hide();
-            }
-
             let show_item = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
             let settings_item = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "关闭", true, None::<&str>)?;
@@ -642,13 +646,22 @@ fn main() {
                                                         let cached_display_title = db::get_game_cache(&conn, &game_id)
                                                             .and_then(|c| c.display_title);
                                                         
-                                                        let display_title = cached_display_title
-                                                            .as_ref()
-                                                            .map(|s| s.as_str())
-                                                            .unwrap_or(&task.process_name);
+                                                        let display_title = if let Some(ref title) = cached_display_title {
+                                                            title.clone()
+                                                        } else if let Some(ref exe_path) = task.exe_path {
+                                                            if let Some(folder_name) = windows_utils::get_game_folder_name(exe_path) {
+                                                                let cleaned = windows_utils::clean_game_name(&folder_name);
+                                                                println!("[游戏名] 清理文件夹名: {} -> {}", folder_name, cleaned);
+                                                                cleaned
+                                                            } else {
+                                                                task.process_name.clone()
+                                                            }
+                                                        } else {
+                                                            task.process_name.clone()
+                                                        };
                                                         
                                                         if let (Some(file_path_str), Some(thumb_path_str)) = (filepath.to_str(), thumbnail_path.to_str()) {
-                                                            if let Ok(_id) = db::insert_screenshot(&conn, file_path_str, thumb_path_str, &game_id, display_title, timestamp) {
+                                                            if let Ok(_id) = db::insert_screenshot(&conn, file_path_str, thumb_path_str, &game_id, &display_title, timestamp) {
                                                                 let has_icon = db::get_game_cache(&conn, &game_id)
                                                                     .and_then(|c| c.icon_path)
                                                                     .map(|p| std::path::Path::new(&p).exists())
@@ -841,6 +854,7 @@ fn main() {
             set_capture_mouse,
             show_window,
             hide_window,
+            show_main_window,
             open_in_explorer,
             get_game_icon,
             extract_game_icon,

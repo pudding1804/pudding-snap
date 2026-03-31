@@ -211,27 +211,41 @@ pub fn get_rpg_maker_game_title(exe_path: &str) -> Option<String> {
     let game_dir = exe_path.parent()?;
     
     let game_ini = game_dir.join("Game.ini");
-    if !game_ini.exists() {
-        return None;
+    if game_ini.exists() {
+        if let Ok(content) = std::fs::read_to_string(&game_ini) {
+            let mut in_game_section = false;
+            for line in content.lines() {
+                let line = line.trim();
+                if line == "[Game]" {
+                    in_game_section = true;
+                    continue;
+                }
+                if line.starts_with('[') && line.ends_with(']') {
+                    in_game_section = false;
+                    continue;
+                }
+                if in_game_section && line.starts_with("Title=") {
+                    if let Some(title) = line.strip_prefix("Title=") {
+                        if !title.is_empty() {
+                            println!("[游戏ID] 从Game.ini读取标题: {}", title);
+                            return Some(title.to_string());
+                        }
+                    }
+                }
+            }
+        }
     }
     
-    let content = std::fs::read_to_string(&game_ini).ok()?;
-    
-    let mut in_game_section = false;
-    for line in content.lines() {
-        let line = line.trim();
-        if line == "[Game]" {
-            in_game_section = true;
-            continue;
-        }
-        if line.starts_with('[') && line.ends_with(']') {
-            in_game_section = false;
-            continue;
-        }
-        if in_game_section && line.starts_with("Title=") {
-            let title = line.strip_prefix("Title=")?;
-            if !title.is_empty() {
-                return Some(title.to_string());
+    let system_json = game_dir.join("data").join("System.json");
+    if system_json.exists() {
+        if let Ok(content) = std::fs::read_to_string(&system_json) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(title) = json.get("gameTitle").and_then(|t| t.as_str()) {
+                    if !title.is_empty() {
+                        println!("[游戏ID] 从System.json读取标题: {}", title);
+                        return Some(title.to_string());
+                    }
+                }
             }
         }
     }
@@ -243,4 +257,70 @@ pub fn get_game_folder_name(exe_path: &str) -> Option<String> {
     let exe_path = std::path::Path::new(exe_path);
     let game_dir = exe_path.parent()?;
     game_dir.file_name().map(|n| n.to_string_lossy().to_string())
+}
+
+pub fn clean_game_name(folder_name: &str) -> String {
+    let mut name = folder_name.to_string();
+    
+    let patterns = [
+        (r"\.Build\.\d+$", ""),
+        (r"\.v?\d+\.\d+\.\d+.*$", ""),
+        (r"\.v?\d+\.\d+.*$", ""),
+        (r"\s+Build\s*\d+.*$", ""),
+        (r"\s+v\d+.*$", ""),
+        (r"\s*\[.*?\]$", ""),
+        (r"\s*\(.*?\)$", ""),
+        (r"\.REPACK.*$", ""),
+        (r"\.GOG.*$", ""),
+        (r"\.Steam.*$", ""),
+        (r"\.FINAL.*$", ""),
+        (r"\.UPDATE.*$", ""),
+        (r"\.DLC.*$", ""),
+        (r"\.Complete.*$", ""),
+        (r"\.Collection.*$", ""),
+        (r"\.Edition.*$", ""),
+        (r"\.Win64.*$", ""),
+        (r"\.x64.*$", ""),
+        (r"\.MULTi.*$", ""),
+        (r"\-PLAZA$", ""),
+        (r"\-CODEX$", ""),
+        (r"\-SKIDROW$", ""),
+        (r"\-FLT$", ""),
+        (r"\-RELOADED$", ""),
+        (r"\-PROPHET$", ""),
+        (r"\-TiNYiSO$", ""),
+        (r"\-HOODLUM$", ""),
+        (r"\-DARKZER$", ""),
+        (r"\-I_KnoW$", ""),
+        (r"\-SiMPLEX$", ""),
+        (r"\-DOGE$", ""),
+        (r"\-GOG$", ""),
+        (r"\-STEAM$", ""),
+    ];
+    
+    for (pattern, replacement) in patterns {
+        let re = regex::Regex::new(pattern).unwrap();
+        name = re.replace(&name, replacement).to_string();
+    }
+    
+    name = name.replace(".", " ");
+    name = name.replace("_", " ");
+    name = name.replace("  ", " ");
+    name = name.trim().to_string();
+    
+    let words_to_capitalize = ["of", "the", "and", "a", "an", "to", "for", "in", "on", "at", "by", "with", "from"];
+    let words: Vec<&str> = name.split_whitespace().collect();
+    let result: Vec<String> = words.into_iter().enumerate().map(|(i, word)| {
+        if i == 0 || !words_to_capitalize.contains(&word.to_lowercase().as_str()) {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(c) => c.to_uppercase().collect::<String>() + chars.as_str().to_lowercase().as_str(),
+                None => String::new(),
+            }
+        } else {
+            word.to_lowercase()
+        }
+    }).collect();
+    
+    result.join(" ")
 }

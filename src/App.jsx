@@ -82,6 +82,7 @@ function App() {
   const [games, setGames] = useState([])
   const [selectedGame, setSelectedGame] = useState(null)
   const [selectedScreenshot, setSelectedScreenshot] = useState(null)
+  const [selectedScreenshotIndex, setSelectedScreenshotIndex] = useState(0)
   const [isModalClosing, setIsModalClosing] = useState(false)
   const [sortOrder, setSortOrder] = useState('desc')
   const [gameSortOrder, setGameSortOrder] = useState('time_desc')
@@ -95,6 +96,11 @@ function App() {
   const [logs, setLogs] = useState(['应用启动...'])
   const [noteText, setNoteText] = useState('')
   const [currentTheme, setCurrentTheme] = useState('night')
+  
+  // 首次使用向导
+  const [showGuide, setShowGuide] = useState(false)
+  const [guideStep, setGuideStep] = useState(0)
+  const [dontShowAgain, setDontShowAgain] = useState(false)
   
   // 分页相关状态
   const [currentPage, setCurrentPage] = useState(1)
@@ -671,6 +677,19 @@ function App() {
       
       setIsLoading(false)
       addLog('数据加载完成')
+      
+      const hideGuide = localStorage.getItem('hideGuide')
+      if (!hideGuide) {
+        try {
+          await invoke('show_main_window')
+          addLog('主窗口已显示（向导）')
+        } catch (e) {
+          addLog(`显示主窗口失败: ${e}`)
+        }
+        setShowGuide(true)
+      } else {
+        addLog('启动后自动最小化到系统托盘')
+      }
     }
     
     loadData()
@@ -735,6 +754,23 @@ function App() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (!selectedScreenshot) return
+    
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault()
+        navigateScreenshot('prev')
+      } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+        e.preventDefault()
+        navigateScreenshot('next')
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedScreenshot, selectedScreenshotIndex])
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -863,6 +899,26 @@ function App() {
       setSelectedScreenshot(null)
       setIsModalClosing(false)
     }, 250)
+  }
+
+  const navigateScreenshot = (direction) => {
+    if (!selectedScreenshot) return
+    
+    const currentIndex = selectedScreenshotIndex
+    let newIndex = currentIndex
+    
+    if (direction === 'prev' && currentIndex > 0) {
+      newIndex = currentIndex - 1
+    } else if (direction === 'next' && currentIndex < screenshots.length - 1) {
+      newIndex = currentIndex + 1
+    }
+    
+    if (newIndex !== currentIndex) {
+      const newScreenshot = screenshots[newIndex]
+      setSelectedScreenshot(newScreenshot)
+      setSelectedScreenshotIndex(newIndex)
+      setNoteText(newScreenshot.note || '')
+    }
   }
 
   const saveNote = async (id, note) => {
@@ -1311,6 +1367,7 @@ function App() {
                           toggleSelectScreenshot(ss.id)
                         } else {
                           setSelectedScreenshot(ss)
+                          setSelectedScreenshotIndex(index)
                           setNoteText(ss.note || '')
                         }
                       }}
@@ -1792,6 +1849,7 @@ function App() {
                           toggleSelectScreenshot(ss.id)
                         } else {
                           setSelectedScreenshot(ss)
+                          setSelectedScreenshotIndex(index)
                           setNoteText(ss.note || '')
                         }
                       }}
@@ -2073,19 +2131,85 @@ function App() {
             ...styles.modal,
             animation: isModalClosing ? 'modalFadeOut 0.25s ease-in forwards' : 'modalFadeIn 0.3s ease-out'
           }} 
-          onClick={closeModal}
-        >
+            onClick={closeModal}
+          >
           <div 
-            style={styles.modalContent}
+            style={{
+              ...styles.modalContent,
+              width: '90vw',
+              maxWidth: 1000,
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
             onClick={e => e.stopPropagation()}
           >
             <div style={styles.modalHeader}>
               <h3>{formatDate(selectedScreenshot.timestamp)}</h3>
-              <button style={styles.btn} {...btnEvents} onClick={closeModal}>关闭</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 14, color: theme.textMuted }}>
+                  {selectedScreenshotIndex + 1} / {screenshots.length}
+                </span>
+                <button style={styles.btn} {...btnEvents} onClick={closeModal}>关闭</button>
+              </div>
             </div>
-            <div style={styles.modalBody}>
-              <img src={getImageSrc(selectedScreenshot.file_path)} alt="截图" style={{ width: '100%', maxWidth: 800 }} />
+            
+            <div style={{ 
+              flex: 1, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              padding: 16,
+              minHeight: 0
+            }}>
+              <img 
+                src={getImageSrc(selectedScreenshot.file_path)} 
+                alt="截图" 
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: 'calc(90vh - 280px)',
+                  objectFit: 'contain'
+                }} 
+              />
             </div>
+            
+            <div style={{ 
+              padding: '8px 16px',
+              borderTop: `1px solid ${theme.border}`,
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              gap: 24 
+            }}>
+              <button
+                style={{
+                  ...styles.btn,
+                  opacity: selectedScreenshotIndex > 0 ? 1 : 0.5,
+                  cursor: selectedScreenshotIndex > 0 ? 'pointer' : 'not-allowed'
+                }}
+                {...(selectedScreenshotIndex > 0 ? btnEvents : {})}
+                onClick={() => navigateScreenshot('prev')}
+                disabled={selectedScreenshotIndex === 0}
+              >
+                ← 上一张
+              </button>
+              <span style={{ fontSize: 14, color: theme.textMuted, minWidth: 60, textAlign: 'center' }}>
+                {selectedScreenshotIndex + 1} / {screenshots.length}
+              </span>
+              <button
+                style={{
+                  ...styles.btn,
+                  opacity: selectedScreenshotIndex < screenshots.length - 1 ? 1 : 0.5,
+                  cursor: selectedScreenshotIndex < screenshots.length - 1 ? 'pointer' : 'not-allowed'
+                }}
+                {...(selectedScreenshotIndex < screenshots.length - 1 ? btnEvents : {})}
+                onClick={() => navigateScreenshot('next')}
+                disabled={selectedScreenshotIndex === screenshots.length - 1}
+              >
+                下一张 →
+              </button>
+            </div>
+            
             <div style={styles.modalFooter}>
               <div style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -2405,6 +2529,228 @@ function App() {
           <div>
             <div style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>截图成功</div>
             <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>已保存到本地</div>
+          </div>
+        </div>
+      )}
+      
+      {showGuide && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10002,
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: currentTheme === 'night' ? '#1a1a2e' : '#fff',
+            borderRadius: 16,
+            padding: 32,
+            maxWidth: 500,
+            width: '90%',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            {guideStep === 0 && (
+              <>
+                <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                  <svg width="64" height="64" viewBox="0 0 100 100" fill="none" style={{ marginBottom: 16 }}>
+                    <rect x="10" y="10" width="80" height="80" rx="16" fill="url(#guideGradient)" />
+                    <path d="M30 50 L45 65 L70 35" stroke="white" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+                    <defs>
+                      <linearGradient id="guideGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style={{ stopColor: '#667eea' }} />
+                        <stop offset="100%" style={{ stopColor: '#764ba2' }} />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <h2 style={{ color: currentTheme === 'night' ? '#fff' : '#333', margin: 0, fontSize: 24 }}>欢迎使用极简游戏截图管理器</h2>
+                </div>
+                <p style={{ color: currentTheme === 'night' ? 'rgba(255,255,255,0.8)' : '#666', lineHeight: 1.8, textAlign: 'center' }}>
+                  这是一款专为游戏玩家设计的截图管理工具，帮助您轻松管理游戏截图。
+                </p>
+              </>
+            )}
+            
+            {guideStep === 1 && (
+              <>
+                <h3 style={{ color: currentTheme === 'night' ? '#fff' : '#333', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 24 }}>📸</span> 快速截图
+                </h3>
+                <p style={{ color: currentTheme === 'night' ? 'rgba(255,255,255,0.8)' : '#666', lineHeight: 1.8 }}>
+                  按下 <strong style={{ color: '#667eea' }}>PrintScreen</strong> 键即可截图。程序会自动识别当前运行的游戏，并将截图保存到本地。
+                </p>
+                <div style={{ 
+                  background: currentTheme === 'night' ? 'rgba(102, 126, 234, 0.1)' : '#f5f5f5', 
+                  padding: 12, 
+                  borderRadius: 8, 
+                  marginTop: 16,
+                  border: '1px solid rgba(102, 126, 234, 0.3)'
+                }}>
+                  <span style={{ color: currentTheme === 'night' ? 'rgba(255,255,255,0.6)' : '#888', fontSize: 13 }}>💡 提示：截图时会播放提示音</span>
+                </div>
+              </>
+            )}
+            
+            {guideStep === 2 && (
+              <>
+                <h3 style={{ color: currentTheme === 'night' ? '#fff' : '#333', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 24 }}>🎮</span> 游戏识别
+                </h3>
+                <p style={{ color: currentTheme === 'night' ? 'rgba(255,255,255,0.8)' : '#666', lineHeight: 1.8 }}>
+                  程序会自动识别游戏名称，并支持手动匹配 Steam 游戏信息，获取游戏封面和详细资料。
+                </p>
+                <div style={{ 
+                  background: currentTheme === 'night' ? 'rgba(102, 126, 234, 0.1)' : '#f5f5f5', 
+                  padding: 12, 
+                  borderRadius: 8, 
+                  marginTop: 16,
+                  border: '1px solid rgba(102, 126, 234, 0.3)'
+                }}>
+                  <span style={{ color: currentTheme === 'night' ? 'rgba(255,255,255,0.6)' : '#888', fontSize: 13 }}>💡 提示：点击游戏卡片可以匹配 Steam 信息</span>
+                </div>
+              </>
+            )}
+            
+            {guideStep === 3 && (
+              <>
+                <h3 style={{ color: currentTheme === 'night' ? '#fff' : '#333', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 24 }}>📁</span> 数据管理
+                </h3>
+                <p style={{ color: currentTheme === 'night' ? 'rgba(255,255,255,0.8)' : '#666', lineHeight: 1.8 }}>
+                  所有截图保存在本地，支持添加备注、批量删除、数据迁移等功能。程序最小化后会驻留系统托盘，随时待命。
+                </p>
+                <div style={{ 
+                  background: currentTheme === 'night' ? 'rgba(102, 126, 234, 0.1)' : '#f5f5f5', 
+                  padding: 12, 
+                  borderRadius: 8, 
+                  marginTop: 16,
+                  border: '1px solid rgba(102, 126, 234, 0.3)'
+                }}>
+                  <span style={{ color: currentTheme === 'night' ? 'rgba(255,255,255,0.6)' : '#888', fontSize: 13 }}>💡 提示：点击托盘图标可以快速打开主界面</span>
+                </div>
+              </>
+            )}
+            
+            <div style={{ 
+              marginTop: 24, 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              paddingTop: 16,
+              borderTop: `1px solid ${currentTheme === 'night' ? 'rgba(255,255,255,0.1)' : '#eee'}`
+            }}>
+              <label style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 8, 
+                cursor: 'pointer',
+                color: currentTheme === 'night' ? 'rgba(255,255,255,0.6)' : '#888',
+                fontSize: 13
+              }}>
+                <input
+                  type="checkbox"
+                  checked={dontShowAgain}
+                  onChange={(e) => setDontShowAgain(e.target.checked)}
+                  style={{ width: 16, height: 16, cursor: 'pointer' }}
+                />
+                以后不再显示
+              </label>
+              
+              <div style={{ display: 'flex', gap: 8 }}>
+                {guideStep > 0 && (
+                  <button
+                    onClick={() => setGuideStep(guideStep - 1)}
+                    style={{
+                      padding: '10px 20px',
+                      background: 'transparent',
+                      border: `1px solid ${currentTheme === 'night' ? 'rgba(255,255,255,0.2)' : '#ddd'}`,
+                      borderRadius: 8,
+                      color: currentTheme === 'night' ? '#fff' : '#333',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    上一步
+                  </button>
+                )}
+                
+                {guideStep < 3 ? (
+                  <button
+                    onClick={() => setGuideStep(guideStep + 1)}
+                    style={{
+                      padding: '10px 24px',
+                      background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                      border: 'none',
+                      borderRadius: 8,
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      fontWeight: 'bold',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    下一步
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      if (dontShowAgain) {
+                        localStorage.setItem('hideGuide', 'true')
+                      }
+                      setShowGuide(false)
+                      try {
+                        await invoke('hide_window')
+                        addLog('向导完成，窗口已最小化')
+                      } catch (e) {
+                        addLog(`最小化窗口失败: ${e}`)
+                      }
+                    }}
+                    style={{
+                      padding: '10px 24px',
+                      background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                      border: 'none',
+                      borderRadius: 8,
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      fontWeight: 'bold',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    开始使用
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              gap: 8, 
+              marginTop: 16 
+            }}>
+              {[0, 1, 2, 3].map(i => (
+                <div
+                  key={i}
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: i === guideStep 
+                      ? 'linear-gradient(135deg, #667eea, #764ba2)' 
+                      : currentTheme === 'night' ? 'rgba(255,255,255,0.2)' : '#ddd',
+                    transition: 'all 0.2s'
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
