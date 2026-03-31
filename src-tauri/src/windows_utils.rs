@@ -205,3 +205,42 @@ unsafe fn hicon_to_rgba(hicon: HICON) -> Result<(u32, u32, Vec<u8>), String> {
     
     Ok((width, height, rgba))
 }
+
+pub fn get_rpg_maker_game_title(exe_path: &str) -> Option<String> {
+    let exe_path = std::path::Path::new(exe_path);
+    let game_dir = exe_path.parent()?;
+    
+    let game_ini = game_dir.join("Game.ini");
+    if !game_ini.exists() {
+        return None;
+    }
+    
+    let content = std::fs::read_to_string(&game_ini).ok()?;
+    
+    let mut in_game_section = false;
+    for line in content.lines() {
+        let line = line.trim();
+        if line == "[Game]" {
+            in_game_section = true;
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            in_game_section = false;
+            continue;
+        }
+        if in_game_section && line.starts_with("Title=") {
+            let title = line.strip_prefix("Title=")?;
+            if !title.is_empty() {
+                return Some(title.to_string());
+            }
+        }
+    }
+    
+    None
+}
+
+pub fn get_game_folder_name(exe_path: &str) -> Option<String> {
+    let exe_path = std::path::Path::new(exe_path);
+    let game_dir = exe_path.parent()?;
+    game_dir.file_name().map(|n| n.to_string_lossy().to_string())
+}

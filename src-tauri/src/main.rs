@@ -471,6 +471,7 @@ fn main() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState { 
             db: db_arc, 
             window_shown,
@@ -548,6 +549,7 @@ fn main() {
             let queue_clone = state.screenshot_queue.clone();
             let processing_clone = state.is_processing.clone();
             let db_for_hotkey = state.db.clone();
+            let window_shown_clone = state.window_shown.clone();
 
             std::thread::spawn(move || {
                 println!("[启动] 热键监听线程启动");
@@ -587,6 +589,7 @@ fn main() {
                                     let db_h = db_for_hotkey.clone();
                                     let queue_h = queue_clone.clone();
                                     let processing_h = processing_clone.clone();
+                                    let window_shown_h = window_shown_clone.clone();
                                     
                                     let mut processing = processing_h.lock().unwrap();
                                     if *processing {
@@ -606,7 +609,17 @@ fn main() {
                                             if let Some(task) = task {
                                                 println!("[队列] 处理任务: {}", task.process_name);
                                                 
-                                                let game_id = db::generate_game_id(&task.process_name);
+                                                let exe_path_ref = task.exe_path.as_deref();
+                                                
+                                                let db_clone_for_id = db_h.clone();
+                                                let conn_for_id = db_clone_for_id.lock().unwrap();
+                                                let game_id = db::find_existing_game_id(&conn_for_id, &task.process_name, exe_path_ref)
+                                                    .unwrap_or_else(|| {
+                                                        db::generate_game_id(&task.process_name, exe_path_ref)
+                                                    });
+                                                drop(conn_for_id);
+                                                println!("[队列] 使用游戏ID: {} (进程名: {})", game_id, task.process_name);
+                                                
                                                 let game_dir = db::get_game_dir(&game_id);
                                                 let thumbnails_dir = db::get_thumbnails_dir();
                                                 
@@ -625,15 +638,31 @@ fn main() {
                                                         
                                                         let db_clone = db_h.clone();
                                                         let conn = db_clone.lock().unwrap();
+                                                        
+                                                        let cached_display_title = db::get_game_cache(&conn, &game_id)
+                                                            .and_then(|c| c.display_title);
+                                                        
+                                                        let display_title = cached_display_title
+                                                            .as_ref()
+                                                            .map(|s| s.as_str())
+                                                            .unwrap_or(&task.process_name);
+                                                        
                                                         if let (Some(file_path_str), Some(thumb_path_str)) = (filepath.to_str(), thumbnail_path.to_str()) {
-                                                            if let Ok(_id) = db::insert_screenshot(&conn, file_path_str, thumb_path_str, &game_id, &task.process_name, timestamp) {
+                                                            if let Ok(_id) = db::insert_screenshot(&conn, file_path_str, thumb_path_str, &game_id, display_title, timestamp) {
                                                                 let has_icon = db::get_game_cache(&conn, &game_id)
                                                                     .and_then(|c| c.icon_path)
                                                                     .map(|p| std::path::Path::new(&p).exists())
                                                                     .unwrap_or(false);
                                                                 
+                                                                let has_steam_info = db::get_game_cache(&conn, &game_id)
+                                                                    .and_then(|c| c.steam_match_status)
+                                                                    .map(|s| !s.is_empty())
+                                                                    .unwrap_or(false);
+                                                                println!("[Steam] 检查Steam信息: game_id={}, has_steam_info={}", game_id, has_steam_info);
+                                                                
+                                                                drop(conn);
+                                                                
                                                                 if !has_icon {
-                                                                    drop(conn);
                                                                     let db_for_icon = db_clone.clone();
                                                                     let exe_path_for_icon = task.exe_path.clone();
                                                                     let game_id_for_icon = game_id.clone();
@@ -663,7 +692,103 @@ fn main() {
                                                                     });
                                                                 }
                                                                 
-                                                                let _ = app_h.emit("screenshot-taken", ());
+                                                                if !has_steam_info {
+                                                                    let db_for_steam = db_clone.clone();
+                                                                    let game_id_for_steam = game_id.clone();
+                                                                    let process_name_for_steam = task.process_name.clone();
+                                                                    std::thread::spawn(move || {
+                                                                        println!("[Steam] 自动匹配游戏信息: {}", process_name_for_steam);
+                                                                        let result = steam::match_game_name(&process_name_for_steam);
+                                                                        
+                                                                        if result.status == SteamMatchStatus::Found {
+                                                                            if let Some(ref info) = result.game_info {
+                                                                                let logos_dir = steam::get_steam_logos_dir();
+                                                                                let logo_filename = format!("steam_{}.jpg", info.appid);
+                                                                                let logo_path = logos_dir.join(&logo_filename);
+                                                                                
+                                                                                let logo_url = info.header_image.as_ref()
+                                                                                    .or(info.capsule_image.as_ref())
+                                                                                    .map(|s| s.as_str());
+                                                                                
+                                                                                let mut logo_path_str = None;
+                                                                                if let Some(url) = logo_url {
+                                                                                    if let Err(e) = steam::download_steam_image(url, &logo_path) {
+                                                                                        println!("[Steam] 自动下载logo失败: {}", e);
+                                                                                    } else {
+                                                                                        logo_path_str = Some(logo_path.to_string_lossy().to_string());
+                                                                                    }
+                                                                                }
+                                                                                
+                                                                                let conn = db_for_steam.lock().unwrap();
+                                                                                let mut cache = db::get_game_cache(&conn, &game_id_for_steam).unwrap_or(GameCache {
+                                                                                    game_id: game_id_for_steam.clone(),
+                                                                                    exe_path: None,
+                                                                                    icon_path: None,
+                                                                                    display_title: Some(info.name.clone()),
+                                                                                    last_updated: chrono::Utc::now().timestamp(),
+                                                                                    steam_appid: Some(info.appid),
+                                                                                    steam_name: Some(info.name.clone()),
+                                                                                    steam_logo_path: logo_path_str.clone(),
+                                                                                    steam_match_status: Some("found".to_string()),
+                                                                                });
+                                                                                
+                                                                                cache.display_title = Some(info.name.clone());
+                                                                                cache.steam_appid = Some(info.appid);
+                                                                                cache.steam_name = Some(info.name.clone());
+                                                                                cache.steam_logo_path = logo_path_str;
+                                                                                cache.steam_match_status = Some("found".to_string());
+                                                                                cache.last_updated = chrono::Utc::now().timestamp();
+                                                                                
+                                                                                if let Err(e) = db::set_game_cache(&conn, &cache) {
+                                                                                    println!("[Steam] 自动保存缓存失败: {}", e);
+                                                                                }
+                                                                                
+                                                                                if let Err(e) = db::update_game_display_title(&conn, &game_id_for_steam, &info.name) {
+                                                                                    println!("[Steam] 自动更新显示标题失败: {}", e);
+                                                                                }
+                                                                                
+                                                                                println!("[Steam] 自动匹配成功: {} -> {}", process_name_for_steam, info.name);
+                                                                            }
+                                                                        } else {
+                                                                            let conn = db_for_steam.lock().unwrap();
+                                                                            let mut cache = db::get_game_cache(&conn, &game_id_for_steam).unwrap_or(GameCache {
+                                                                                game_id: game_id_for_steam.clone(),
+                                                                                exe_path: None,
+                                                                                icon_path: None,
+                                                                                display_title: None,
+                                                                                last_updated: chrono::Utc::now().timestamp(),
+                                                                                steam_appid: None,
+                                                                                steam_name: None,
+                                                                                steam_logo_path: None,
+                                                                                steam_match_status: Some(result.status.clone().to_string()),
+                                                                            });
+                                                                            
+                                                                            cache.steam_match_status = Some(result.status.clone().to_string());
+                                                                            cache.last_updated = chrono::Utc::now().timestamp();
+                                                                            
+                                                                            if let Err(e) = db::set_game_cache(&conn, &cache) {
+                                                                                println!("[Steam] 保存状态失败: {}", e);
+                                                                            }
+                                                                            
+                                                                            println!("[Steam] 自动匹配结果: {} -> {:?}", process_name_for_steam, result.status);
+                                                                        }
+                                                                    });
+                                                                }
+                                                                
+                                                                let is_window_shown = {
+                                                                    let shown = window_shown_h.lock().unwrap();
+                                                                    *shown
+                                                                };
+                                                                if is_window_shown {
+                                                                    let _ = app_h.emit("screenshot-taken", ());
+                                                                } else {
+                                                                    use tauri_plugin_notification::NotificationExt;
+                                                                    let _ = app_h.notification()
+                                                                        .builder()
+                                                                        .title("截图成功")
+                                                                        .body("已保存到本地")
+                                                                        .show();
+                                                                }
                                                             }
                                                         }
                                                     }

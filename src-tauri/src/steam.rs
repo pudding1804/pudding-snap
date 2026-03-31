@@ -212,7 +212,20 @@ pub fn match_game_name(process_name: &str) -> SteamMatchResult {
                 }
             }
             
-            println!("[Steam] 无完全匹配: {}", clean_name);
+            if games.len() == 1 {
+                let game = &games[0];
+                println!("[Steam] 唯一结果自动匹配: {} -> {}", clean_name, game.name);
+                
+                if let Ok(Some(info)) = get_steam_app_details(game.appid) {
+                    return SteamMatchResult {
+                        status: SteamMatchStatus::Found,
+                        game_info: Some(info),
+                        searched_name: clean_name,
+                    };
+                }
+            }
+            
+            println!("[Steam] 无完全匹配: {} (找到{}个结果)", clean_name, games.len());
             
             SteamMatchResult {
                 status: SteamMatchStatus::Mismatch,

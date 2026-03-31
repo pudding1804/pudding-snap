@@ -88,10 +88,50 @@ pub fn get_storage_path() -> String {
     get_data_dir().to_string_lossy().to_string()
 }
 
-pub fn generate_game_id(game_title: &str) -> String {
+pub fn generate_game_id(process_name: &str, exe_path: Option<&str>) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    
     let mut hasher = DefaultHasher::new();
-    game_title.hash(&mut hasher);
+    
+    if let Some(exe) = exe_path {
+        if let Some(rpg_title) = crate::windows_utils::get_rpg_maker_game_title(exe) {
+            let folder_name = crate::windows_utils::get_game_folder_name(exe)
+                .unwrap_or_else(|| process_name.to_string());
+            let unique_key = format!("{}:{}", rpg_title, folder_name);
+            println!("[游戏ID] RPG Maker游戏: {} -> {}", process_name, unique_key);
+            unique_key.hash(&mut hasher);
+            return format!("{:x}", hasher.finish());
+        }
+        
+        if let Some(folder_name) = crate::windows_utils::get_game_folder_name(exe) {
+            let unique_key = format!("{}:{}", process_name, folder_name);
+            println!("[游戏ID] 使用文件夹名: {} -> {}", process_name, unique_key);
+            unique_key.hash(&mut hasher);
+            return format!("{:x}", hasher.finish());
+        }
+    }
+    
+    process_name.hash(&mut hasher);
     format!("{:x}", hasher.finish())
+}
+
+pub fn find_existing_game_id(conn: &Connection, process_name: &str, exe_path: Option<&str>) -> Option<String> {
+    let game_id = generate_game_id(process_name, exe_path);
+    
+    let mut stmt = conn.prepare(
+        "SELECT game_id FROM screenshots WHERE game_id = ?1 LIMIT 1"
+    ).ok()?;
+    
+    if stmt.query_row(params![&game_id], |row| row.get::<_, String>(0)).ok().is_some() {
+        return Some(game_id);
+    }
+    
+    let mut stmt = conn.prepare(
+        "SELECT game_id FROM screenshots WHERE game_title = ?1 LIMIT 1"
+    ).ok()?;
+    
+    stmt.query_row(params![process_name], |row| row.get(0)).ok()
 }
 
 pub fn init_db() -> Result<Connection> {

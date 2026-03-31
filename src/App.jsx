@@ -82,8 +82,13 @@ function App() {
   const [games, setGames] = useState([])
   const [selectedGame, setSelectedGame] = useState(null)
   const [selectedScreenshot, setSelectedScreenshot] = useState(null)
+  const [isModalClosing, setIsModalClosing] = useState(false)
   const [sortOrder, setSortOrder] = useState('desc')
   const [gameSortOrder, setGameSortOrder] = useState('time_desc')
+  const [iconSize, setIconSize] = useState(() => {
+    const saved = localStorage.getItem('iconSize')
+    return saved || 'large'
+  })
   const [isLoading, setIsLoading] = useState(true)
   const [notification, setNotification] = useState(null)
   const [error, setError] = useState(null)
@@ -124,6 +129,33 @@ function App() {
   const [isApplyingInfo, setIsApplyingInfo] = useState(false)
   const [showApplySuccess, setShowApplySuccess] = useState(false)
   const [appliedGameName, setAppliedGameName] = useState('')
+  const [screenshotNotification, setScreenshotNotification] = useState(false)
+  
+  const showScreenshotNotification = () => {
+    setScreenshotNotification(true)
+    setTimeout(() => {
+      setScreenshotNotification(false)
+    }, 2000)
+  }
+  
+  // 三点菜单状态
+  const [showMenu, setShowMenu] = useState(false)
+  const [showSortMenu, setShowSortMenu] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed')
+    return saved === 'true'
+  })
+  
+  const toggleSidebar = () => {
+    const newState = !sidebarCollapsed
+    setSidebarCollapsed(newState)
+    localStorage.setItem('sidebarCollapsed', String(newState))
+  }
+  
+  const handleIconSizeChange = (size) => {
+    setIconSize(size)
+    localStorage.setItem('iconSize', size)
+  }
   
   // 刷新防抖
   const refreshDebounceRef = useRef(null)
@@ -153,7 +185,14 @@ function App() {
         steam_found: 'Steam信息检索成功',
         steam_not_found: '未找到Steam信息',
         steam_mismatch: 'Steam信息不匹配',
-        steam_searching: '正在检索Steam信息...'
+        steam_searching: '正在检索Steam信息...',
+        more_options: '更多选项',
+        sort_by: '排序方式',
+        note_hint: '附注 (最多120字)',
+        note_shortcut: '按Ctrl+Enter保存',
+        note_saved: '附注已保存',
+        icon_large: '大图标',
+        icon_small: '小图标'
       },
       search: {
         title: '检索游戏信息',
@@ -279,7 +318,14 @@ function App() {
         steam_found: 'Steam info found',
         steam_not_found: 'Steam info not found',
         steam_mismatch: 'Steam info mismatch',
-        steam_searching: 'Searching Steam info...'
+        steam_searching: 'Searching Steam info...',
+        more_options: 'More Options',
+        sort_by: 'Sort By',
+        note_hint: 'Note (max 120 chars)',
+        note_shortcut: 'Press Ctrl+Enter to save',
+        note_saved: 'Note saved',
+        icon_large: 'Large Icons',
+        icon_small: 'Small Icons'
       },
       search: {
         title: 'Search Game Info',
@@ -405,7 +451,14 @@ function App() {
         steam_found: 'Steam情報が見つかりました',
         steam_not_found: 'Steam情報が見つかりません',
         steam_mismatch: 'Steam情報が一致しません',
-        steam_searching: 'Steam情報を検索中...'
+        steam_searching: 'Steam情報を検索中...',
+        more_options: 'その他のオプション',
+        sort_by: '並び替え',
+        note_hint: 'メモ (最大120文字)',
+        note_shortcut: 'Ctrl+Enterで保存',
+        note_saved: 'メモを保存しました',
+        icon_large: '大きなアイコン',
+        icon_small: '小さなアイコン'
       },
       search: {
         title: 'ゲーム情報検索',
@@ -624,6 +677,7 @@ function App() {
 
     const unlisten = listen('screenshot-taken', () => {
       addLog('收到截图事件，准备刷新')
+      showScreenshotNotification()
       
       if (refreshDebounceRef.current) {
         clearTimeout(refreshDebounceRef.current)
@@ -695,6 +749,7 @@ function App() {
           if (isRefreshingRef.current) return
           
           isRefreshingRef.current = true
+          
           try {
             await loadScreenshotsWithPagination(1, selectedGame?.game_id || null)
             await loadGames()
@@ -802,12 +857,21 @@ function App() {
     return date.toLocaleString('zh-CN')
   }
 
+  const closeModal = () => {
+    setIsModalClosing(true)
+    setTimeout(() => {
+      setSelectedScreenshot(null)
+      setIsModalClosing(false)
+    }, 250)
+  }
+
   const saveNote = async (id, note) => {
     try {
       await invoke('update_note', { id, note })
       addLog(`附注保存成功: ID=${id}`)
       await loadScreenshotsWithPagination(currentPage, selectedGame?.game_id || null)
-      setNotification({ title: '保存成功', body: '附注已保存' })
+      closeModal()
+      setNotification({ title: t.header.note_saved, body: '' })
       setTimeout(() => setNotification(null), 2000)
     } catch (e) {
       addLog(`附注保存失败: ${e}`)
@@ -821,7 +885,12 @@ function App() {
       await invoke('delete_screenshot', { id })
       addLog(`截图删除成功: ID=${id}`)
       await loadScreenshotsWithPagination(currentPage, selectedGame?.game_id || null)
-      setSelectedScreenshot(null)
+      closeModal()
+      
+      if (selectedGame && screenshots.length <= 1) {
+        setSelectedGame(null)
+        await loadGames()
+      }
     } catch (e) {
       addLog(`截图删除失败: ${e}`)
       setError('删除截图失败: ' + String(e))
@@ -843,14 +912,21 @@ function App() {
     
     if (!confirm(`确定要删除 ${selectedScreenshots.length} 张截图吗？`)) return
     
+    const deleteCount = selectedScreenshots.length
+    
     try {
       await invoke('delete_screenshots', { ids: selectedScreenshots })
-      addLog(`批量删除成功: ${selectedScreenshots.length} 张`)
+      addLog(`批量删除成功: ${deleteCount} 张`)
       await loadScreenshotsWithPagination(currentPage, selectedGame?.game_id || null)
       setIsMultiSelectMode(false)
       setSelectedScreenshots([])
-      setNotification({ title: '删除成功', body: `已删除 ${selectedScreenshots.length} 张截图` })
+      setNotification({ title: '删除成功', body: `已删除 ${deleteCount} 张截图` })
       setTimeout(() => setNotification(null), 2000)
+      
+      if (selectedGame && screenshots.length <= deleteCount) {
+        setSelectedGame(null)
+        await loadGames()
+      }
     } catch (e) {
       addLog(`批量删除失败: ${e}`)
       setError('批量删除失败: ' + String(e))
@@ -917,6 +993,9 @@ function App() {
     }
   }
 
+  const cardWidth = iconSize === 'large' ? 280 : 187
+  const cardGap = iconSize === 'large' ? 16 : 12
+
   const styles = {
     container: { display: 'flex', height: '100vh', background: theme.bg, color: theme.text, fontFamily: 'system-ui, sans-serif' },
     sidebar: { width: 200, background: theme.sidebar, padding: 16, display: 'flex', flexDirection: 'column' },
@@ -926,18 +1005,18 @@ function App() {
     main: { flex: 1, padding: 24, overflow: 'auto' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
     title: { fontSize: 24, fontWeight: 'bold' },
-    btn: { padding: '8px 16px', background: theme.accent, border: 'none', borderRadius: 6, color: theme.text, cursor: 'pointer' },
-    btnPrimary: { padding: '8px 16px', background: theme.primary, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontWeight: 'bold' },
-    btnDanger: { padding: '8px 16px', background: theme.danger, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer' },
-    btnDisabled: { padding: '8px 16px', background: theme.accent, border: 'none', borderRadius: 6, color: theme.textMuted, cursor: 'not-allowed', opacity: 0.6 },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 },
-    card: { background: theme.card, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' },
-    cardImage: { width: '100%', height: 150, objectFit: 'cover', background: theme.accent },
+    btn: { padding: '8px 16px', background: theme.accent, border: 'none', borderRadius: 6, color: theme.text, cursor: 'pointer', transition: 'transform 0.15s, background 0.15s, opacity 0.15s' },
+    btnPrimary: { padding: '8px 16px', background: theme.primary, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'transform 0.15s, background 0.15s, opacity 0.15s' },
+    btnDanger: { padding: '8px 16px', background: theme.danger, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', transition: 'transform 0.15s, background 0.15s, opacity 0.15s' },
+    btnDisabled: { padding: '8px 16px', background: theme.accent, border: 'none', borderRadius: 6, color: theme.textMuted, cursor: 'not-allowed', opacity: 0.6, transition: 'transform 0.15s' },
+    grid: { display: 'grid', gridTemplateColumns: `repeat(auto-fill, ${cardWidth}px)`, gap: cardGap, justifyContent: 'flex-start' },
+    card: { background: theme.card, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', width: cardWidth },
+    cardImage: { width: '100%', aspectRatio: '16 / 9', objectFit: 'contain', background: theme.accent },
     cardInfo: { padding: 12 },
     cardTitle: { fontSize: 14, fontWeight: 'bold', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     cardDate: { fontSize: 12, color: theme.textMuted },
-    gameCard: { background: theme.card, borderRadius: 8, padding: 16, cursor: 'pointer', textAlign: 'center', transition: 'transform 0.2s' },
-    gameIcon: { width: '100%', height: 60, borderRadius: 8, background: theme.accent, margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, overflow: 'hidden' },
+    gameCard: { background: theme.card, borderRadius: 8, padding: 16, cursor: 'pointer', textAlign: 'center', transition: 'transform 0.2s', width: cardWidth },
+    gameIcon: { width: '100%', height: iconSize === 'large' ? 116 : 77, borderRadius: 8, background: theme.accent, margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: iconSize === 'large' ? 32 : 24, overflow: 'hidden' },
     gameIconImage: { width: '100%', height: '100%', objectFit: 'cover' },
     gameLogoImage: { width: '100%', height: '100%', objectFit: 'cover' },
     gameTitle: { fontWeight: 'bold', marginBottom: 4 },
@@ -947,7 +1026,7 @@ function App() {
     modalContent: { background: theme.card, borderRadius: 12, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' },
     modalHeader: { padding: 16, borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     modalTitle: { fontSize: 18, fontWeight: 'bold' },
-    closeBtn: { background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: theme.textMuted, padding: 0, lineHeight: 1 },
+    closeBtn: { background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: theme.textMuted, padding: 0, lineHeight: 1, transition: 'transform 0.15s, color 0.15s' },
     modalBody: { padding: 16 },
     modalFooter: { padding: 16, borderTop: `1px solid ${theme.border}` },
     input: { width: '100%', padding: 8, background: theme.accent, border: `1px solid ${theme.border}`, borderRadius: 4, color: theme.text, boxSizing: 'border-box' },
@@ -956,10 +1035,10 @@ function App() {
     debugLine: { color: theme.primary, marginBottom: 2 },
     empty: { textAlign: 'center', padding: 48, color: theme.textMuted },
     loading: { textAlign: 'center', padding: 48, color: theme.primary },
-    themeBtn: { padding: '10px 16px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', transition: 'transform 0.2s' },
+    themeBtn: { padding: '10px 16px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', transition: 'transform 0.15s, box-shadow 0.15s' },
     themeBtnActive: { transform: 'scale(1.05)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' },
     pagination: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24, padding: 16, background: theme.card, borderRadius: 8 },
-    paginationBtn: { padding: '6px 12px', background: theme.accent, border: 'none', borderRadius: 4, color: theme.text, cursor: 'pointer' },
+    paginationBtn: { padding: '6px 12px', background: theme.accent, border: 'none', borderRadius: 4, color: theme.text, cursor: 'pointer', transition: 'transform 0.15s, opacity 0.15s' },
     paginationBtnActive: { background: theme.primary, color: '#fff' },
     paginationInfo: { fontSize: 14, color: theme.textMuted },
     selectCheckbox: { position: 'absolute', top: 8, right: 8, width: 16, height: 16, border: `2px solid ${theme.border}`, borderRadius: 3, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
@@ -971,35 +1050,171 @@ function App() {
     migrationProgressBar: { height: '100%', background: theme.primary, transition: 'width 0.3s ease' },
   }
 
+  const btnEvents = {
+    onMouseEnter: e => {
+      e.currentTarget.style.transform = 'scale(1.05)'
+      e.currentTarget.style.opacity = '0.9'
+    },
+    onMouseLeave: e => {
+      e.currentTarget.style.transform = 'scale(1)'
+      e.currentTarget.style.opacity = '1'
+    },
+    onMouseDown: e => {
+      e.currentTarget.style.transform = 'scale(0.95)'
+    },
+    onMouseUp: e => {
+      e.currentTarget.style.transform = 'scale(1.05)'
+    }
+  }
+
+  const modalExpandKeyframes = `
+    @keyframes modalFadeIn {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+    @keyframes modalFadeOut {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    @keyframes slideInLeft {
+      0% { opacity: 0; transform: translateX(-30px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes fadeIn {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+    @keyframes fadeOut {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    @keyframes slideInRight {
+      0% { opacity: 0; transform: translateX(100%); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes slideOutRight {
+      0% { opacity: 1; transform: translateX(0); }
+      100% { opacity: 0; transform: translateX(100%); }
+    }
+  `
+
   return (
-    <div style={styles.container}>
-      <nav style={styles.sidebar}>
-        <div style={styles.sidebarTitle}>截图管理器</div>
+    <>
+      <style>{modalExpandKeyframes}</style>
+      
+      <div style={styles.container}>
+      <nav style={{
+        ...styles.sidebar,
+        width: sidebarCollapsed ? 48 : 200,
+        padding: sidebarCollapsed ? 8 : 16,
+        transition: 'width 0.25s ease, padding 0.25s ease',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        <div style={{ 
+          ...styles.sidebarTitle, 
+          opacity: sidebarCollapsed ? 0 : 1,
+          transition: 'opacity 0.2s ease',
+          whiteSpace: 'nowrap'
+        }}>截图管理器</div>
         
         <div 
-          style={{ ...styles.navItem, ...(currentView === 'time' ? styles.navItemActive : {}) }}
+          style={{ 
+            ...styles.navItem, 
+            ...(currentView === 'time' ? styles.navItemActive : {}),
+            opacity: sidebarCollapsed ? 0 : 1,
+            transition: 'opacity 0.2s ease',
+            whiteSpace: 'nowrap'
+          }}
           onClick={switchToTimeView}
         >
           {t.nav.time}
         </div>
         <div 
-          style={{ ...styles.navItem, ...(currentView === 'games' || currentView === 'game-detail' ? styles.navItemActive : {}) }}
+          style={{ 
+            ...styles.navItem, 
+            ...(currentView === 'games' || currentView === 'game-detail' ? styles.navItemActive : {}),
+            opacity: sidebarCollapsed ? 0 : 1,
+            transition: 'opacity 0.2s ease',
+            whiteSpace: 'nowrap'
+          }}
           onClick={switchToGames}
         >
           {t.nav.games}
         </div>
         <div 
-          style={{ ...styles.navItem, ...(currentView === 'settings' ? styles.navItemActive : {}) }}
+          style={{ 
+            ...styles.navItem, 
+            ...(currentView === 'settings' ? styles.navItemActive : {}),
+            opacity: sidebarCollapsed ? 0 : 1,
+            transition: 'opacity 0.2s ease',
+            whiteSpace: 'nowrap'
+          }}
           onClick={() => setCurrentView('settings')}
         >
           {t.nav.settings}
         </div>
 
-        <div style={styles.debugPanel}>
+        <div style={{ 
+          ...styles.debugPanel,
+          opacity: sidebarCollapsed ? 0 : 1,
+          transition: 'opacity 0.2s ease'
+        }}>
           {logs.slice(-5).map((log, i) => (
             <div key={i} style={styles.debugLine}>{log}</div>
           ))}
         </div>
+        
+        <button
+          onClick={toggleSidebar}
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 32,
+            height: 32,
+            background: theme.accent,
+            border: 'none',
+            borderRadius: 6,
+            color: theme.text,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'transform 0.15s ease, background 0.15s ease',
+            zIndex: 10
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'scale(1.1)'
+            e.currentTarget.style.background = theme.card
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = 'scale(1)'
+            e.currentTarget.style.background = theme.accent
+          }}
+          onMouseDown={e => {
+            e.currentTarget.style.transform = 'scale(0.95)'
+          }}
+          onMouseUp={e => {
+            e.currentTarget.style.transform = 'scale(1.1)'
+          }}
+          title={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+        >
+          <svg 
+            width="16" 
+            height="16" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2"
+            style={{ 
+              transform: sidebarCollapsed ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.25s ease'
+            }}
+          >
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
       </nav>
 
       <main style={styles.main} ref={gridRef} onScroll={handleScroll}>
@@ -1018,7 +1233,7 @@ function App() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {isMultiSelectMode ? (
                   <>
-                    <button style={styles.btn} onClick={() => {
+                    <button style={styles.btn} {...btnEvents} onClick={() => {
                       setIsMultiSelectMode(false)
                       setSelectedScreenshots([])
                     }}>
@@ -1026,6 +1241,7 @@ function App() {
                     </button>
                     <button 
                       style={selectedScreenshots.length > 0 ? styles.btnDanger : styles.btnDisabled}
+                      {...(selectedScreenshots.length > 0 ? btnEvents : {})}
                       onClick={deleteSelectedScreenshots}
                       disabled={selectedScreenshots.length === 0}
                     >
@@ -1050,7 +1266,23 @@ function App() {
                       <option value="desc">{t.header.sort_newest}</option>
                       <option value="asc">{t.header.sort_oldest}</option>
                     </select>
-                    <button style={styles.btn} onClick={() => setIsMultiSelectMode(true)}>
+                    <select 
+                      value={iconSize}
+                      onChange={(e) => handleIconSizeChange(e.target.value)}
+                      style={{ 
+                        padding: '8px 12px', 
+                        background: theme.accent, 
+                        border: 'none', 
+                        borderRadius: 6, 
+                        color: theme.text, 
+                        cursor: 'pointer',
+                        fontSize: 14
+                      }}
+                    >
+                      <option value="large">{t.header.icon_large}</option>
+                      <option value="small">{t.header.icon_small}</option>
+                    </select>
+                    <button style={styles.btn} {...btnEvents} onClick={() => setIsMultiSelectMode(true)}>
                       {t.header.multi_select}
                     </button>
                   </>
@@ -1066,7 +1298,7 @@ function App() {
             ) : (
               <>
                 <div style={styles.grid}>
-                  {screenshots.map(ss => (
+                  {screenshots.map((ss, index) => (
                     <div 
                       key={ss.id} 
                       style={{ 
@@ -1074,13 +1306,27 @@ function App() {
                         ...(isMultiSelectMode ? styles.cardWithCheckbox : {}),
                         ...(isMultiSelectMode && selectedScreenshots.includes(ss.id) ? styles.cardSelected : {})
                       }}
-                      onClick={() => {
+                      onClick={(e) => {
                         if (isMultiSelectMode) {
                           toggleSelectScreenshot(ss.id)
                         } else {
                           setSelectedScreenshot(ss)
                           setNoteText(ss.note || '')
                         }
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.transform = 'scale(1.03)'
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.transform = 'scale(1)'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                      onMouseDown={e => {
+                        e.currentTarget.style.transform = 'scale(0.98)'
+                      }}
+                      onMouseUp={e => {
+                        e.currentTarget.style.transform = 'scale(1.03)'
                       }}
                     >
                       {isMultiSelectMode && (
@@ -1093,17 +1339,32 @@ function App() {
                           )}
                         </div>
                       )}
-                      <img 
-                        src={getImageSrc(ss.thumbnail_path)} 
-                        alt="截图缩略图" 
-                        style={styles.cardImage}
-                        onError={(e) => { e.target.style.background = theme.accent; e.target.style.display = 'none'; }}
-                        loading="lazy"
-                      />
+                      <div style={{ 
+                        width: '100%', 
+                        aspectRatio: '16 / 9', 
+                        background: theme.accent, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        overflow: 'hidden'
+                      }}>
+                        <img 
+                          src={getImageSrc(ss.thumbnail_path)} 
+                          alt="截图缩略图" 
+                          style={{ 
+                            width: '100%', 
+                            height: '100%', 
+                            objectFit: 'cover',
+                            objectPosition: 'center center'
+                          }}
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                          loading="lazy"
+                        />
+                      </div>
                       <div style={styles.cardInfo}>
                         <div style={styles.cardTitle}>{ss.display_title || ss.game_title}</div>
                         <div style={styles.cardDate}>{formatDate(ss.timestamp)}</div>
-                        {ss.note && <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ss.note}</div>}
+                        {ss.note && <div style={{ fontSize: 11, color: theme.text, marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.4' }}>{ss.note}</div>}
                       </div>
                     </div>
                   ))}
@@ -1116,6 +1377,7 @@ function App() {
                 <div style={styles.pagination}>
                   <button 
                     style={styles.paginationBtn}
+                    {...btnEvents}
                     onClick={() => loadScreenshotsWithPagination(1, null)}
                     disabled={currentPage === 1}
                   >
@@ -1123,6 +1385,7 @@ function App() {
                   </button>
                   <button 
                     style={styles.paginationBtn}
+                    {...btnEvents}
                     onClick={() => loadScreenshotsWithPagination(Math.max(1, currentPage - 1), null)}
                     disabled={currentPage === 1}
                   >
@@ -1133,6 +1396,7 @@ function App() {
                   </span>
                   <button 
                     style={styles.paginationBtn}
+                    {...btnEvents}
                     onClick={() => loadScreenshotsWithPagination(Math.min(totalPages, currentPage + 1), null)}
                     disabled={currentPage === totalPages}
                   >
@@ -1140,6 +1404,7 @@ function App() {
                   </button>
                   <button 
                     style={styles.paginationBtn}
+                    {...btnEvents}
                     onClick={() => loadScreenshotsWithPagination(totalPages, null)}
                     disabled={currentPage === totalPages}
                   >
@@ -1153,24 +1418,42 @@ function App() {
           <div>
             <div style={styles.header}>
               <h1 style={styles.title}>{t.nav.games}</h1>
-              <select 
-                value={gameSortOrder}
-                onChange={(e) => handleGameSortChange(e.target.value)}
-                style={{ 
-                  padding: '8px 12px', 
-                  background: theme.accent, 
-                  border: 'none', 
-                  borderRadius: 6, 
-                  color: theme.text, 
-                  cursor: 'pointer',
-                  fontSize: 14
-                }}
-              >
-                <option value="time_desc">{t.header.game_sort_newest}</option>
-                <option value="time_asc">{t.header.game_sort_oldest}</option>
-                <option value="alpha_asc">{t.header.game_sort_alpha_asc}</option>
-                <option value="alpha_desc">{t.header.game_sort_alpha_desc}</option>
-              </select>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select 
+                  value={gameSortOrder}
+                  onChange={(e) => handleGameSortChange(e.target.value)}
+                  style={{ 
+                    padding: '8px 12px', 
+                    background: theme.accent, 
+                    border: 'none', 
+                    borderRadius: 6, 
+                    color: theme.text, 
+                    cursor: 'pointer',
+                    fontSize: 14
+                  }}
+                >
+                  <option value="time_desc">{t.header.game_sort_newest}</option>
+                  <option value="time_asc">{t.header.game_sort_oldest}</option>
+                  <option value="alpha_asc">{t.header.game_sort_alpha_asc}</option>
+                  <option value="alpha_desc">{t.header.game_sort_alpha_desc}</option>
+                </select>
+                <select 
+                  value={iconSize}
+                  onChange={(e) => handleIconSizeChange(e.target.value)}
+                  style={{ 
+                    padding: '8px 12px', 
+                    background: theme.accent, 
+                    border: 'none', 
+                    borderRadius: 6, 
+                    color: theme.text, 
+                    cursor: 'pointer',
+                    fontSize: 14
+                  }}
+                >
+                  <option value="large">{t.header.icon_large}</option>
+                  <option value="small">{t.header.icon_small}</option>
+                </select>
+              </div>
             </div>
             
             {games.length === 0 ? (
@@ -1180,11 +1463,29 @@ function App() {
               </div>
             ) : (
               <div style={styles.grid}>
-                {games.map(game => {
+                {games.map((game, index) => {
                   const hasSteamLogo = !!game.steam_logo_path;
                   const iconSrc = game.steam_logo_path || game.game_icon_path;
                   return (
-                  <div key={game.game_id} style={styles.gameCard} onClick={() => selectGame(game)}>
+                  <div 
+                    key={game.game_id} 
+                    style={styles.gameCard}
+                    onClick={() => selectGame(game)}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = 'scale(1.03)'
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = 'scale(1)'
+                      e.currentTarget.style.boxShadow = 'none'
+                    }}
+                    onMouseDown={e => {
+                      e.currentTarget.style.transform = 'scale(0.98)'
+                    }}
+                    onMouseUp={e => {
+                      e.currentTarget.style.transform = 'scale(1.03)'
+                    }}
+                  >
                     <div style={styles.gameIcon}>
                       {iconSrc ? (
                         hasSteamLogo ? (
@@ -1237,6 +1538,7 @@ function App() {
             <div style={{ ...styles.header, position: 'relative' }}>
               <button 
                 style={{ ...styles.btn, padding: '8px 12px' }} 
+                {...btnEvents}
                 onClick={backToGames}
                 title="返回游戏列表"
               >
@@ -1250,7 +1552,6 @@ function App() {
                   height: 40, 
                   borderRadius: 6, 
                   overflow: 'hidden',
-                  background: theme.accent,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center'
@@ -1262,7 +1563,6 @@ function App() {
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={(e) => {
                         e.target.style.display = 'none';
-                        e.target.parentElement.innerHTML = selectedGame.display_title?.charAt(0) || selectedGame.game_title?.charAt(0) || '?';
                       }}
                     />
                   ) : selectedGame?.steam_logo_path ? (
@@ -1272,19 +1572,16 @@ function App() {
                       style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                       onError={(e) => {
                         e.target.style.display = 'none';
-                        e.target.parentElement.innerHTML = selectedGame.display_title?.charAt(0) || selectedGame.game_title?.charAt(0) || '?';
                       }}
                     />
-                  ) : (
-                    selectedGame?.display_title?.charAt(0) || selectedGame?.game_title?.charAt(0) || '?'
-                  )}
+                  ) : null}
                 </div>
                 <h1 style={styles.title}>{selectedGame?.display_title || selectedGame?.game_title}</h1>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
                 {isMultiSelectMode ? (
                   <>
-                    <button style={styles.btn} onClick={() => {
+                    <button style={styles.btn} {...btnEvents} onClick={() => {
                       setIsMultiSelectMode(false)
                       setSelectedScreenshots([])
                     }}>
@@ -1292,6 +1589,7 @@ function App() {
                     </button>
                     <button 
                       style={selectedScreenshots.length > 0 ? styles.btnDanger : styles.btnDisabled}
+                      {...(selectedScreenshots.length > 0 ? btnEvents : {})}
                       onClick={deleteSelectedScreenshots}
                       disabled={selectedScreenshots.length === 0}
                     >
@@ -1299,48 +1597,179 @@ function App() {
                     </button>
                   </>
                 ) : (
-                  <>
+                  <div style={{ position: 'relative' }}>
                     <button 
                       style={{ 
                         ...styles.btn, 
                         padding: '8px 12px',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 4
+                        justifyContent: 'center'
                       }} 
-                      onClick={() => {
-                        setShowSearchModal(true)
-                        setSearchModalStep('source')
-                        setSteamSearchTerm('')
-                        setSteamSearchResults([])
-                      }}
+                      {...btnEvents}
+                      onClick={() => setShowMenu(!showMenu)}
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="11" cy="11" r="8"/>
-                        <path d="M21 21l-4.35-4.35"/>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="5" r="2"/>
+                        <circle cx="12" cy="12" r="2"/>
+                        <circle cx="12" cy="19" r="2"/>
                       </svg>
-                      {t.header.search_info}
                     </button>
-                    <select 
-                      value={gameSortOrder}
-                      onChange={(e) => handleGameSortChange(e.target.value)}
-                      style={{ 
-                        padding: '8px 12px', 
-                        background: theme.accent, 
-                        border: 'none', 
-                        borderRadius: 6, 
-                        color: theme.text, 
-                        cursor: 'pointer',
-                        fontSize: 14
-                      }}
-                    >
-                      <option value="time_desc">{t.header.game_sort_newest}</option>
-                      <option value="time_asc">{t.header.game_sort_oldest}</option>
-                    </select>
-                    <button style={styles.btn} onClick={() => setIsMultiSelectMode(true)}>
-                      {t.header.multi_select}
-                    </button>
-                  </>
+                    
+                    {showMenu && (
+                      <>
+                        <div 
+                          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }}
+                          onClick={() => setShowMenu(false)}
+                        />
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          right: 0,
+                          marginTop: 4,
+                          background: theme.card,
+                          borderRadius: 8,
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                          minWidth: 160,
+                          zIndex: 999,
+                          overflow: 'hidden'
+                        }}>
+                          <div
+                            style={{
+                              padding: '10px 16px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              transition: 'background 0.2s'
+                            }}
+                            onClick={() => {
+                              setShowSearchModal(true)
+                              setSearchModalStep('source')
+                              setSteamSearchTerm('')
+                              setSteamSearchResults([])
+                              setShowMenu(false)
+                            }}
+                            onMouseEnter={e => e.target.style.background = theme.accent}
+                            onMouseLeave={e => e.target.style.background = 'transparent'}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="11" cy="11" r="8"/>
+                              <path d="M21 21l-4.35-4.35"/>
+                            </svg>
+                            {t.header.search_info}
+                          </div>
+                          
+                          <div
+                            style={{
+                              padding: '10px 16px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              transition: 'background 0.2s'
+                            }}
+                            onClick={() => setShowSortMenu(!showSortMenu)}
+                            onMouseEnter={e => e.target.style.background = theme.accent}
+                            onMouseLeave={e => e.target.style.background = 'transparent'}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 6h18M6 12h12M9 18h6"/>
+                              </svg>
+                              {t.header.sort_by}
+                            </div>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: showSortMenu ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                              <path d="M9 18l6-6-6-6"/>
+                            </svg>
+                          </div>
+                          
+                          {showSortMenu && (
+                            <div style={{ background: theme.accent }}>
+                              {[
+                                { value: 'time_desc', label: t.header.game_sort_newest },
+                                { value: 'time_asc', label: t.header.game_sort_oldest }
+                              ].map(option => (
+                                <div
+                                  key={option.value}
+                                  style={{
+                                    padding: '8px 16px 8px 32px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    background: gameSortOrder === option.value ? theme.primary : 'transparent',
+                                    color: gameSortOrder === option.value ? '#fff' : theme.text,
+                                    transition: 'background 0.2s'
+                                  }}
+                                  onClick={() => {
+                                    handleGameSortChange(option.value)
+                                    setShowSortMenu(false)
+                                    setShowMenu(false)
+                                  }}
+                                >
+                                  {option.label}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          <div style={{ height: 1, background: theme.border, margin: '4px 0' }} />
+                          
+                          <div
+                            style={{
+                              padding: '10px 16px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              transition: 'background 0.2s'
+                            }}
+                            onClick={() => {
+                              handleIconSizeChange(iconSize === 'large' ? 'small' : 'large')
+                              setShowMenu(false)
+                            }}
+                            onMouseEnter={e => e.target.style.background = theme.accent}
+                            onMouseLeave={e => e.target.style.background = 'transparent'}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="2"/>
+                              <circle cx="8.5" cy="8.5" r="1.5"/>
+                              <path d="M21 15l-5-5L5 21"/>
+                            </svg>
+                            {iconSize === 'large' ? t.header.icon_small : t.header.icon_large}
+                          </div>
+                          
+                          <div style={{ height: 1, background: theme.border, margin: '4px 0' }} />
+                          
+                          <div
+                            style={{
+                              padding: '10px 16px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              transition: 'background 0.2s'
+                            }}
+                            onClick={() => {
+                              setIsMultiSelectMode(true)
+                              setShowMenu(false)
+                            }}
+                            onMouseEnter={e => e.target.style.background = theme.accent}
+                            onMouseLeave={e => e.target.style.background = 'transparent'}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="7" height="7" rx="1"/>
+                              <rect x="14" y="3" width="7" height="7" rx="1"/>
+                              <rect x="3" y="14" width="7" height="7" rx="1"/>
+                              <rect x="14" y="14" width="7" height="7" rx="1"/>
+                            </svg>
+                            {t.header.multi_select}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -1350,7 +1779,7 @@ function App() {
             ) : (
               <>
                 <div style={styles.grid}>
-                  {screenshots.map(ss => (
+                  {screenshots.map((ss, index) => (
                     <div 
                       key={ss.id} 
                       style={{ 
@@ -1358,13 +1787,27 @@ function App() {
                         ...(isMultiSelectMode ? styles.cardWithCheckbox : {}),
                         ...(isMultiSelectMode && selectedScreenshots.includes(ss.id) ? styles.cardSelected : {})
                       }}
-                      onClick={() => {
+                      onClick={(e) => {
                         if (isMultiSelectMode) {
                           toggleSelectScreenshot(ss.id)
                         } else {
                           setSelectedScreenshot(ss)
                           setNoteText(ss.note || '')
                         }
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.transform = 'scale(1.03)'
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.transform = 'scale(1)'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                      onMouseDown={e => {
+                        e.currentTarget.style.transform = 'scale(0.98)'
+                      }}
+                      onMouseUp={e => {
+                        e.currentTarget.style.transform = 'scale(1.03)'
                       }}
                     >
                       {isMultiSelectMode && (
@@ -1377,16 +1820,31 @@ function App() {
                           )}
                         </div>
                       )}
-                      <img 
-                        src={getImageSrc(ss.thumbnail_path)} 
-                        alt="截图缩略图" 
-                        style={styles.cardImage}
-                        onError={(e) => { e.target.style.background = theme.accent; e.target.style.display = 'none'; }}
-                        loading="lazy"
-                      />
+                      <div style={{ 
+                        width: '100%', 
+                        aspectRatio: '16 / 9', 
+                        background: theme.accent, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        overflow: 'hidden'
+                      }}>
+                        <img 
+                          src={getImageSrc(ss.thumbnail_path)} 
+                          alt="截图缩略图" 
+                          style={{ 
+                            width: '100%', 
+                            height: '100%', 
+                            objectFit: 'cover',
+                            objectPosition: 'center center'
+                          }}
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                          loading="lazy"
+                        />
+                      </div>
                       <div style={styles.cardInfo}>
                         <div style={styles.cardDate}>{formatDate(ss.timestamp)}</div>
-                        {ss.note && <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>{ss.note.slice(0, 30)}...</div>}
+                        {ss.note && <div style={{ fontSize: 11, color: theme.text, marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.4' }}>{ss.note}</div>}
                       </div>
                     </div>
                   ))}
@@ -1399,6 +1857,7 @@ function App() {
                 <div style={styles.pagination}>
                   <button 
                     style={styles.paginationBtn}
+                    {...btnEvents}
                     onClick={() => loadScreenshotsWithPagination(1, selectedGame?.game_id)}
                     disabled={currentPage === 1}
                   >
@@ -1406,6 +1865,7 @@ function App() {
                   </button>
                   <button 
                     style={styles.paginationBtn}
+                    {...btnEvents}
                     onClick={() => loadScreenshotsWithPagination(Math.max(1, currentPage - 1), selectedGame?.game_id)}
                     disabled={currentPage === 1}
                   >
@@ -1416,6 +1876,7 @@ function App() {
                   </span>
                   <button 
                     style={styles.paginationBtn}
+                    {...btnEvents}
                     onClick={() => loadScreenshotsWithPagination(Math.min(totalPages, currentPage + 1), selectedGame?.game_id)}
                     disabled={currentPage === totalPages}
                   >
@@ -1423,6 +1884,7 @@ function App() {
                   </button>
                   <button 
                     style={styles.paginationBtn}
+                    {...btnEvents}
                     onClick={() => loadScreenshotsWithPagination(totalPages, selectedGame?.game_id)}
                     disabled={currentPage === totalPages}
                   >
@@ -1469,6 +1931,22 @@ function App() {
                         background: t.colors.primary,
                         color: key === 'night' ? '#fff' : '#333',
                       }}
+                      onMouseEnter={e => {
+                        if (currentTheme !== key) {
+                          e.currentTarget.style.transform = 'scale(1.05)'
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (currentTheme !== key) {
+                          e.currentTarget.style.transform = 'scale(1)'
+                        }
+                      }}
+                      onMouseDown={e => {
+                        e.currentTarget.style.transform = 'scale(0.95)'
+                      }}
+                      onMouseUp={e => {
+                        e.currentTarget.style.transform = currentTheme === key ? 'scale(1.05)' : 'scale(1)'
+                      }}
                     >
                       {t.name}
                     </button>
@@ -1483,6 +1961,7 @@ function App() {
                 </p>
                 <button 
                   style={styles.btnPrimary} 
+                  {...btnEvents}
                   onClick={changeStoragePath}
                   disabled={isMigrating}
                 >
@@ -1559,6 +2038,7 @@ function App() {
                     padding: '10px 16px',
                     fontSize: 14
                   }} 
+                  {...btnEvents}
                   onClick={async () => {
                     if (confirm(t.settings.delete_all_confirm)) {
                       try {
@@ -1588,21 +2068,39 @@ function App() {
       </main>
 
       {selectedScreenshot && (
-        <div style={styles.modal} onClick={() => setSelectedScreenshot(null)}>
-          <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+        <div 
+          style={{
+            ...styles.modal,
+            animation: isModalClosing ? 'modalFadeOut 0.25s ease-in forwards' : 'modalFadeIn 0.3s ease-out'
+          }} 
+          onClick={closeModal}
+        >
+          <div 
+            style={styles.modalContent}
+            onClick={e => e.stopPropagation()}
+          >
             <div style={styles.modalHeader}>
               <h3>{formatDate(selectedScreenshot.timestamp)}</h3>
-              <button style={styles.btn} onClick={() => setSelectedScreenshot(null)}>关闭</button>
+              <button style={styles.btn} {...btnEvents} onClick={closeModal}>关闭</button>
             </div>
             <div style={styles.modalBody}>
               <img src={getImageSrc(selectedScreenshot.file_path)} alt="截图" style={{ width: '100%', maxWidth: 800 }} />
             </div>
             <div style={styles.modalFooter}>
               <div style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: theme.textMuted }}>附注 (最多120字)</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, color: theme.textMuted }}>{t.header.note_hint}</label>
+                  <span style={{ fontSize: 12, color: theme.textMuted }}>{t.header.note_shortcut}</span>
+                </div>
                 <textarea
                   value={noteText}
                   onChange={e => setNoteText(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.ctrlKey && e.key === 'Enter') {
+                      e.preventDefault()
+                      saveNote(selectedScreenshot.id, noteText)
+                    }
+                  }}
                   maxLength={120}
                   style={{ ...styles.input, height: 60, resize: 'none' }}
                   placeholder="写下你的感悟..."
@@ -1611,9 +2109,27 @@ function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 14, color: theme.textMuted }}>游戏: {selectedScreenshot.display_title || selectedScreenshot.game_title}</span>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button style={styles.btnPrimary} onClick={() => saveNote(selectedScreenshot.id, noteText)}>保存附注</button>
-                  <button style={styles.btn} onClick={() => openInExplorer(selectedScreenshot.file_path)}>打开文件夹</button>
-                  <button style={styles.btnDanger} onClick={() => deleteScreenshot(selectedScreenshot.id)}>删除</button>
+                  <button 
+                    style={styles.btnPrimary}
+                    {...btnEvents}
+                    onClick={() => saveNote(selectedScreenshot.id, noteText)}
+                  >
+                    保存附注
+                  </button>
+                  <button 
+                    style={styles.btn}
+                    {...btnEvents}
+                    onClick={() => openInExplorer(selectedScreenshot.file_path)}
+                  >
+                    打开文件夹
+                  </button>
+                  <button 
+                    style={styles.btnDanger}
+                    {...btnEvents}
+                    onClick={() => deleteScreenshot(selectedScreenshot.id)}
+                  >
+                    删除
+                  </button>
                 </div>
               </div>
             </div>
@@ -1626,7 +2142,16 @@ function App() {
           <div style={{ ...styles.modalContent, maxWidth: 500, maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h2 style={styles.modalTitle}>{t.search.title}</h2>
-              <button style={styles.closeBtn} onClick={() => setShowSearchModal(false)}>×</button>
+              <button style={styles.closeBtn} 
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = 'scale(1.2)'
+                  e.currentTarget.style.color = theme.text
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = 'scale(1)'
+                  e.currentTarget.style.color = theme.textMuted
+                }}
+                onClick={() => setShowSearchModal(false)}>×</button>
             </div>
             
             {searchModalStep === 'source' && (
@@ -1634,6 +2159,7 @@ function App() {
                 <p style={{ color: theme.textMuted, textAlign: 'center' }}>{t.search.select_source}</p>
                 <button 
                   style={{ ...styles.btnPrimary, padding: 16, fontSize: 16 }}
+                  {...btnEvents}
                   onClick={() => {
                     setSearchModalStep('steam')
                     setSteamSearchTerm(selectedGame?.display_title || selectedGame?.game_title || '')
@@ -1678,6 +2204,7 @@ function App() {
                   />
                   <button 
                     style={styles.btnPrimary}
+                    {...btnEvents}
                     onClick={async () => {
                       if (steamSearchTerm.trim()) {
                         setIsSearching(true)
@@ -1700,6 +2227,7 @@ function App() {
                 </div>
                 <button 
                   style={{ ...styles.btn, width: '100%' }}
+                  {...btnEvents}
                   onClick={() => setSearchModalStep('source')}
                 >
                   {t.search.back}
@@ -1745,7 +2273,21 @@ function App() {
                             background: theme.accent, 
                             borderRadius: 8, 
                             cursor: 'pointer',
-                            transition: 'background 0.2s'
+                            transition: 'transform 0.15s, background 0.15s'
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.transform = 'scale(1.02)'
+                            e.currentTarget.style.background = theme.card
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.transform = 'scale(1)'
+                            e.currentTarget.style.background = theme.accent
+                          }}
+                          onMouseDown={e => {
+                            e.currentTarget.style.transform = 'scale(0.98)'
+                          }}
+                          onMouseUp={e => {
+                            e.currentTarget.style.transform = 'scale(1.02)'
                           }}
                           onClick={async () => {
                             setIsApplyingInfo(true)
@@ -1786,6 +2328,7 @@ function App() {
                     </div>
                     <button 
                       style={{ ...styles.btn, width: '100%', marginTop: 16 }}
+                      {...btnEvents}
                       onClick={() => setSearchModalStep('steam')}
                     >
                       {t.search.back}
@@ -1820,6 +2363,7 @@ function App() {
               <p style={{ color: theme.textMuted, marginBottom: 24 }}>{appliedGameName}</p>
               <button 
                 style={{ ...styles.btnPrimary, padding: '12px 32px' }}
+                {...btnEvents}
                 onClick={() => setShowApplySuccess(false)}
               >
                 {t.search.confirm}
@@ -1828,7 +2372,44 @@ function App() {
           </div>
         </div>
       )}
+      
+      {screenshotNotification && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          background: 'rgba(30, 30, 40, 0.95)',
+          borderRadius: 8,
+          padding: '16px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          zIndex: 10001,
+          animation: 'slideInRight 0.3s ease-out',
+          minWidth: 220
+        }}>
+          <div style={{
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <div>
+            <div style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>截图成功</div>
+            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>已保存到本地</div>
+          </div>
+        </div>
+      )}
     </div>
+    </>
   )
 }
 
