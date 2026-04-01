@@ -282,10 +282,10 @@ fn restart_app(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn search_steam_game_info(game_id: String, game_title: String, state: State<AppState>) -> Result<SteamMatchResult, String> {
-    println!("[Steam] 搜索游戏信息: {} ({})", game_title, game_id);
+fn search_steam_game_info(game_id: String, game_title: String, language: String, state: State<AppState>) -> Result<SteamMatchResult, String> {
+    println!("[Steam] 搜索游戏信息: {} ({}) (语言: {})", game_title, game_id, language);
     
-    let result = steam::match_game_name(&game_title);
+    let result = steam::match_game_name(&game_title, &language);
     
     if result.status == SteamMatchStatus::Found {
         if let Some(ref info) = result.game_info {
@@ -372,16 +372,16 @@ fn search_steam_game_info(game_id: String, game_title: String, state: State<AppS
 }
 
 #[tauri::command]
-fn search_steam_games(search_term: String) -> Result<Vec<SteamSearchResult>, String> {
-    println!("[Steam] 手动搜索游戏: {}", search_term);
-    steam::search_steam_games_with_images(&search_term)
+fn search_steam_games(search_term: String, language: String) -> Result<Vec<SteamSearchResult>, String> {
+    println!("[Steam] 手动搜索游戏: {} (语言: {})", search_term, language);
+    steam::search_steam_games_with_images(&search_term, &language)
 }
 
 #[tauri::command]
-fn apply_steam_game_info(game_id: String, appid: u32, state: State<AppState>) -> Result<SteamGameInfo, String> {
-    println!("[Steam] 应用游戏信息: {} -> {}", game_id, appid);
+fn apply_steam_game_info(game_id: String, appid: u32, language: String, state: State<AppState>) -> Result<SteamGameInfo, String> {
+    println!("[Steam] 应用游戏信息: {} -> {} (语言: {})", game_id, appid, language);
     
-    let info = steam::get_steam_app_details(appid)?
+    let info = steam::get_steam_app_details(appid, &language)?
         .ok_or_else(|| format!("未找到 Steam 游戏: {}", appid))?;
     
     let conn = state.db.lock().unwrap();
@@ -711,7 +711,7 @@ fn main() {
                                                                     let process_name_for_steam = task.process_name.clone();
                                                                     std::thread::spawn(move || {
                                                                         println!("[Steam] 自动匹配游戏信息: {}", process_name_for_steam);
-                                                                        let result = steam::match_game_name(&process_name_for_steam);
+                                                                        let result = steam::match_game_name(&process_name_for_steam, "schinese");
                                                                         
                                                                         if result.status == SteamMatchStatus::Found {
                                                                             if let Some(ref info) = result.game_info {

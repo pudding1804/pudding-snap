@@ -126,6 +126,9 @@ function App() {
   // 语言设置
   const [language, setLanguage] = useState('zh')
   
+  // Steam搜索语言设置
+  const [steamLanguage, setSteamLanguage] = useState('schinese')
+  
   // 检索信息弹窗状态
   const [showSearchModal, setShowSearchModal] = useState(false)
   const [searchModalStep, setSearchModalStep] = useState('source') // 'source' | 'steam' | 'results'
@@ -251,6 +254,12 @@ function App() {
           zh: '中文',
           en: 'English',
           ja: '日本语'
+        },
+        steam_language: 'Steam搜索语言',
+        steam_languages: {
+          schinese: '简体中文',
+          english: 'English',
+          japanese: '日本語'
         }
       },
       game: {
@@ -384,6 +393,12 @@ function App() {
           zh: '中文',
           en: 'English',
           ja: '日本语'
+        },
+        steam_language: 'Steam Search Language',
+        steam_languages: {
+          schinese: 'Simplified Chinese',
+          english: 'English',
+          japanese: 'Japanese'
         }
       },
       game: {
@@ -517,6 +532,12 @@ function App() {
           zh: '中文',
           en: 'English',
           ja: '日本语'
+        },
+        steam_language: 'Steam検索言語',
+        steam_languages: {
+          schinese: '簡体字中国語',
+          english: '英語',
+          japanese: '日本語'
         }
       },
       game: {
@@ -1985,6 +2006,26 @@ function App() {
                 </select>
               </div>
               <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
+                <h3 style={{ marginBottom: 12 }}>{t.settings.steam_language}</h3>
+                <select 
+                  value={steamLanguage}
+                  onChange={(e) => setSteamLanguage(e.target.value)}
+                  style={{ 
+                    padding: '8px 12px', 
+                    background: theme.primary, 
+                    border: 'none', 
+                    borderRadius: 6, 
+                    color: theme.text, 
+                    cursor: 'pointer',
+                    fontSize: 14
+                  }}
+                >
+                  <option value="schinese">{t.settings.steam_languages.schinese}</option>
+                  <option value="english">{t.settings.steam_languages.english}</option>
+                  <option value="japanese">{t.settings.steam_languages.japanese}</option>
+                </select>
+              </div>
+              <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
                 <h3 style={{ marginBottom: 12 }}>{t.settings.theme}</h3>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   {Object.entries(themes).map(([key, t]) => (
@@ -2162,6 +2203,27 @@ function App() {
               flexShrink: 0
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button 
+                  style={{ 
+                    background: 'transparent', 
+                    border: 'none', 
+                    color: theme.textMuted, 
+                    cursor: 'pointer', 
+                    fontSize: 16, 
+                    padding: '2px 6px',
+                    lineHeight: 1,
+                    transition: 'color 0.15s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = theme.text}
+                  onMouseLeave={e => e.currentTarget.style.color = theme.textMuted}
+                  onClick={closeModal}
+                >
+                  ‹ 返回
+                </button>
+                <span style={{ fontSize: 12, color: theme.textMuted }}>|</span>
                 <span style={{ fontSize: 13, color: theme.text, fontWeight: 500 }}>
                   {formatDate(selectedScreenshot.timestamp)}
                 </span>
@@ -2169,28 +2231,6 @@ function App() {
                 <span style={{ fontSize: 12, color: theme.textMuted }}>
                   {selectedScreenshot.display_title || selectedScreenshot.game_title}
                 </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, color: theme.textMuted, background: theme.accent, padding: '2px 8px', borderRadius: 4 }}>
-                  {selectedScreenshotIndex + 1}/{screenshots.length}
-                </span>
-                <button 
-                  style={{ 
-                    background: 'transparent', 
-                    border: 'none', 
-                    color: theme.textMuted, 
-                    cursor: 'pointer', 
-                    fontSize: 20, 
-                    padding: '2px 6px',
-                    lineHeight: 1,
-                    transition: 'color 0.15s'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.color = theme.text}
-                  onMouseLeave={e => e.currentTarget.style.color = theme.textMuted}
-                  onClick={closeModal}
-                >
-                  ✕
-                </button>
               </div>
             </div>
             
@@ -2449,7 +2489,7 @@ function App() {
                       if (e.key === 'Enter' && steamSearchTerm.trim()) {
                         setIsSearching(true)
                         try {
-                          const results = await invoke('search_steam_games', { searchTerm: steamSearchTerm })
+                          const results = await invoke('search_steam_games', { searchTerm: steamSearchTerm, language: steamLanguage })
                           setSteamSearchResults(results)
                           if (results.length > 0) {
                             setSearchModalStep('results')
@@ -2471,7 +2511,7 @@ function App() {
                       if (steamSearchTerm.trim()) {
                         setIsSearching(true)
                         try {
-                          const results = await invoke('search_steam_games', { searchTerm: steamSearchTerm })
+                          const results = await invoke('search_steam_games', { searchTerm: steamSearchTerm, language: steamLanguage })
                           setSteamSearchResults(results)
                           if (results.length > 0) {
                             setSearchModalStep('results')
@@ -2557,7 +2597,8 @@ function App() {
                               addLog(`正在应用 ${result.name} 的信息...`)
                               const info = await invoke('apply_steam_game_info', {
                                 gameId: selectedGame?.game_id,
-                                appid: result.appid
+                                appid: result.appid,
+                                language: steamLanguage
                               })
                               addLog(`已应用: ${info.name}`)
                               setAppliedGameName(info.name)

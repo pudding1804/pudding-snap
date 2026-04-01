@@ -81,7 +81,7 @@ fn wait_for_rate_limit() {
     *last_time = Instant::now();
 }
 
-pub fn search_steam_game(game_name: &str) -> Result<Vec<SteamGame>, String> {
+pub fn search_steam_game(game_name: &str, language: &str) -> Result<Vec<SteamGame>, String> {
     wait_for_rate_limit();
     
     let client = reqwest::blocking::Client::builder()
@@ -91,8 +91,9 @@ pub fn search_steam_game(game_name: &str) -> Result<Vec<SteamGame>, String> {
         .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
     
     let url = format!(
-        "https://store.steampowered.com/api/storesearch/?term={}&cc=CN&l=schinese",
-        urlencoding::encode(game_name)
+        "https://store.steampowered.com/api/storesearch/?term={}&cc=CN&l={}",
+        urlencoding::encode(game_name),
+        language
     );
     
     println!("[Steam] 搜索游戏: {}", game_name);
@@ -121,8 +122,8 @@ pub fn search_steam_game(game_name: &str) -> Result<Vec<SteamGame>, String> {
     Ok(games)
 }
 
-pub fn search_steam_games_with_images(game_name: &str) -> Result<Vec<SteamSearchResult>, String> {
-    let games = search_steam_game(game_name)?;
+pub fn search_steam_games_with_images(game_name: &str, language: &str) -> Result<Vec<SteamSearchResult>, String> {
+    let games = search_steam_game(game_name, language)?;
     
     let results: Vec<SteamSearchResult> = games.into_iter().map(|game| {
         SteamSearchResult {
@@ -135,7 +136,7 @@ pub fn search_steam_games_with_images(game_name: &str) -> Result<Vec<SteamSearch
     Ok(results)
 }
 
-pub fn get_steam_app_details(appid: u32) -> Result<Option<SteamGameInfo>, String> {
+pub fn get_steam_app_details(appid: u32, language: &str) -> Result<Option<SteamGameInfo>, String> {
     wait_for_rate_limit();
     
     let client = reqwest::blocking::Client::builder()
@@ -145,8 +146,9 @@ pub fn get_steam_app_details(appid: u32) -> Result<Option<SteamGameInfo>, String
         .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
     
     let url = format!(
-        "https://store.steampowered.com/api/appdetails?appids={}&cc=CN&l=schinese",
-        appid
+        "https://store.steampowered.com/api/appdetails?appids={}&cc=CN&l={}",
+        appid,
+        language
     );
     
     println!("[Steam] 获取游戏详情: {}", appid);
@@ -181,10 +183,10 @@ pub fn get_steam_app_details(appid: u32) -> Result<Option<SteamGameInfo>, String
     Ok(None)
 }
 
-pub fn match_game_name(process_name: &str) -> SteamMatchResult {
+pub fn match_game_name(process_name: &str, language: &str) -> SteamMatchResult {
     let clean_name = clean_process_name(process_name);
     
-    match search_steam_game(&clean_name) {
+    match search_steam_game(&clean_name, language) {
         Ok(games) => {
             if games.is_empty() {
                 return SteamMatchResult {
@@ -202,7 +204,7 @@ pub fn match_game_name(process_name: &str) -> SteamMatchResult {
                 if game_name_lower == search_name_lower {
                     println!("[Steam] 完全匹配: {} -> {}", clean_name, game.name);
                     
-                    if let Ok(Some(info)) = get_steam_app_details(game.appid) {
+                    if let Ok(Some(info)) = get_steam_app_details(game.appid, language) {
                         return SteamMatchResult {
                             status: SteamMatchStatus::Found,
                             game_info: Some(info),
@@ -216,7 +218,7 @@ pub fn match_game_name(process_name: &str) -> SteamMatchResult {
                 let game = &games[0];
                 println!("[Steam] 唯一结果自动匹配: {} -> {}", clean_name, game.name);
                 
-                if let Ok(Some(info)) = get_steam_app_details(game.appid) {
+                if let Ok(Some(info)) = get_steam_app_details(game.appid, language) {
                     return SteamMatchResult {
                         status: SteamMatchStatus::Found,
                         game_info: Some(info),
