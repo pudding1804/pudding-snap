@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection, Result};
 use crate::models::{ScreenshotRecord, GameSummary, PaginationResult, MigrationResult, GameCache};
+use serde::{Serialize, Deserialize};
 use std::path::PathBuf;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -38,7 +39,7 @@ fn load_custom_data_dir() -> Option<PathBuf> {
     None
 }
 
-fn save_custom_data_dir(path: &PathBuf) {
+pub fn save_custom_data_dir(path: &PathBuf) {
     let config_path = get_config_file_path();
     if let Err(e) = std::fs::write(&config_path, path.to_string_lossy().as_bytes()) {
         println!("[配置] 保存配置文件失败: {}", e);
@@ -59,13 +60,20 @@ pub fn get_data_dir() -> PathBuf {
         .expect("Could not get parent dir")
         .to_path_buf();
     
-    let path = exe_dir.join("screenshot-data");
+    let default_path = exe_dir.join("screenshot-data");
     
-    if !path.exists() {
-        let _ = std::fs::create_dir_all(&path);
+    let db_path = default_path.join("screenshots_v2.db");
+    if db_path.exists() {
+        println!("[数据目录] 检测到便携模式数据目录: {:?}", default_path);
+        *CUSTOM_DATA_DIR.lock().unwrap() = Some(default_path.clone());
+        return default_path;
     }
     
-    path
+    if !default_path.exists() {
+        let _ = std::fs::create_dir_all(&default_path);
+    }
+    
+    default_path
 }
 
 pub fn get_screenshots_dir() -> PathBuf {
@@ -251,7 +259,73 @@ pub fn init_db() -> Result<Connection> {
     tx.commit()?;
 
     println!("[数据库] 数据库初始化成功");
+    
+    fix_paths_on_startup(&conn)?;
+    
     Ok(conn)
+}
+
+pub fn fix_paths_on_startup(conn: &Connection) -> Result<()> {
+    let current_data_dir = get_data_dir();
+    let current_dir_str = current_data_dir.to_string_lossy().to_string();
+    
+    let sample_path: Option<String> = conn.query_row(
+        "SELECT file_path FROM screenshots LIMIT 1",
+        [],
+        |row| row.get(0)
+    ).ok();
+    
+    if let Some(path) = sample_path {
+        if !path.starts_with(&current_dir_str) {
+            println!("[路径修复] 检测到路径不匹配，尝试自动修复...");
+            println!("[路径修复] 样本路径: {}", path);
+            println!("[路径修复] 当前数据目录: {}", current_dir_str);
+            
+            let path_obj = std::path::Path::new(&path);
+            if let Some(parent) = path_obj.parent() {
+                let mut old_dir = parent.to_string_lossy().to_string();
+                
+                if let Some(game_dir_name) = parent.file_name() {
+                    let game_dir_str = game_dir_name.to_string_lossy();
+                    if game_dir_str.len() == 16 && game_dir_str.chars().all(|c| c.is_ascii_hexdigit()) {
+                        if let Some(data_dir) = parent.parent() {
+                            old_dir = data_dir.to_string_lossy().to_string();
+                            println!("[路径修复] 检测到game_id子目录，使用数据目录: {}", old_dir);
+                        }
+                    }
+                }
+                
+                if old_dir != current_dir_str {
+                    println!("[路径修复] 旧目录: {}", old_dir);
+                    println!("[路径修复] 新目录: {}", current_dir_str);
+                    
+                    conn.execute(
+                        "UPDATE screenshots SET file_path = REPLACE(file_path, ?1, ?2)",
+                        params![&old_dir, &current_dir_str],
+                    )?;
+                    
+                    conn.execute(
+                        "UPDATE screenshots SET thumbnail_path = REPLACE(thumbnail_path, ?1, ?2)",
+                        params![&old_dir, &current_dir_str],
+                    )?;
+                    
+                    conn.execute(
+                        "UPDATE game_cache SET icon_path = REPLACE(icon_path, ?1, ?2) WHERE icon_path IS NOT NULL",
+                        params![&old_dir, &current_dir_str],
+                    )?;
+                    
+                    conn.execute(
+                        "UPDATE game_cache SET steam_logo_path = REPLACE(steam_logo_path, ?1, ?2) WHERE steam_logo_path IS NOT NULL",
+                        params![&old_dir, &current_dir_str],
+                    )?;
+                    
+                    println!("[路径修复] 路径修复完成");
+                }
+            }
+        }
+    }
+    
+    Ok(())
 }
 
 pub fn get_game_dir(game_id: &str) -> PathBuf {
@@ -474,6 +548,8 @@ pub fn update_display_title(conn: &Connection, game_id: &str, display_title: &st
 }
 
 pub fn migrate_data(new_path: &str) -> Result<MigrationResult> {
+    use crate::models::MigrationStats;
+    
     let old_data_dir = get_data_dir();
     let new_data_dir = PathBuf::from(new_path);
     
@@ -484,29 +560,39 @@ pub fn migrate_data(new_path: &str) -> Result<MigrationResult> {
             return Ok(MigrationResult {
                 success: false,
                 error: Some(format!("无法创建新目录: {}", e)),
+                stats: None,
             });
         }
     }
     
-    let copy_result = copy_dir(&old_data_dir, &new_data_dir);
+    let mut stats = MigrationStats {
+        total_files: 0,
+        copied_files: 0,
+        failed_files: 0,
+        total_size: 0,
+    };
+    
+    let copy_result = copy_dir_with_stats(&old_data_dir, &new_data_dir, &mut stats);
     if let Err(e) = copy_result {
         return Ok(MigrationResult {
             success: false,
             error: Some(format!("复制文件失败: {}", e)),
+            stats: Some(stats),
         });
     }
     
     save_custom_data_dir(&new_data_dir);
     
-    println!("[迁移] 迁移完成，新数据目录已保存到配置文件");
+    println!("[迁移] 迁移完成: {} 文件, {} 字节", stats.copied_files, stats.total_size);
     
     Ok(MigrationResult {
         success: true,
         error: None,
+        stats: Some(stats),
     })
 }
 
-fn copy_dir(src: &PathBuf, dst: &PathBuf) -> io::Result<()> {
+fn copy_dir_with_stats(src: &PathBuf, dst: &PathBuf, stats: &mut crate::models::MigrationStats) -> io::Result<()> {
     if !dst.exists() {
         fs::create_dir_all(dst)?;
     }
@@ -517,12 +603,120 @@ fn copy_dir(src: &PathBuf, dst: &PathBuf) -> io::Result<()> {
         let dst_path = dst.join(entry.file_name());
         
         if path.is_dir() {
-            copy_dir(&path, &dst_path)?;
+            copy_dir_with_stats(&path, &dst_path, stats)?;
         } else {
-            fs::copy(&path, &dst_path)?;
+            stats.total_files += 1;
+            
+            if let Ok(metadata) = fs::metadata(&path) {
+                stats.total_size += metadata.len();
+            }
+            
+            match fs::copy(&path, &dst_path) {
+                Ok(_) => {
+                    stats.copied_files += 1;
+                    println!("[迁移] 复制: {:?}", path.file_name().unwrap_or_default());
+                }
+                Err(e) => {
+                    stats.failed_files += 1;
+                    println!("[迁移] 失败: {:?} - {}", path.file_name().unwrap_or_default(), e);
+                }
+            }
         }
     }
     
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DirectoryCheckResult {
+    pub valid: bool,
+    pub message: Option<String>,
+}
+
+pub fn check_data_directory(path: &str) -> DirectoryCheckResult {
+    let data_dir = PathBuf::from(path);
+    
+    if !data_dir.exists() {
+        return DirectoryCheckResult {
+            valid: false,
+            message: Some("目录不存在".to_string()),
+        };
+    }
+    
+    if !data_dir.is_dir() {
+        return DirectoryCheckResult {
+            valid: false,
+            message: Some("路径不是目录".to_string()),
+        };
+    }
+    
+    let db_path = data_dir.join("screenshots_v2.db");
+    if !db_path.exists() {
+        return DirectoryCheckResult {
+            valid: false,
+            message: Some("目录中没有找到数据库文件 (screenshots_v2.db)".to_string()),
+        };
+    }
+    
+    DirectoryCheckResult {
+        valid: true,
+        message: Some(format!("有效数据目录，数据库大小: {} 字节", 
+            std::fs::metadata(&db_path).map(|m| m.len()).unwrap_or(0))),
+    }
+}
+
+pub fn switch_data_directory(new_path: &str) -> Result<MigrationResult> {
+    let new_data_dir = PathBuf::from(new_path);
+    let old_data_dir = get_data_dir();
+    
+    let check_result = check_data_directory(new_path);
+    if !check_result.valid {
+        return Ok(MigrationResult {
+            success: false,
+            error: check_result.message,
+            stats: None,
+        });
+    }
+    
+    let old_dir_str = old_data_dir.to_string_lossy().to_string();
+    let new_dir_str = new_data_dir.to_string_lossy().to_string();
+    
+    save_custom_data_dir(&new_data_dir);
+    
+    println!("[切换] 数据目录已切换到: {:?}", new_data_dir);
+    println!("[切换] 旧目录: {:?}", old_data_dir);
+    
+    Ok(MigrationResult {
+        success: true,
+        error: None,
+        stats: None,
+    })
+}
+
+pub fn update_paths_for_import(conn: &Connection, old_dir: &str, new_dir: &str) -> Result<()> {
+    println!("[导入] 更新数据库路径: {} -> {}", old_dir, new_dir);
+    
+    conn.execute(
+        "UPDATE screenshots SET file_path = REPLACE(file_path, ?1, ?2) WHERE file_path LIKE ?3",
+        params![old_dir, new_dir, format!("{}%", old_dir)],
+    )?;
+    
+    conn.execute(
+        "UPDATE screenshots SET thumbnail_path = REPLACE(thumbnail_path, ?1, ?2) WHERE thumbnail_path LIKE ?3",
+        params![old_dir, new_dir, format!("{}%", old_dir)],
+    )?;
+    
+    conn.execute(
+        "UPDATE game_cache SET icon_path = REPLACE(icon_path, ?1, ?2) WHERE icon_path LIKE ?3",
+        params![old_dir, new_dir, format!("{}%", old_dir)],
+    )?;
+    
+    conn.execute(
+        "UPDATE game_cache SET steam_logo_path = REPLACE(steam_logo_path, ?1, ?2) WHERE steam_logo_path LIKE ?3",
+        params![old_dir, new_dir, format!("{}%", old_dir)],
+    )?;
+    
+    println!("[导入] 数据库路径更新完成");
     Ok(())
 }
 
@@ -587,6 +781,33 @@ pub fn update_game_display_title(conn: &Connection, game_id: &str, display_title
         params![display_title, game_id],
     )?;
     println!("[数据库] 更新游戏 {} 的显示标题为: {}", game_id, display_title);
+    Ok(())
+}
+
+pub fn update_paths_after_migration(conn: &Connection, old_dir: &str, new_dir: &str) -> Result<()> {
+    println!("[迁移] 更新数据库路径: {} -> {}", old_dir, new_dir);
+    
+    conn.execute(
+        "UPDATE screenshots SET file_path = REPLACE(file_path, ?1, ?2) WHERE file_path LIKE ?3",
+        params![old_dir, new_dir, format!("{}%", old_dir)],
+    )?;
+    
+    conn.execute(
+        "UPDATE screenshots SET thumbnail_path = REPLACE(thumbnail_path, ?1, ?2) WHERE thumbnail_path LIKE ?3",
+        params![old_dir, new_dir, format!("{}%", old_dir)],
+    )?;
+    
+    conn.execute(
+        "UPDATE game_cache SET icon_path = REPLACE(icon_path, ?1, ?2) WHERE icon_path LIKE ?3",
+        params![old_dir, new_dir, format!("{}%", old_dir)],
+    )?;
+    
+    conn.execute(
+        "UPDATE game_cache SET steam_logo_path = REPLACE(steam_logo_path, ?1, ?2) WHERE steam_logo_path LIKE ?3",
+        params![old_dir, new_dir, format!("{}%", old_dir)],
+    )?;
+    
+    println!("[迁移] 数据库路径更新完成");
     Ok(())
 }
 

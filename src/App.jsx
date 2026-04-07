@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog'
 
 const themes = {
   night: {
@@ -116,6 +117,12 @@ function App() {
   const [storagePath, setStoragePath] = useState('')
   const [isMigrating, setIsMigrating] = useState(false)
   const [migrationProgress, setMigrationProgress] = useState(0)
+  const [migrationTotal, setMigrationTotal] = useState(0)
+  const [migrationStatus, setMigrationStatus] = useState('')
+  const [migrationStats, setMigrationStats] = useState(null)
+  
+  // 删除确认弹窗状态
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   
   // 鼠标捕捉设置
   const [captureMouse, setCaptureMouse] = useState(false)
@@ -250,6 +257,7 @@ function App() {
         delete_all_confirm: '确定要删除所有数据吗？此操作无法恢复！',
         restart_required: '需要重启程序',
         restart_now: '现在重启',
+        cancel: '取消',
         languages: {
           zh: '中文',
           en: 'English',
@@ -389,6 +397,7 @@ function App() {
         delete_all_confirm: 'Are you sure you want to delete all data? This operation cannot be recovered!',
         restart_required: 'Restart required',
         restart_now: 'Restart Now',
+        cancel: 'Cancel',
         languages: {
           zh: '中文',
           en: 'English',
@@ -528,6 +537,7 @@ function App() {
         delete_all_confirm: '本当にすべてのデータを削除しますか？この操作は元に戻すことができません！',
         restart_required: '再起動が必要',
         restart_now: '今すぐ再起動',
+        cancel: 'キャンセル',
         languages: {
           zh: '中文',
           en: 'English',
@@ -598,6 +608,14 @@ function App() {
     const time = new Date().toLocaleTimeString()
     console.log(`[${time}] ${msg}`)
     setLogs(prev => [...prev.slice(-20), `[${time}] ${msg}`])
+  }
+  
+  const formatBytes = (bytes) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
   const loadGames = async (sortType = null) => {
@@ -765,11 +783,20 @@ function App() {
       setCurrentView('settings')
     })
 
+    const unlistenMigration = listen('migration-progress', (event) => {
+      const { current, total, status } = event.payload
+      setMigrationProgress(current)
+      setMigrationTotal(total)
+      setMigrationStatus(status)
+      addLog(`迁移进度: ${current}/${total} - ${status}`)
+    })
+
     return () => {
       unlisten.then(f => f())
       unlistenTray.then(f => f())
       unlistenNotify.then(f => f())
       unlistenSettings.then(f => f())
+      unlistenMigration.then(f => f())
       if (refreshDebounceRef.current) {
         clearTimeout(refreshDebounceRef.current)
       }
@@ -1030,31 +1057,96 @@ function App() {
 
   const changeStoragePath = async () => {
     try {
-      // 使用简单的 prompt 暂时替代 dialog
-      const newPath = prompt('请输入新的存储目录路径:');
+      const selectedPath = await open({
+        directory: true,
+        multiple: false,
+        title: '选择新的存储目录'
+      })
       
-      if (newPath) {
-        setIsMigrating(true)
-        setMigrationProgress(0)
-        
-        addLog(`开始迁移数据到: ${newPath}`)
-        const result = await invoke('migrate_data', { newPath })
-        
-        if (result.success) {
-          setStoragePath(newPath)
-          setNotification({ title: '迁移成功', body: '数据已成功迁移到新目录' })
-          await loadScreenshotsWithPagination(1, selectedGame?.game_id || null)
-          await loadGames()
-        } else {
-          setError('迁移失败: ' + (result.error || '未知错误'))
-        }
+      if (!selectedPath) {
+        return
+      }
+      
+      setIsMigrating(true)
+      setMigrationProgress(0)
+      setMigrationTotal(0)
+      setMigrationStatus('准备迁移...')
+      setMigrationStats(null)
+      
+      addLog(`开始迁移数据到: ${selectedPath}`)
+      const result = await invoke('migrate_data', { newPath: selectedPath })
+      
+      if (result.success) {
+        setStoragePath(selectedPath)
+        setMigrationStats(result.stats)
+        setNotification({ title: '迁移成功', body: '数据已成功迁移到新目录' })
+      } else {
+        setError('迁移失败: ' + (result.error || '未知错误'))
       }
     } catch (e) {
       addLog(`更改存储路径失败: ${e}`)
       setError('更改存储路径失败: ' + String(e))
     } finally {
       setIsMigrating(false)
-      setMigrationProgress(0)
+      setMigrationStatus('')
+    }
+  }
+  
+  const [importConfirmPath, setImportConfirmPath] = useState(null)
+  
+  const importExistingDirectory = async () => {
+    try {
+      const selectedPath = await open({
+        directory: true,
+        multiple: false,
+        title: '选择已有数据目录'
+      })
+      
+      if (!selectedPath) {
+        return
+      }
+      
+      const result = await invoke('check_data_directory', { path: selectedPath })
+      
+      if (!result.valid) {
+        setError(result.message || '所选目录不是有效的数据目录')
+        return
+      }
+      
+      setImportConfirmPath(selectedPath)
+    } catch (e) {
+      addLog(`检查目录失败: ${e}`)
+      setError('检查目录失败: ' + String(e))
+    }
+  }
+  
+  const confirmImportDirectory = async () => {
+    if (!importConfirmPath) return
+    
+    try {
+      setIsMigrating(true)
+      addLog(`切换数据目录到: ${importConfirmPath}`)
+      
+      const result = await invoke('switch_data_directory', { newPath: importConfirmPath })
+      
+      if (result.success) {
+        setStoragePath(importConfirmPath)
+        setImportConfirmPath(null)
+        setMigrationStats({
+          total_files: 0,
+          copied_files: 0,
+          failed_files: 0,
+          total_size: 0,
+          is_import: true
+        })
+      } else {
+        setError('切换目录失败: ' + (result.error || '未知错误'))
+      }
+    } catch (e) {
+      addLog(`切换目录失败: ${e}`)
+      setError('切换目录失败: ' + String(e))
+    } finally {
+      setIsMigrating(false)
     }
   }
 
@@ -2066,22 +2158,44 @@ function App() {
                 <p style={{ color: theme.textMuted, fontSize: 14, marginBottom: 12 }}>
                   {t.settings.current_path} {storagePath}
                 </p>
-                <button 
-                  style={styles.btnPrimary} 
-                  {...btnEvents}
-                  onClick={changeStoragePath}
-                  disabled={isMigrating}
-                >
-                  {isMigrating ? t.settings.migrating : t.settings.change_path}
-                </button>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <button 
+                    style={styles.btnPrimary} 
+                    {...btnEvents}
+                    onClick={changeStoragePath}
+                    disabled={isMigrating}
+                  >
+                    {isMigrating ? t.settings.migrating : t.settings.change_path}
+                  </button>
+                  <button 
+                    style={{ ...styles.btn, borderColor: theme.primary, color: theme.primary }} 
+                    {...btnEvents}
+                    onClick={importExistingDirectory}
+                    disabled={isMigrating}
+                  >
+                    {t.settings.import_directory || '导入已有目录'}
+                  </button>
+                </div>
                 {isMigrating && (
-                  <div style={styles.migrationProgress}>
-                    <div 
-                      style={{
-                        ...styles.migrationProgressBar,
-                        width: `${migrationProgress}%`
-                      }}
-                    />
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      marginBottom: 4,
+                      fontSize: 12,
+                      color: theme.textMuted
+                    }}>
+                      <span>{migrationStatus || '准备迁移...'}</span>
+                      <span>{migrationProgress}/{migrationTotal}</span>
+                    </div>
+                    <div style={styles.migrationProgress}>
+                      <div 
+                        style={{
+                          ...styles.migrationProgressBar,
+                          width: `${migrationTotal > 0 ? (migrationProgress / migrationTotal * 100) : 0}%`
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
                 <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
@@ -2146,19 +2260,7 @@ function App() {
                     fontSize: 14
                   }} 
                   {...btnEvents}
-                  onClick={async () => {
-                    if (confirm(t.settings.delete_all_confirm)) {
-                      try {
-                        await invoke('delete_all_data')
-                        addLog('所有数据已删除')
-                        alert(t.settings.restart_required)
-                        await invoke('restart_app')
-                      } catch (e) {
-                        addLog(`删除所有数据失败: ${e}`)
-                        alert(`删除失败: ${e}`)
-                      }
-                    }
-                  }}
+                  onClick={() => setShowDeleteConfirm(true)}
                 >
                   {t.settings.delete_all}
                 </button>
@@ -2247,7 +2349,7 @@ function App() {
                 alt="截图" 
                 style={{ 
                   maxWidth: '100%', 
-                  maxHeight: 'calc(95vh - 120px)',
+                  maxHeight: 'calc(95vh - 145px)',
                   objectFit: 'contain'
                 }} 
               />
@@ -2357,20 +2459,22 @@ function App() {
                   placeholder="添加附注..."
                   style={{ 
                     flex: 1,
-                    height: 28, 
+                    height: 52, 
                     resize: 'none',
                     fontSize: 13,
-                    padding: '4px 10px',
+                    lineHeight: 1.5,
+                    padding: '6px 10px',
                     background: 'transparent',
                     border: 'none',
                     color: theme.text,
-                    outline: 'none'
+                    outline: 'none',
+                    overflow: 'hidden'
                   }}
                 />
                 <button 
                   style={{ 
                     padding: '0 12px', 
-                    height: 28,
+                    height: 52,
                     background: theme.primary, 
                     border: 'none', 
                     color: '#fff', 
@@ -2708,6 +2812,213 @@ function App() {
           <div>
             <div style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>截图成功</div>
             <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>已保存到本地</div>
+          </div>
+        </div>
+      )}
+      
+      {importConfirmPath && (
+        <div style={styles.modalOverlay} onClick={() => setImportConfirmPath(null)}>
+          <div style={{ ...styles.modalContent, maxWidth: 450 }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: 32, textAlign: 'center' }}>
+              <div style={{ 
+                width: 60, 
+                height: 60, 
+                borderRadius: '50%', 
+                background: '#f59e0b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px'
+              }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                  <line x1="12" y1="9" x2="12" y2="13"></line>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+              </div>
+              <h3 style={{ marginBottom: 16 }}>{t.settings.import_confirm_title || '确认导入目录'}</h3>
+              <div style={{ 
+                background: theme.accent, 
+                borderRadius: 8, 
+                padding: 16, 
+                marginBottom: 16,
+                textAlign: 'left'
+              }}>
+                <p style={{ color: theme.text, fontSize: 14, marginBottom: 8, wordBreak: 'break-all' }}>
+                  {t.settings.import_path || '目录路径'}: <strong>{importConfirmPath}</strong>
+                </p>
+              </div>
+              <div style={{ 
+                background: 'rgba(239, 68, 68, 0.1)', 
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: 8, 
+                padding: 16, 
+                marginBottom: 24 
+              }}>
+                <p style={{ color: theme.danger, fontSize: 14, margin: 0 }}>
+                  ⚠️ {t.settings.import_warning || '此操作将覆盖当前的数据目录设置，现有数据将不再显示。程序将重启以应用更改。'}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <button 
+                  style={{ ...styles.btn, padding: '12px 24px' }}
+                  {...btnEvents}
+                  onClick={() => setImportConfirmPath(null)}
+                >
+                  {t.settings.cancel || '取消'}
+                </button>
+                <button 
+                  style={{ ...styles.btnPrimary, padding: '12px 24px', background: '#f59e0b' }}
+                  {...btnEvents}
+                  onClick={confirmImportDirectory}
+                >
+                  {t.settings.confirm_import || '确认导入'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {migrationStats && (
+        <div style={styles.modalOverlay} onClick={() => setMigrationStats(null)}>
+          <div style={{ ...styles.modalContent, maxWidth: 450 }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: 32, textAlign: 'center' }}>
+              <div style={{ 
+                width: 60, 
+                height: 60, 
+                borderRadius: '50%', 
+                background: theme.primary,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px'
+              }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </div>
+              <h3 style={{ marginBottom: 16 }}>
+                {migrationStats.is_import ? (t.settings.import_complete || '导入完成') : (t.settings.migration_complete || '迁移完成')}
+              </h3>
+              {!migrationStats.is_import && (
+                <div style={{ 
+                  background: theme.accent, 
+                  borderRadius: 8, 
+                  padding: 16, 
+                  marginBottom: 24,
+                  textAlign: 'left'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ color: theme.textMuted }}>{t.settings.total_files || '总文件数'}:</span>
+                    <span style={{ color: theme.text, fontWeight: 500 }}>{migrationStats.total_files}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ color: theme.textMuted }}>{t.settings.copied_files || '已复制'}:</span>
+                    <span style={{ color: theme.primary, fontWeight: 500 }}>{migrationStats.copied_files}</span>
+                  </div>
+                  {migrationStats.failed_files > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <span style={{ color: theme.textMuted }}>{t.settings.failed_files || '失败'}:</span>
+                      <span style={{ color: theme.danger, fontWeight: 500 }}>{migrationStats.failed_files}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: theme.textMuted }}>{t.settings.total_size || '总大小'}:</span>
+                    <span style={{ color: theme.text, fontWeight: 500 }}>{formatBytes(migrationStats.total_size)}</span>
+                  </div>
+                </div>
+              )}
+              {migrationStats.is_import && (
+                <p style={{ color: theme.textMuted, fontSize: 14, marginBottom: 24 }}>
+                  {t.settings.import_success_msg || '数据目录已成功切换，程序将重启以加载新数据。'}
+                </p>
+              )}
+              <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 24 }}>
+                {t.settings.restart_required || '需要重启程序以应用更改'}
+              </p>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <button 
+                  style={{ ...styles.btn, padding: '12px 24px' }}
+                  {...btnEvents}
+                  onClick={() => setMigrationStats(null)}
+                >
+                  {t.settings.later || '稍后'}
+                </button>
+                <button 
+                  style={{ ...styles.btnPrimary, padding: '12px 24px' }}
+                  {...btnEvents}
+                  onClick={async () => {
+                    try {
+                      setNotification({ title: t.settings.restart_required || '需要重启程序', body: '程序将自动重启' })
+                      await invoke('restart_app')
+                    } catch (e) {
+                      addLog(`重启失败: ${e}`)
+                    }
+                  }}
+                >
+                  {t.settings.restart_now || '立即重启'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {showDeleteConfirm && (
+        <div style={styles.modalOverlay} onClick={() => setShowDeleteConfirm(false)}>
+          <div style={{ ...styles.modalContent, maxWidth: 450 }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: 32, textAlign: 'center' }}>
+              <div style={{ 
+                width: 64, 
+                height: 64, 
+                borderRadius: '50%', 
+                background: 'rgba(239, 68, 68, 0.1)', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                margin: '0 auto 20px'
+              }}>
+                <span style={{ fontSize: 32 }}>⚠️</span>
+              </div>
+              <h3 style={{ marginBottom: 16, color: theme.text }}>{t.settings.delete_all}</h3>
+              <p style={{ color: theme.textMuted, fontSize: 14, marginBottom: 24 }}>
+                {t.settings.delete_all_confirm}
+              </p>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <button 
+                  style={{ ...styles.btn, padding: '12px 24px' }}
+                  {...btnEvents}
+                  onClick={() => setShowDeleteConfirm(false)}
+                >
+                  {t.settings.cancel || '取消'}
+                </button>
+                <button 
+                  style={{ ...styles.btnDanger, padding: '12px 24px' }}
+                  {...btnEvents}
+                  onClick={async () => {
+                    try {
+                      await invoke('delete_all_data')
+                      addLog('所有数据已删除')
+                      setShowDeleteConfirm(false)
+                      setNotification({ title: t.settings.restart_required || '需要重启程序', body: '程序将自动重启' })
+                      setTimeout(async () => {
+                        try {
+                          await invoke('restart_app')
+                        } catch (e) {
+                          addLog(`重启失败: ${e}`)
+                        }
+                      }, 500)
+                    } catch (e) {
+                      addLog(`删除所有数据失败: ${e}`)
+                      setError(`删除失败: ${e}`)
+                    }
+                  }}
+                >
+                  {t.settings.delete_all}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

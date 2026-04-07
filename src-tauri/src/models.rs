@@ -32,9 +32,18 @@ pub struct PaginationResult {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct MigrationStats {
+    pub total_files: u32,
+    pub copied_files: u32,
+    pub failed_files: u32,
+    pub total_size: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MigrationResult {
     pub success: bool,
     pub error: Option<String>,
+    pub stats: Option<MigrationStats>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
