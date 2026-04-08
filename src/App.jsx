@@ -93,7 +93,7 @@ function App() {
   const [autostart, setAutostart] = useState(false)
   const [language, setLanguage] = useState('zh')
   const [steamLanguage, setSteamLanguage] = useState('schinese')
-  const [screenshotFormat, setScreenshotFormat] = useState('original')
+  const [screenshotFormat, setScreenshotFormat] = useState('webp')
   const [screenshotQuality, setScreenshotQuality] = useState('medium')
   
   const [showSearchModal, setShowSearchModal] = useState(false)
@@ -117,6 +117,7 @@ function App() {
   
   const [showDeleteGameConfirm, setShowDeleteGameConfirm] = useState(false)
   const [deleteGameCallback, setDeleteGameCallback] = useState(null)
+  const [deleteConfirmMode, setDeleteConfirmMode] = useState('last_screenshot')
   
   const [showImportModal, setShowImportModal] = useState(false)
   const [importFiles, setImportFiles] = useState([])
@@ -399,16 +400,32 @@ function App() {
     try {
       await invoke('delete_screenshot', { id })
       addLog(`截图删除成功: ID=${id}`)
+      showNotification(t.notifications.delete_success)
       
       const newScreenshots = screenshots.filter(ss => ss.id !== id)
       
       if (newScreenshots.length === 0) {
         closeModal()
         if (selectedGame) {
-          setSelectedGame(null)
-          await loadGames()
+          setDeleteConfirmMode('last_screenshot')
+          setShowDeleteGameConfirm(true)
+          setDeleteGameCallback(() => async (deleteGame) => {
+            if (deleteGame) {
+              await invoke('delete_game', { gameId: selectedGame.game_id })
+              addLog(`已删除游戏: ${selectedGame.game_id}`)
+              showNotification('游戏已删除')
+            }
+            setShowDeleteGameConfirm(false)
+            setDeleteGameCallback(null)
+            setIsMultiSelectMode(false)
+            setSelectedScreenshots([])
+            setSelectedGame(null)
+            setCurrentView('games')
+            await loadGames()
+          })
+        } else {
+          await loadScreenshotsWithPagination(currentPage, null)
         }
-        await loadScreenshotsWithPagination(currentPage, selectedGame?.game_id || null)
       } else {
         let newIndex = selectedScreenshotIndex
         if (selectedScreenshotIndex >= newScreenshots.length) {
@@ -428,7 +445,7 @@ function App() {
       addLog(`截图删除失败: ${e}`)
       setError('删除截图失败: ' + String(e))
     }
-  }, [addLog, screenshots, selectedScreenshotIndex, selectedGame, closeModal, loadGames, loadScreenshotsWithPagination, currentPage, t])
+  }, [addLog, screenshots, selectedScreenshotIndex, selectedGame, closeModal, loadGames, loadScreenshotsWithPagination, currentPage, t, showNotification])
 
   const openInExplorer = useCallback(async (filePath) => {
     try {
@@ -455,37 +472,39 @@ function App() {
       addLog(`批量删除成功: ${deleteCount} 张`)
       
       if (willBeEmpty && currentGameId) {
+        setDeleteConfirmMode('last_screenshot')
         setShowDeleteGameConfirm(true)
         setDeleteGameCallback(() => async (deleteGame) => {
           if (deleteGame) {
             await invoke('delete_game', { gameId: currentGameId })
             addLog(`已删除游戏: ${currentGameId}`)
-            setSelectedGame(null)
-            await loadGames()
+            showNotification('游戏已删除')
           }
           setShowDeleteGameConfirm(false)
           setDeleteGameCallback(null)
           setIsMultiSelectMode(false)
           setSelectedScreenshots([])
-          if (!deleteGame) {
-            await loadScreenshotsWithPagination(currentPage, currentGameId)
+          setSelectedGame(null)
+          if (deleteGame) {
+            setCurrentView('games')
+            await loadGames()
+          } else {
+            await loadGames()
+            await loadScreenshotsWithPagination(1, currentGameId)
           }
         })
       } else {
-        await loadScreenshotsWithPagination(currentPage, currentGameId || null)
         setIsMultiSelectMode(false)
         setSelectedScreenshots([])
         showNotification('删除成功', `已删除 ${deleteCount} 张截图`)
-        
-        if (selectedGame && screenshots.length <= deleteCount) {
-          await loadGames()
-        }
+        await loadGames()
+        await loadScreenshotsWithPagination(currentPage, currentGameId || null)
       }
     } catch (e) {
       addLog(`批量删除失败: ${e}`)
       setError('批量删除失败: ' + String(e))
     }
-  }, [selectedScreenshots, selectedGame, screenshots, addLog, loadScreenshotsWithPagination, currentPage, loadGames])
+  }, [selectedScreenshots, selectedGame, screenshots, addLog, loadScreenshotsWithPagination, currentPage, loadGames, showNotification])
 
   const toggleSelectScreenshot = useCallback((id) => {
     setSelectedScreenshots(prev => {
@@ -800,7 +819,27 @@ function App() {
               onToggleMultiSelect={setIsGameMultiSelectMode}
               onSelectGame={(action) => {
                 if (action === 'delete' && selectedGames.length > 0) {
+                  setDeleteConfirmMode('delete_game')
                   setShowDeleteGameConfirm(true)
+                  setDeleteGameCallback(() => async (confirm) => {
+                    if (confirm) {
+                      try {
+                        for (const gameId of selectedGames) {
+                          await invoke('delete_game', { gameId })
+                          addLog(`已删除游戏: ${gameId}`)
+                        }
+                        showNotification('删除成功', `已删除 ${selectedGames.length} 个游戏`)
+                      } catch (e) {
+                        addLog(`删除游戏失败: ${e}`)
+                        setError('删除游戏失败: ' + String(e))
+                      }
+                    }
+                    setShowDeleteGameConfirm(false)
+                    setDeleteGameCallback(null)
+                    setIsGameMultiSelectMode(false)
+                    setSelectedGames([])
+                    await loadGames()
+                  })
                 }
               }}
               onToggleSelectGame={(game) => {
@@ -1124,9 +1163,11 @@ function App() {
           }}>
             <div style={{ ...styles.modalContent, maxWidth: 450 }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: 32, textAlign: 'center' }}>
-                <h3 style={{ marginBottom: 16, color: theme.text }}>{t.delete_last_screenshot.title}</h3>
+                <h3 style={{ marginBottom: 16, color: theme.text }}>
+                  {deleteConfirmMode === 'delete_game' ? t.delete_game_confirm.title : t.delete_last_screenshot.title}
+                </h3>
                 <p style={{ color: theme.textMuted, fontSize: 14, marginBottom: 24 }}>
-                  {t.delete_last_screenshot.message}
+                  {deleteConfirmMode === 'delete_game' ? t.delete_game_confirm.message : t.delete_last_screenshot.message}
                 </p>
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
                   <button 
@@ -1134,14 +1175,14 @@ function App() {
                     {...btnEvents}
                     onClick={() => deleteGameCallback && deleteGameCallback(true)}
                   >
-                    {t.delete_last_screenshot.delete_game}
+                    {deleteConfirmMode === 'delete_game' ? t.delete_game_confirm.confirm : t.delete_last_screenshot.delete_game}
                   </button>
                   <button 
                     style={{ ...styles.btnPrimary, padding: '12px 24px' }}
                     {...btnEvents}
                     onClick={() => deleteGameCallback && deleteGameCallback(false)}
                   >
-                    {t.delete_last_screenshot.keep_game}
+                    {deleteConfirmMode === 'delete_game' ? t.delete_game_confirm.cancel : t.delete_last_screenshot.keep_game}
                   </button>
                 </div>
               </div>

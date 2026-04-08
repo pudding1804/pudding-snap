@@ -162,6 +162,12 @@ export const translations = {
       delete_game: '删除游戏',
       keep_game: '保留游戏'
     },
+    delete_game_confirm: {
+      title: '删除游戏',
+      message: '确定要删除选中的游戏及其所有截图吗？此操作不可撤销。',
+      confirm: '确定删除',
+      cancel: '取消'
+    },
     detail: {
       note: '附注:',
       save_note: '保存附注',
@@ -351,6 +357,12 @@ export const translations = {
       delete_game: 'Delete Game',
       keep_game: 'Keep Game'
     },
+    delete_game_confirm: {
+      title: 'Delete Game',
+      message: 'Are you sure you want to delete the selected games and all their screenshots? This action cannot be undone.',
+      confirm: 'Confirm Delete',
+      cancel: 'Cancel'
+    },
     detail: {
       note: 'Note:',
       save_note: 'Save Note',
@@ -539,6 +551,12 @@ export const translations = {
       message: 'これはこのゲームの最後のスクリーンショットです。削除するとゲームにスクリーンショットがなくなります。ゲームも削除しますか？',
       delete_game: 'ゲームを削除',
       keep_game: 'ゲームを保持'
+    },
+    delete_game_confirm: {
+      title: 'ゲームを削除',
+      message: '選択したゲームとそのすべてのスクリーンショットを削除してもよろしいですか？この操作は元に戻せません。',
+      confirm: '削除を確認',
+      cancel: 'キャンセル'
     },
     detail: {
       note: 'メモ:',

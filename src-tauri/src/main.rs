@@ -748,7 +748,10 @@ fn import_screenshots(
     println!("[导入] 已有 {} 个文件", existing_filenames.len());
     
     let game_dir = db::get_game_dir(&game_id);
-    let thumbnails_dir = db::get_thumbnails_dir();
+    let thumbnails_dir = game_dir.join("thumbnails");
+    if !thumbnails_dir.exists() {
+        let _ = std::fs::create_dir_all(&thumbnails_dir);
+    }
     
     let mut current = 0u32;
     let mut imported_count = 0u32;
@@ -778,8 +781,12 @@ fn import_screenshots(
             .and_then(|e| e.to_str())
             .unwrap_or("png")
             .to_lowercase();
-        let filename = format!("{}.{}", timestamp, original_ext);
-        let thumbnail_filename = format!("thumb_{}.webp", timestamp);
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .subsec_millis();
+        let filename = format!("{}_{:03}.{}", timestamp, millis, original_ext);
+        let thumbnail_filename = format!("{}_{:03}_thumb.webp", timestamp, millis);
         
         if existing_filenames.contains(&filename) {
             println!("[导入] 跳过重复文件: {}", filename);
@@ -1101,7 +1108,10 @@ fn main() {
                                                 println!("[队列] 使用游戏ID: {} (进程名: {}, 已存在: {})", game_id, task.process_name, is_existing);
                                                 
                                                 let game_dir = db::get_game_dir(&game_id);
-                                                let thumbnails_dir = db::get_thumbnails_dir();
+                                                let thumbnails_dir = game_dir.join("thumbnails");
+                                                if !thumbnails_dir.exists() {
+                                                    let _ = std::fs::create_dir_all(&thumbnails_dir);
+                                                }
                                                 
                                                 let db_for_settings = db_h.clone();
                                                 let conn_for_settings = db_for_settings.lock().unwrap();

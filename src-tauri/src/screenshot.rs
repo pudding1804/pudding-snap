@@ -337,15 +337,21 @@ pub fn generate_filename_with_format(format: &str) -> String {
         "webp" => "webp",
         _ => "webp",
     };
-    format!("{}.{}", now.format("%Y%m%d_%H%M%S"), ext)
+    let timestamp = now.format("%Y%m%d_%H%M%S");
+    let millis = now.timestamp_subsec_millis();
+    format!("{}_{:03}.{}", timestamp, millis, ext)
 }
 
 pub fn generate_filename() -> String {
     let now = Utc::now();
-    format!("{}.webp", now.format("%Y%m%d_%H%M%S"))
+    let timestamp = now.format("%Y%m%d_%H%M%S");
+    let millis = now.timestamp_subsec_millis();
+    format!("{}_{:03}.webp", timestamp, millis)
 }
 
 pub fn generate_thumbnail_filename() -> String {
     let now = Utc::now();
-    format!("{}_thumb.webp", now.format("%Y%m%d_%H%M%S"))
+    let timestamp = now.format("%Y%m%d_%H%M%S");
+    let millis = now.timestamp_subsec_millis();
+    format!("{}_{:03}_thumb.webp", timestamp, millis)
 }
