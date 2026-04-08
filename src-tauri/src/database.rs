@@ -820,6 +820,16 @@ pub fn update_game_display_title(conn: &Connection, game_id: &str, display_title
     Ok(())
 }
 
+pub fn update_game_cache(conn: &Connection, game_id: &str, steam_appid: Option<u32>, steam_name: Option<String>, steam_logo_path: Option<String>) -> Result<()> {
+    let timestamp = chrono::Utc::now().timestamp();
+    conn.execute(
+        "UPDATE game_cache SET steam_appid = ?1, steam_name = ?2, steam_logo_path = ?3, steam_match_status = 'manual', display_title = ?4, last_updated = ?5 WHERE game_id = ?6",
+        params![steam_appid, steam_name, steam_logo_path, steam_name, timestamp, game_id],
+    )?;
+    println!("[数据库] 更新游戏 {} 的Steam信息", game_id);
+    Ok(())
+}
+
 pub fn update_paths_after_migration(conn: &Connection, old_dir: &str, new_dir: &str) -> Result<()> {
     println!("[迁移] 更新数据库路径: {} -> {}", old_dir, new_dir);
     

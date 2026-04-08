@@ -137,6 +137,7 @@ function App() {
   
   const refreshDebounceRef = useRef(null)
   const isRefreshingRef = useRef(false)
+  const selectedGameRef = useRef(null)
   const gridRef = useRef(null)
 
   const theme = themes[currentTheme].colors
@@ -148,6 +149,11 @@ function App() {
     console.log(`[${time}] ${msg}`)
     setLogs(prev => [...prev.slice(-20), `[${time}] ${msg}`])
   }, [])
+
+  useEffect(() => {
+    selectedGameRef.current = selectedGame
+    console.log(`[DEBUG] selectedGameRef 更新: ${selectedGame?.game_id || 'null'}`)
+  }, [selectedGame])
 
   const showScreenshotNotification = useCallback(() => {
     setScreenshotNotification(true)
@@ -715,31 +721,70 @@ function App() {
     
     loadData()
 
-    const unlisten = listen('screenshot-taken', () => {
-      addLog('收到截图事件，准备刷新')
+    const unlisten = listen('screenshot-taken', (event) => {
+      const payload = event.payload || {}
+      const gameId = payload.game_id
+      console.log(`[DEBUG] 收到screenshot-taken事件:`, event)
+      console.log(`[DEBUG] payload:`, payload)
+      console.log(`[DEBUG] gameId: ${gameId}`)
+      console.log(`[DEBUG] selectedGameRef.current: ${selectedGameRef.current?.game_id || 'null'}`)
+      addLog(`收到截图事件，游戏ID: ${gameId || '未知'}`)
       showScreenshotNotification()
       
       if (refreshDebounceRef.current) {
+        console.log(`[DEBUG] 清除之前的防抖定时器`)
         clearTimeout(refreshDebounceRef.current)
       }
       
       refreshDebounceRef.current = setTimeout(async () => {
+        console.log(`[DEBUG] 防抖定时器触发，准备刷新`)
+        console.log(`[DEBUG] isRefreshingRef.current: ${isRefreshingRef.current}`)
+        
         if (isRefreshingRef.current) {
           addLog('刷新进行中，跳过')
           return
         }
         
         isRefreshingRef.current = true
+        console.log(`[DEBUG] 开始刷新数据`)
+        
         try {
-          await loadScreenshotsWithPagination(1, selectedGame?.game_id || null)
-          await loadGames()
+          const currentSelectedGame = selectedGameRef.current
+          console.log(`[DEBUG] currentSelectedGame: ${currentSelectedGame?.game_id || 'null'}`)
+          console.log(`[DEBUG] gameId: ${gameId}`)
+          
+          // 如果当前在某个游戏的详情页
+          if (currentSelectedGame) {
+            // 只有新截图属于当前游戏时才刷新
+            if (gameId && currentSelectedGame.game_id === gameId) {
+              addLog(`刷新当前游戏截图: ${gameId}`)
+              console.log(`[DEBUG] 调用 loadScreenshotsWithPagination(1, ${gameId})`)
+              await loadScreenshotsWithPagination(1, gameId)
+            } else {
+              // 新截图属于其他游戏，只刷新游戏列表，不刷新当前截图
+              addLog(`新截图属于其他游戏，只刷新游戏列表`)
+              console.log(`[DEBUG] 只刷新游戏列表`)
+              await loadGames()
+            }
+          } else {
+            // 当前在全部截图页面，刷新所有截图和游戏列表
+            addLog(`刷新所有截图和游戏列表`)
+            console.log(`[DEBUG] 调用 loadScreenshotsWithPagination(1, null) 和 loadGames()`)
+            await loadScreenshotsWithPagination(1, null)
+            await loadGames()
+          }
+          console.log(`[DEBUG] 刷新完成`)
+        } catch (error) {
+          console.error(`[DEBUG] 刷新失败:`, error)
+          addLog(`刷新失败: ${error}`)
         } finally {
           isRefreshingRef.current = false
         }
-      }, 500)
+      }, 100)
     })
 
     return () => {
+      console.log(`[DEBUG] 清理screenshot-taken事件监听器`)
       unlisten.then(fn => fn())
     }
   }, [])
@@ -873,7 +918,7 @@ function App() {
               screenshots={screenshots}
               isMultiSelectMode={isMultiSelectMode}
               selectedScreenshots={selectedScreenshots}
-              gameSortOrder={gameSortOrder}
+              sortOrder={sortOrder}
               iconSize={iconSize}
               showMenu={showGameDetailMenu}
               showSortMenu={showSortMenu}
@@ -973,6 +1018,213 @@ function App() {
           onSearchTermChange={setAddGameSearchTerm}
           onAddGame={handleAddGame}
         />
+
+        {showSearchModal && (
+          <div style={styles.modalOverlay} onClick={() => setShowSearchModal(false)}>
+            <div style={{ ...styles.modalContent, maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+              {searchModalStep === 'source' && (
+                <div style={{ padding: 24 }}>
+                  <h2 style={{ marginBottom: 24, textAlign: 'center' }}>{t.search.select_source}</h2>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <button
+                      style={{ 
+                        ...styles.btn, 
+                        padding: '16px 24px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        gap: 12,
+                        fontSize: 16
+                      }}
+                      {...btnEvents}
+                      onClick={() => setSearchModalStep('search')}
+                    >
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                      </svg>
+                      {t.add_game.steam}
+                    </button>
+                    <button
+                      style={{ 
+                        ...styles.btn, 
+                        padding: '16px 24px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        gap: 12,
+                        fontSize: 16,
+                        opacity: 0.5,
+                        cursor: 'not-allowed'
+                      }}
+                      disabled
+                    >
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                        <line x1="9" y1="9" x2="9.01" y2="9"/>
+                        <line x1="15" y1="9" x2="15.01" y2="9"/>
+                      </svg>
+                      {t.add_game.bangumi}
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {searchModalStep === 'search' && (
+                <div style={{ padding: 24 }}>
+                  <h2 style={{ marginBottom: 16, textAlign: 'center' }}>{t.search.title}</h2>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    <input
+                      type="text"
+                      value={steamSearchTerm}
+                      onChange={(e) => setSteamSearchTerm(e.target.value)}
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Enter' && steamSearchTerm.trim()) {
+                          setIsSearching(true)
+                          try {
+                            const results = await invoke('search_steam_games', { searchTerm: steamSearchTerm, language: steamLanguage })
+                            setSteamSearchResults(results)
+                            if (results.length > 0) {
+                              setSearchModalStep('results')
+                            }
+                          } catch (err) {
+                            addLog(`搜索失败: ${err}`)
+                          }
+                          setIsSearching(false)
+                        }
+                      }}
+                      placeholder={t.search.placeholder}
+                      style={{ ...styles.input, flex: 1 }}
+                      autoFocus
+                    />
+                    <button 
+                      style={styles.btnPrimary}
+                      {...btnEvents}
+                      onClick={async () => {
+                        if (!steamSearchTerm.trim()) return
+                        setIsSearching(true)
+                        try {
+                          const results = await invoke('search_steam_games', { searchTerm: steamSearchTerm, language: steamLanguage })
+                          setSteamSearchResults(results)
+                          if (results.length > 0) {
+                            setSearchModalStep('results')
+                          }
+                        } catch (err) {
+                          addLog(`搜索失败: ${err}`)
+                        }
+                        setIsSearching(false)
+                      }}
+                      disabled={isSearching}
+                    >
+                      {isSearching ? t.search.searching : t.search.search}
+                    </button>
+                  </div>
+                  <button 
+                    style={{ ...styles.btn, width: '100%' }}
+                    {...btnEvents}
+                    onClick={() => setSearchModalStep('source')}
+                  >
+                    {t.search.back}
+                  </button>
+                </div>
+              )}
+              
+              {searchModalStep === 'results' && (
+                <div style={{ padding: 24 }}>
+                  {isApplyingInfo ? (
+                    <div style={{ textAlign: 'center', padding: 32 }}>
+                      <div style={{ 
+                        width: 40, 
+                        height: 40, 
+                        border: `3px solid ${theme.border}`,
+                        borderTop: `3px solid ${theme.primary}`,
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                        margin: '0 auto 16px'
+                      }} />
+                      <p style={{ color: theme.text }}>{t.search.applying}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <p style={{ color: theme.textMuted, marginBottom: 16 }}>
+                        {t.search.found_results.replace('{count}', steamSearchResults.length)}
+                      </p>
+                      <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {steamSearchResults.map(result => (
+                          <div 
+                            key={result.appid}
+                            style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: 12, 
+                              padding: 12, 
+                              background: theme.accent, 
+                              borderRadius: 8, 
+                              cursor: 'pointer',
+                              transition: 'transform 0.15s, background 0.15s'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.transform = 'scale(1.02)'
+                              e.currentTarget.style.background = theme.card
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.transform = 'scale(1)'
+                              e.currentTarget.style.background = theme.accent
+                            }}
+                            onClick={async () => {
+                              if (!selectedGame) return
+                              setIsApplyingInfo(true)
+                              try {
+                                const updatedGame = await invoke('update_game_steam_info', {
+                                  gameId: selectedGame.game_id,
+                                  appid: result.appid,
+                                  gameName: result.name,
+                                  language: steamLanguage
+                                })
+                                addLog(`更新游戏信息成功: ${result.name}`)
+                                setAppliedGameName(result.name)
+                                setShowApplySuccess(true)
+                                setTimeout(() => setShowApplySuccess(false), 2000)
+                                setShowSearchModal(false)
+                                setSearchModalStep('source')
+                                setSteamSearchTerm('')
+                                setSteamSearchResults([])
+                                setSelectedGame(updatedGame)
+                                await loadGames()
+                                await loadScreenshotsWithPagination(1, selectedGame.game_id)
+                              } catch (err) {
+                                addLog(`更新游戏信息失败: ${err}`)
+                              }
+                              setIsApplyingInfo(false)
+                            }}
+                          >
+                            {result.tiny_image && (
+                              <img 
+                                src={result.tiny_image} 
+                                alt={result.name}
+                                style={{ width: 60, height: 30, objectFit: 'cover', borderRadius: 4 }}
+                              />
+                            )}
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 'bold', color: theme.text }}>{result.name}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button 
+                        style={{ ...styles.btn, width: '100%', marginTop: 16 }}
+                        {...btnEvents}
+                        onClick={() => setSearchModalStep('search')}
+                      >
+                        {t.search.back}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <ImportModal
           theme={theme}
@@ -1222,6 +1474,42 @@ function App() {
             <div>
               <div style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>截图成功</div>
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>已保存到本地</div>
+            </div>
+          </div>
+        )}
+
+        {showApplySuccess && (
+          <div style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            background: 'rgba(30, 30, 40, 0.95)',
+            borderRadius: 8,
+            padding: '16px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+            zIndex: 10001,
+            animation: 'slideInRight 0.3s ease-out',
+            minWidth: 220
+          }}>
+            <div style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <div>
+              <div style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>{t.search.apply_success}</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>{appliedGameName}</div>
             </div>
           </div>
         )}

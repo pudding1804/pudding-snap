@@ -24,7 +24,7 @@ export function GameDetail({
   screenshots,
   isMultiSelectMode,
   selectedScreenshots,
-  gameSortOrder,
+  sortOrder,
   iconSize,
   showMenu,
   showSortMenu,
@@ -209,8 +209,8 @@ export function GameDetail({
                     {showSortMenu && (
                       <div style={{ background: theme.accent }}>
                         {[
-                          { value: 'time_desc', label: t.header.game_sort_newest },
-                          { value: 'time_asc', label: t.header.game_sort_oldest }
+                          { value: 'desc', label: t.header.game_sort_newest },
+                          { value: 'asc', label: t.header.game_sort_oldest }
                         ].map(option => (
                           <div
                             key={option.value}
@@ -220,8 +220,8 @@ export function GameDetail({
                               display: 'flex',
                               alignItems: 'center',
                               gap: 8,
-                              background: gameSortOrder === option.value ? theme.primary : 'transparent',
-                              color: gameSortOrder === option.value ? '#fff' : theme.text,
+                              background: sortOrder === option.value ? theme.primary : 'transparent',
+                              color: sortOrder === option.value ? '#fff' : theme.text,
                               transition: 'background 0.2s'
                             }}
                             onClick={() => {

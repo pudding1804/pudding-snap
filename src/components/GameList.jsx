@@ -248,6 +248,7 @@ export function GameList({
                       onError={(e) => {
                         e.target.style.display = 'none';
                         e.target.parentElement.innerHTML = game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?';
+                        e.target.parentElement.style.background = theme.accent;
                       }}
                     />
                   ) : (
@@ -258,7 +259,8 @@ export function GameList({
                       overflow: 'hidden',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                      justifyContent: 'center',
+                      background: theme.accent
                     }}>
                       <img 
                         src={getImageSrc(iconSrc)} 
@@ -272,7 +274,17 @@ export function GameList({
                     </div>
                   )
                 ) : (
-                  game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?'
+                  <div style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: theme.accent,
+                    borderRadius: 6
+                  }}>
+                    {game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?'}
+                  </div>
                 )}
               </div>
               <div style={styles.gameTitle}>{game.display_title || game.game_title}</div>
