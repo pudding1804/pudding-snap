@@ -1,7 +1,7 @@
 # 极简游戏截图管理器 - 技术设计文档
 
 ## 文档版本
-- 版本: 1.0.0
+- 版本: 2.0.0
 - 更新日期: 2026-04-08
 - 作者: AI Assistant
 
@@ -40,6 +40,9 @@
 - Steam 信息自动匹配
 - 截图分类管理
 - 数据迁移与导入
+- 手动添加游戏
+- 批量导入截图
+- 多选删除功能
 
 ---
 
@@ -51,21 +54,22 @@
 ScreenshotProject/
 ├── src/                          # 前端源码
 │   ├── components/               # React 组件
+│   │   ├── index.js             # 组件导出
 │   │   ├── Sidebar.jsx          # 侧边栏
 │   │   ├── ScreenshotGrid.jsx   # 截图网格
 │   │   ├── ScreenshotModal.jsx  # 截图详情弹窗
+│   │   ├── GameList.jsx         # 游戏列表
+│   │   ├── GameDetail.jsx       # 游戏详情
 │   │   ├── SettingsPanel.jsx    # 设置面板
-│   │   └── MigrationProgress.jsx # 迁移进度
+│   │   ├── AddGameModal.jsx     # 添加游戏弹窗
+│   │   └── ImportModal.jsx      # 导入截图弹窗
 │   ├── hooks/                    # 自定义 Hooks
-│   │   ├── useScreenshots.js    # 截图数据管理
-│   │   ├── useGames.js          # 游戏数据管理
-│   │   └── useMigration.js      # 迁移逻辑
-│   ├── contexts/                 # React Context
-│   │   └── AppContext.jsx       # 全局状态
+│   │   └── useAppState.js       # 全局状态管理
 │   ├── i18n/                     # 国际化
 │   │   └── translations.js      # 多语言翻译
 │   ├── styles/                   # 样式
-│   │   └── themes.js            # 主题定义
+│   │   ├── themes.js            # 主题定义
+│   │   └── sharedStyles.js      # 共享样式
 │   ├── App.jsx                   # 主应用组件
 │   └── main.jsx                  # 入口文件
 │
@@ -77,11 +81,8 @@ ScreenshotProject/
 │       │   ├── migration.rs     # 迁移相关命令
 │       │   ├── settings.rs      # 设置相关命令
 │       │   ├── steam.rs         # Steam 相关命令
-│       │   └── window.rs        # 窗口相关命令
-│       ├── services/             # 业务逻辑层
-│       │   ├── mod.rs
-│       │   ├── screenshot_service.rs
-│       │   └── migration_service.rs
+│       │   ├── window.rs        # 窗口相关命令
+│       │   └── game.rs          # 游戏相关命令
 │       ├── database.rs           # 数据库操作
 │       ├── models.rs             # 数据模型
 │       ├── screenshot.rs         # 截图处理
@@ -101,33 +102,26 @@ ScreenshotProject/
 ┌─────────────────────────────────────────────────────────────┐
 │                        前端 (React)                          │
 ├─────────────────────────────────────────────────────────────┤
-│  App.jsx                                                    │
-│    ├── Sidebar (导航)                                        │
-│    ├── ScreenshotGrid (截图展示)                              │
-│    ├── ScreenshotModal (详情弹窗)                             │
-│    ├── SettingsPanel (设置)                                  │
-│    └── MigrationProgress (迁移进度)                           │
-├─────────────────────────────────────────────────────────────┤
-│                    Tauri IPC 通信层                           │
-├─────────────────────────────────────────────────────────────┤
-│                        后端 (Rust)                           │
-├─────────────────────────────────────────────────────────────┤
-│  Commands (命令层)                                          │
-│    ├── screenshot commands                                   │
-│    ├── migration commands                                    │
-│    ├── settings commands                                     │
-│    ├── steam commands                                        │
-│    └── window commands                                       │
-├─────────────────────────────────────────────────────────────┤
-│  Services (服务层)                                          │
-│    ├── ScreenshotService                                     │
-│    └── MigrationService                                      │
-├─────────────────────────────────────────────────────────────┤
-│  Core (核心层)                                               │
-│    ├── Database (SQLite)                                     │
-│    ├── Screenshot (图片处理)                                  │
-│    ├── Steam (API 集成)                                      │
-│    └── Windows Utils (系统工具)                               │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐        │
+│  │Sidebar  │  │Screenshot│  │GameList │  │Settings │        │
+│  │         │  │Grid     │  │         │  │Panel    │        │
+│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘        │
+│       │            │            │            │              │
+│  ┌────┴────────────┴────────────┴────────────┴────┐        │
+│  │              useAppState (状态管理)              │        │
+│  └────────────────────────┬───────────────────────┘        │
+└───────────────────────────┼─────────────────────────────────┘
+                            │ Tauri invoke
+┌───────────────────────────┼─────────────────────────────────┐
+│                      后端 (Rust)                             │
+├───────────────────────────┼─────────────────────────────────┤
+│  ┌────────────────────────┴───────────────────────┐        │
+│  │              commands (Tauri 命令)              │        │
+│  └────────────────────────┬───────────────────────┘        │
+│                           │                                  │
+│  ┌────────────┐  ┌───────┴───────┐  ┌────────────┐        │
+│  │ database.rs│  │ screenshot.rs │  │  steam.rs  │        │
+│  └────────────┘  └───────────────┘  └────────────┘        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -135,157 +129,146 @@ ScreenshotProject/
 
 ## 3. 核心模块说明
 
-### 3.1 后端模块
+### 3.1 前端组件
 
-#### 3.1.1 commands/screenshot.rs
-**职责**: 截图相关的 Tauri 命令
+#### Sidebar.jsx
+侧边栏导航组件，负责：
+- 显示应用标题
+- 导航按钮（按时间浏览、按游戏浏览、设置）
+- 日志显示面板
+- 折叠/展开功能
 
-**导出函数**:
-```rust
-pub fn get_screenshots(game_id, sort_order, state) -> Result<Vec<ScreenshotRecord>>
-pub fn get_screenshots_with_pagination(game_id, sort_order, page, page_size, state) -> Result<PaginationResult>
-pub fn get_games(state) -> Result<Vec<GameSummary>>
-pub fn delete_screenshot(id, state) -> Result<()>
-pub fn delete_screenshots(ids, state) -> Result<()>
-pub fn update_note(id, note, state) -> Result<()>
-pub fn get_game_icon(game_id, state) -> Result<Option<String>>
-pub fn extract_game_icon(game_id, exe_path, state) -> Result<String>
-```
+#### ScreenshotGrid.jsx
+截图网格组件，负责：
+- 按时间显示截图列表
+- 排序功能（从新到旧/从旧到新）
+- 图标大小切换
+- 多选删除模式
+- 分页导航
 
-#### 3.1.2 commands/migration.rs
-**职责**: 数据迁移相关命令
+#### GameList.jsx
+游戏列表组件，负责：
+- 显示所有游戏
+- 游戏排序（时间/字母）
+- 多选删除游戏
+- 三点菜单（添加新游戏、多选删除）
 
-**导出函数**:
-```rust
-pub async fn migrate_data(app, new_path, state) -> Result<MigrationResult>
-pub fn switch_data_directory(new_path) -> Result<MigrationResult>
-pub fn check_data_directory(path) -> Result<DirectoryCheckResult>
-pub fn get_storage_path() -> Result<String>
-```
+#### GameDetail.jsx
+游戏详情组件，负责：
+- 显示单个游戏的所有截图
+- 返回游戏列表
+- 检索游戏信息
+- 导入截图
+- 多选删除截图
 
-**事件**:
-- `migration-progress`: 迁移进度事件
-  ```typescript
-  { current: number, total: number, status: string }
-  ```
+#### ScreenshotModal.jsx
+截图详情弹窗组件，负责：
+- 显示截图大图
+- 前后翻页导航
+- 添加/编辑附注
+- 打开文件夹
+- 删除截图
 
-#### 3.1.3 commands/settings.rs
-**职责**: 设置相关命令
+#### SettingsPanel.jsx
+设置面板组件，负责：
+- 语言设置
+- Steam搜索语言设置
+- 主题切换
+- 存储位置管理
+- 开机自启动设置
+- 鼠标捕捉设置
+- 删除所有数据
 
-**导出函数**:
-```rust
-pub fn get_capture_mouse(state) -> Result<bool>
-pub fn set_capture_mouse(enabled, state) -> Result<()>
-```
+#### AddGameModal.jsx
+添加游戏弹窗组件，负责：
+- 平台选择（Steam/Bangumi）
+- 游戏搜索
+- 创建游戏记录
 
-#### 3.1.4 commands/steam.rs
-**职责**: Steam API 集成
+#### ImportModal.jsx
+导入截图弹窗组件，负责：
+- 拖放上传
+- 文件选择
+- 文件列表显示
+- 执行导入
 
-**导出函数**:
-```rust
-pub fn search_steam_game_info(game_id, game_title, language, state) -> Result<SteamMatchResult>
-pub fn search_steam_games(search_term, language) -> Result<Vec<SteamSearchResult>>
-pub fn apply_steam_game_info(game_id, appid, language, state) -> Result<SteamGameInfo>
-```
+### 3.2 后端模块
 
-#### 3.1.5 commands/window.rs
-**职责**: 窗口管理命令
+#### commands/screenshot.rs
+截图相关命令：
+- `get_screenshots` - 获取截图列表
+- `get_screenshots_with_pagination` - 分页获取截图
+- `delete_screenshot` - 删除单个截图
+- `delete_screenshots` - 批量删除截图
+- `update_note` - 更新附注
+- `get_file_metadata` - 获取文件元数据
 
-**导出函数**:
-```rust
-pub fn show_window(app, state) -> Result<()>
-pub fn hide_window(app) -> Result<()>
-pub fn show_main_window(app) -> Result<()>
-pub fn open_in_explorer(file_path) -> Result<()>
-pub fn restart_app(app, state) -> Result<()>
-pub fn delete_all_data(state) -> Result<()>
-```
+#### commands/game.rs
+游戏相关命令：
+- `create_game_from_steam` - 从Steam创建游戏
+- `delete_game` - 删除单个游戏
+- `delete_games` - 批量删除游戏
+- `get_game_screenshot_count` - 获取游戏截图数量
+- `import_screenshots` - 导入截图
+- `get_all_games_with_empty` - 获取所有游戏（包含空游戏）
 
-#### 3.1.6 database.rs
-**职责**: 数据库操作封装
+#### commands/steam.rs
+Steam相关命令：
+- `search_steam_game_info` - 搜索Steam游戏信息
+- `search_steam_games` - 搜索Steam游戏列表
+- `apply_steam_game_info` - 应用Steam游戏信息
 
-**核心函数**:
-```rust
-pub fn init_db() -> Result<Connection>
-pub fn get_data_dir() -> PathBuf
-pub fn get_game_dir(game_id: &str) -> PathBuf
-pub fn get_thumbnails_dir() -> PathBuf
-pub fn get_icons_dir() -> PathBuf
-pub fn insert_screenshot(conn, file_path, thumbnail_path, game_id, game_title, timestamp) -> Result<i64>
-pub fn get_screenshots(conn, game_id, sort_order) -> Result<Vec<ScreenshotRecord>>
-pub fn get_screenshots_with_pagination(conn, game_id, sort_order, page, page_size) -> Result<PaginationResult>
-pub fn get_games(conn) -> Result<Vec<GameSummary>>
-pub fn delete_screenshot(conn, id) -> Result<()>
-pub fn delete_screenshots(conn, ids) -> Result<()>
-pub fn update_note(conn, id, note) -> Result<()>
-pub fn get_game_cache(conn, game_id) -> Option<GameCache>
-pub fn set_game_cache(conn, cache) -> Result<()>
-pub fn update_paths_after_migration(conn, old_dir, new_dir) -> Result<()>
-pub fn fix_paths_on_startup(conn) -> Result<()>
-```
+#### commands/migration.rs
+迁移相关命令：
+- `migrate_data` - 迁移数据
+- `check_data_directory` - 检查数据目录
+- `switch_data_directory` - 切换数据目录
 
-### 3.2 前端模块
+#### commands/settings.rs
+设置相关命令：
+- `get_storage_path` - 获取存储路径
+- `get_capture_mouse` - 获取鼠标捕捉设置
+- `set_capture_mouse` - 设置鼠标捕捉
+- `delete_all_data` - 删除所有数据
+- `restart_app` - 重启应用
 
-#### 3.2.1 hooks/useScreenshots.js
-**职责**: 截图数据管理
-
-**导出**:
-```javascript
-export function useScreenshots() {
-  return {
-    screenshots,
-    totalPages,
-    currentPage,
-    isLoading,
-    loadScreenshots,
-    deleteScreenshot,
-    updateNote,
-    refreshScreenshots
-  }
-}
-```
-
-#### 3.2.2 hooks/useGames.js
-**职责**: 游戏数据管理
-
-**导出**:
-```javascript
-export function useGames() {
-  return {
-    games,
-    isLoading,
-    loadGames,
-    getGameIcon
-  }
-}
-```
-
-#### 3.2.3 hooks/useMigration.js
-**职责**: 数据迁移逻辑
-
-**导出**:
-```javascript
-export function useMigration() {
-  return {
-    isMigrating,
-    migrationProgress,
-    migrationTotal,
-    migrationStatus,
-    migrateData,
-    importDirectory,
-    switchDirectory
-  }
-}
-```
+#### commands/window.rs
+窗口相关命令：
+- `show_window` - 显示窗口
+- `hide_window` - 隐藏窗口
+- `show_main_window` - 显示主窗口
+- `open_in_explorer` - 在资源管理器中打开
 
 ---
 
 ## 4. 接口定义规范
 
-### 4.1 数据模型 (models.rs)
+### 4.1 Tauri 命令规范
 
 ```rust
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[tauri::command]
+pub fn command_name(
+    param1: Type1,
+    param2: Type2,
+    state: State<AppState>,
+) -> Result<ReturnType, String> {
+    // 实现
+}
+```
+
+### 4.2 前端调用规范
+
+```javascript
+const result = await invoke('command_name', { 
+    param1: value1, 
+    param2: value2 
+})
+```
+
+### 4.3 数据模型
+
+#### ScreenshotRecord
+```rust
 pub struct ScreenshotRecord {
     pub id: i32,
     pub file_path: String,
@@ -294,86 +277,22 @@ pub struct ScreenshotRecord {
     pub game_title: String,
     pub display_title: String,
     pub timestamp: i64,
-    pub note: String,
-    pub game_banner_url: String,
+    pub note: Option<String>,
 }
+```
 
-#[derive(Debug, Serialize, Deserialize)]
+#### GameSummary
+```rust
 pub struct GameSummary {
     pub game_id: String,
     pub game_title: String,
     pub display_title: String,
     pub game_banner_url: String,
-    pub game_icon_path: Option<String>,
-    pub steam_logo_path: Option<String>,
     pub count: i32,
     pub last_timestamp: i64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PaginationResult {
-    pub screenshots: Vec<ScreenshotRecord>,
-    pub total_pages: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MigrationStats {
-    pub total_files: u32,
-    pub copied_files: u32,
-    pub failed_files: u32,
-    pub total_size: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MigrationResult {
-    pub success: bool,
-    pub error: Option<String>,
-    pub stats: Option<MigrationStats>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GameCache {
-    pub game_id: String,
-    pub exe_path: Option<String>,
-    pub icon_path: Option<String>,
-    pub display_title: Option<String>,
-    pub last_updated: i64,
-    pub steam_appid: Option<u32>,
-    pub steam_name: Option<String>,
+    pub game_icon_path: Option<String>,
     pub steam_logo_path: Option<String>,
-    pub steam_match_status: Option<String>,
 }
-```
-
-### 4.2 Tauri 命令返回值规范
-
-所有命令统一返回 `Result<T, String>`:
-- 成功: `Ok(T)`
-- 失败: `Err(String)` - 错误信息字符串
-
-### 4.3 前端调用示例
-
-```javascript
-import { invoke } from '@tauri-apps/api/core'
-
-// 获取截图列表
-const screenshots = await invoke('get_screenshots', {
-  gameId: null,
-  sortOrder: 'desc'
-})
-
-// 分页获取
-const result = await invoke('get_screenshots_with_pagination', {
-  gameId: selectedGame?.game_id || null,
-  sortOrder: 'desc',
-  page: 1,
-  pageSize: 50
-})
-
-// 迁移数据
-const result = await invoke('migrate_data', {
-  newPath: selectedPath
-})
 ```
 
 ---
@@ -384,235 +303,110 @@ const result = await invoke('migrate_data', {
 
 #### screenshots 表
 ```sql
-CREATE TABLE screenshots (
-    id INTEGER PRIMARY KEY,
-    file_path TEXT NOT NULL,           -- 截图文件绝对路径
-    thumbnail_path TEXT NOT NULL,      -- 缩略图绝对路径
-    game_id TEXT NOT NULL,             -- 游戏ID (16位hex)
-    game_title TEXT NOT NULL,          -- 游戏进程名
-    display_title TEXT,                -- 显示标题
-    timestamp INTEGER NOT NULL,        -- 时间戳
-    note TEXT,                         -- 附注
-    game_banner_url TEXT               -- Banner URL (保留字段)
-);
-
-CREATE INDEX idx_game_id ON screenshots(game_id);
-CREATE INDEX idx_timestamp ON screenshots(timestamp);
+CREATE TABLE IF NOT EXISTS screenshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_path TEXT NOT NULL,
+    thumbnail_path TEXT NOT NULL,
+    game_id TEXT NOT NULL,
+    game_title TEXT NOT NULL,
+    display_title TEXT,
+    timestamp INTEGER NOT NULL,
+    note TEXT
+)
 ```
 
 #### game_cache 表
 ```sql
-CREATE TABLE game_cache (
+CREATE TABLE IF NOT EXISTS game_cache (
     game_id TEXT PRIMARY KEY,
-    exe_path TEXT,                     -- 可执行文件路径
-    icon_path TEXT,                    -- 图标路径
-    display_title TEXT,                -- 显示标题
-    last_updated INTEGER,              -- 最后更新时间
-    steam_appid INTEGER,               -- Steam AppID
-    steam_name TEXT,                   -- Steam 游戏名
-    steam_logo_path TEXT,              -- Steam Logo 路径
-    steam_match_status TEXT            -- Steam 匹配状态
-);
-```
-
-#### settings 表
-```sql
-CREATE TABLE settings (
-    key TEXT PRIMARY KEY,
-    value TEXT
-);
-```
-
-### 5.2 文件存储结构
-
-```
-{screenshot-data}/
-├── screenshots_v2.db          # 数据库文件
-├── thumbnails/                # 缩略图目录
-│   ├── thumb_xxx.webp
-│   └── ...
-├── icons/                     # 游戏图标目录
-│   ├── {game_id}.png
-│   └── ...
-├── steam_logos/              # Steam Logo 目录
-│   ├── steam_{appid}.jpg
-│   └── ...
-└── {game_id}/                # 各游戏截图目录
-    ├── screenshot_xxx.webp
-    └── ...
+    exe_path TEXT,
+    icon_path TEXT,
+    display_title TEXT,
+    last_updated INTEGER,
+    steam_appid INTEGER,
+    steam_name TEXT,
+    steam_logo_path TEXT,
+    steam_match_status TEXT
+)
 ```
 
 ---
 
 ## 6. 性能优化说明
 
-### 6.1 已实施的优化
+### 6.1 前端优化
+- 使用分页加载截图，避免一次性加载大量数据
+- 图片懒加载 (loading="lazy")
+- 使用 React.memo 优化组件渲染
+- 状态提升减少不必要的重渲染
 
-| 优化项 | 说明 | 效果 |
-|--------|------|------|
-| 分页加载 | 每页50条，避免一次性加载大量数据 | 内存占用降低 80%+ |
-| 缩略图缓存 | 320px 宽度缩略图，WebP 格式 | 加载速度提升 5x |
-| 数据库索引 | game_id, timestamp 索引 | 查询速度提升 10x |
-| 异步处理 | 截图保存、Steam 匹配异步执行 | UI 不阻塞 |
-| 批量删除 | 单次 SQL 执行多条删除 | 删除效率提升 |
-
-### 6.2 内存优化
-
-```rust
-// 使用 Arc<Mutex> 共享数据库连接
-pub struct AppState {
-    pub db: Arc<Mutex<Connection>>,
-    pub window_shown: Arc<Mutex<bool>>,
-    pub screenshot_queue: Arc<Mutex<VecDeque<ScreenshotTask>>>,
-    pub is_processing: Arc<Mutex<bool>>,
-}
-```
-
-### 6.3 文件处理优化
-
-```rust
-// WebP 格式，高质量压缩
-pub fn save_as_webp(image: &DynamicImage, path: &PathBuf, quality: f32) -> Result<()> {
-    // 质量: 截图 80%, 缩略图 70%
-}
-```
+### 6.2 后端优化
+- 数据库连接池管理
+- 图片压缩存储 (WebP格式)
+- 缩略图预生成
+- 异步文件操作
 
 ---
 
 ## 7. 开发规范
 
 ### 7.1 命名规范
+- 组件：PascalCase (如 `ScreenshotGrid`)
+- 函数：camelCase (如 `loadScreenshots`)
+- 常量：UPPER_SNAKE_CASE (如 `DEBUG_MODE`)
+- 文件：与导出内容一致
 
-| 类型 | 规范 | 示例 |
-|------|------|------|
-| Rust 函数 | snake_case | `get_screenshots` |
-| Rust 结构体 | PascalCase | `ScreenshotRecord` |
-| Tauri 命令 | snake_case | `get_screenshots` |
-| React 组件 | PascalCase | `ScreenshotGrid` |
-| React Hooks | camelCase + use | `useScreenshots` |
-| CSS 类 | kebab-case | `screenshot-grid` |
+### 7.2 代码风格
+- 使用函数式组件和 Hooks
+- 样式使用内联对象
+- 多语言文本使用 t 对象
+- 错误处理使用 Result 类型
 
-### 7.2 文件大小限制
-
-| 文件类型 | 最大行数 | 说明 |
-|----------|----------|------|
-| Rust 模块 | 300 行 | 超过需拆分 |
-| React 组件 | 200 行 | 超过需拆分 |
-| 单个函数 | 50 行 | 超过需重构 |
-
-### 7.3 错误处理规范
-
-```rust
-// 后端: 使用 Result<T, String>
-#[tauri::command]
-pub fn some_command() -> Result<Data, String> {
-    operation()
-        .map_err(|e| format!("操作失败: {}", e))?;
-    Ok(data)
-}
-
-// 前端: try-catch + 用户提示
-try {
-    const result = await invoke('some_command');
-} catch (e) {
-    setError(`操作失败: ${e}`);
-}
-```
-
-### 7.4 日志规范
-
-```rust
-// 使用统一前缀
-println!("[截图] 屏幕捕获成功");
-println!("[迁移] 从 {:?} 迁移到 {:?}", old, new);
-println!("[Steam] 搜索游戏信息: {}", title);
-println!("[错误] 操作失败: {}", e);
-```
+### 7.3 Git 提交规范
+- feat: 新功能
+- fix: 修复bug
+- refactor: 重构
+- docs: 文档更新
+- style: 代码格式
 
 ---
 
 ## 8. 注意事项
 
 ### 8.1 路径处理
+- 所有路径使用绝对路径存储
+- 迁移时需要更新数据库中的路径
+- Windows 路径分隔符处理
 
-**重要**: 所有路径存储使用绝对路径，迁移时自动更新。
+### 8.2 Steam API
+- 使用 Steam Store API 获取游戏信息
+- 图片下载保存到本地 logos 目录
+- 支持多语言搜索
 
-```rust
-// 启动时自动修复路径
-pub fn fix_paths_on_startup(conn: &Connection) -> Result<()> {
-    // 检测路径不匹配
-    // 自动更新所有路径引用
-}
-```
+### 8.3 文件操作
+- 删除文件前先删除数据库记录
+- 导入时保留原始创建时间
+- 错误处理要完善
 
-### 8.2 数据库连接
-
-- 使用 `Arc<Mutex<Connection>>` 共享连接
-- 避免长时间持有锁
-- 重启前关闭连接
-
-### 8.3 热键监听
-
-- 使用独立线程监听
-- 避免阻塞主线程
-- 使用队列处理截图任务
-
-### 8.4 Steam API
-
-- 请求频率限制: 1次/秒
-- 图片下载使用异步
-- 缓存匹配结果
-
-### 8.5 前端状态管理
-
-- 使用 Context 共享全局状态
-- 使用 Hooks 封装数据逻辑
-- 避免 prop drilling
+### 8.4 状态管理
+- 使用 useState 管理组件状态
+- 复杂状态考虑使用 useReducer
+- 全局状态通过 props 传递
 
 ---
 
-## 附录
+## 9. 更新日志
 
-### A. 常用命令
+### v2.0.0 (2026-04-08)
+- 重构前端组件架构
+- 添加手动添加游戏功能
+- 添加批量导入截图功能
+- 添加多选删除功能
+- 添加删除确认弹窗
+- 优化代码结构和可维护性
 
-```bash
-# 开发模式
-npm run tauri dev
-
-# 构建发布版
-npm run tauri build
-
-# 检查 Rust 代码
-cargo clippy --manifest-path=src-tauri/Cargo.toml
-
-# 运行测试
-cargo test --manifest-path=src-tauri/Cargo.toml
-```
-
-### B. 依赖版本
-
-```toml
-[dependencies]
-tauri = { version = "2", features = ["..."] }
-tauri-plugin-dialog = "2.7"
-tauri-plugin-opener = "2"
-tauri-plugin-autostart = "2"
-tauri-plugin-notification = "2"
-rusqlite = { version = "0.31", features = ["bundled"] }
-image = "0.25"
-chrono = "0.4"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-rdev = "0.5"
-once_cell = "1"
-```
-
-### C. 更新日志
-
-| 日期 | 版本 | 更新内容 |
-|------|------|----------|
-| 2026-04-08 | 1.0.0 | 初始版本，完成架构重构 |
-
----
-
-*本文档由 AI 生成，后续开发请严格遵循本文档规范。*
+### v1.0.0
+- 初始版本
+- 基础截图功能
+- 游戏识别
+- Steam 信息匹配

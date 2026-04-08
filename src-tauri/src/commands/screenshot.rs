@@ -138,3 +138,36 @@ pub fn open_in_explorer(file_path: String) -> Result<(), String> {
     println!("[打开文件夹] 已打开: {}", file_path);
     Ok(())
 }
+
+#[derive(Debug, serde::Serialize)]
+pub struct FileMetadata {
+    pub size: u64,
+    pub created: i64,
+    pub modified: i64,
+}
+
+#[tauri::command]
+pub fn get_file_metadata(path: String) -> Result<FileMetadata, String> {
+    let metadata = std::fs::metadata(&path)
+        .map_err(|e| format!("无法获取文件信息: {}", e))?;
+    
+    let size = metadata.len();
+    
+    let created = metadata.created()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or_else(|| chrono::Utc::now().timestamp());
+    
+    let modified = metadata.modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or_else(|| chrono::Utc::now().timestamp());
+    
+    Ok(FileMetadata {
+        size,
+        created,
+        modified,
+    })
+}

@@ -272,7 +272,7 @@ pub fn create_thumbnail(image: &DynamicImage, max_size: u32) -> DynamicImage {
     let new_width = (width as f64 * ratio) as u32;
     let new_height = (height as f64 * ratio) as u32;
     
-    image.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
+    image.resize(new_width, new_height, image::imageops::FilterType::Triangle)
 }
 
 pub fn save_as_webp(image: &DynamicImage, path: &PathBuf, quality: f32) -> Result<(), Box<dyn std::error::Error>> {
@@ -284,6 +284,60 @@ pub fn save_as_webp(image: &DynamicImage, path: &PathBuf, quality: f32) -> Resul
     
     std::fs::write(path, &*webp_data)?;
     Ok(())
+}
+
+pub fn save_as_jpg(image: &DynamicImage, path: &PathBuf, quality: u8) -> Result<(), Box<dyn std::error::Error>> {
+    use image::codecs::jpeg::JpegEncoder;
+    use std::fs::File;
+    use std::io::BufWriter;
+    
+    let file = File::create(path)?;
+    let mut writer = BufWriter::new(file);
+    let encoder = JpegEncoder::new_with_quality(&mut writer, quality);
+    
+    let rgb = image.to_rgb8();
+    rgb.write_with_encoder(encoder)?;
+    Ok(())
+}
+
+pub fn save_as_png(image: &DynamicImage, path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    let rgba = image.to_rgba8();
+    rgba.save_with_format(path, image::ImageFormat::Png)?;
+    Ok(())
+}
+
+pub fn save_image(image: &DynamicImage, path: &PathBuf, format: &str, quality: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let quality_value = match quality {
+        "low" => 50.0,
+        "medium" => 75.0,
+        "high" => 90.0,
+        _ => 75.0,
+    };
+    
+    let jpg_quality = match quality {
+        "low" => 50,
+        "medium" => 75,
+        "high" => 90,
+        _ => 75,
+    };
+    
+    match format {
+        "jpg" => save_as_jpg(image, path, jpg_quality),
+        "png" => save_as_png(image, path),
+        "webp" => save_as_webp(image, path, quality_value),
+        _ => save_as_webp(image, path, quality_value),
+    }
+}
+
+pub fn generate_filename_with_format(format: &str) -> String {
+    let now = Utc::now();
+    let ext = match format {
+        "jpg" => "jpg",
+        "png" => "png",
+        "webp" => "webp",
+        _ => "webp",
+    };
+    format!("{}.{}", now.format("%Y%m%d_%H%M%S"), ext)
 }
 
 pub fn generate_filename() -> String {

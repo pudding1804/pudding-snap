@@ -107,14 +107,12 @@ pub fn generate_game_id(process_name: &str, exe_path: Option<&str>) -> String {
             let folder_name = crate::windows_utils::get_game_folder_name(exe)
                 .unwrap_or_else(|| process_name.to_string());
             let unique_key = format!("{}:{}", rpg_title, folder_name);
-            println!("[游戏ID] RPG Maker游戏: {} -> {}", process_name, unique_key);
             unique_key.hash(&mut hasher);
             return format!("{:x}", hasher.finish());
         }
         
         if let Some(folder_name) = crate::windows_utils::get_game_folder_name(exe) {
             let unique_key = format!("{}:{}", process_name, folder_name);
-            println!("[游戏ID] 使用文件夹名: {} -> {}", process_name, unique_key);
             unique_key.hash(&mut hasher);
             return format!("{:x}", hasher.finish());
         }
@@ -124,22 +122,28 @@ pub fn generate_game_id(process_name: &str, exe_path: Option<&str>) -> String {
     format!("{:x}", hasher.finish())
 }
 
-pub fn find_existing_game_id(conn: &Connection, process_name: &str, exe_path: Option<&str>) -> Option<String> {
+pub fn find_existing_game_id(conn: &Connection, process_name: &str, exe_path: Option<&str>) -> (String, bool) {
     let game_id = generate_game_id(process_name, exe_path);
     
-    let mut stmt = conn.prepare(
-        "SELECT game_id FROM screenshots WHERE game_id = ?1 LIMIT 1"
-    ).ok()?;
+    let mut stmt = match conn.prepare("SELECT game_id FROM screenshots WHERE game_id = ?1 LIMIT 1") {
+        Ok(s) => s,
+        Err(_) => return (game_id, false),
+    };
     
     if stmt.query_row(params![&game_id], |row| row.get::<_, String>(0)).ok().is_some() {
-        return Some(game_id);
+        return (game_id, true);
     }
     
-    let mut stmt = conn.prepare(
-        "SELECT game_id FROM screenshots WHERE game_title = ?1 LIMIT 1"
-    ).ok()?;
+    let mut stmt = match conn.prepare("SELECT game_id FROM screenshots WHERE game_title = ?1 LIMIT 1") {
+        Ok(s) => s,
+        Err(_) => return (game_id, false),
+    };
     
-    stmt.query_row(params![process_name], |row| row.get(0)).ok()
+    if let Some(existing_id) = stmt.query_row(params![process_name], |row| row.get(0)).ok() {
+        return (existing_id, true);
+    }
+    
+    (game_id, false)
 }
 
 pub fn init_db() -> Result<Connection> {
@@ -218,6 +222,18 @@ pub fn init_db() -> Result<Connection> {
         "CREATE INDEX IF NOT EXISTS idx_timestamp ON screenshots(timestamp)",
         [],
     )?;
+
+    let has_file_hash: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('screenshots') WHERE name='file_hash')",
+        [],
+        |row| row.get(0)
+    ).unwrap_or(false);
+
+    if !has_file_hash {
+        println!("[数据库] 添加 file_hash 字段...");
+        tx.execute("ALTER TABLE screenshots ADD COLUMN file_hash TEXT", [])?;
+        tx.execute("CREATE INDEX IF NOT EXISTS idx_file_hash ON screenshots(file_hash)", [])?;
+    }
 
     tx.execute(
         "CREATE TABLE IF NOT EXISTS settings (
@@ -343,13 +359,33 @@ pub fn insert_screenshot(
     game_id: &str,
     game_title: &str,
     timestamp: i64,
+    file_hash: Option<&str>,
 ) -> Result<i64> {
     conn.execute(
-        "INSERT INTO screenshots (file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url)
-         VALUES (?1, ?2, ?3, ?4, ?4, ?5, '', '')",
-        params![file_path, thumbnail_path, game_id, game_title, timestamp],
+        "INSERT INTO screenshots (file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash)
+         VALUES (?1, ?2, ?3, ?4, ?4, ?5, '', '', ?6)",
+        params![file_path, thumbnail_path, game_id, game_title, timestamp, file_hash],
     )?;
     Ok(conn.last_insert_rowid())
+}
+
+pub fn get_existing_hashes(conn: &Connection, game_id: &str) -> Result<std::collections::HashSet<String>> {
+    let mut hashes = std::collections::HashSet::new();
+    let mut stmt = conn.prepare(
+        "SELECT file_hash FROM screenshots WHERE game_id = ?1 AND file_hash IS NOT NULL"
+    )?;
+    
+    let iter = stmt.query_map(params![game_id], |row| {
+        row.get::<_, Option<String>>(0)
+    })?;
+    
+    for hash in iter {
+        if let Some(h) = hash? {
+            hashes.insert(h);
+        }
+    }
+    
+    Ok(hashes)
 }
 
 pub fn get_screenshots(
@@ -817,4 +853,89 @@ pub fn get_icons_dir() -> PathBuf {
         let _ = std::fs::create_dir_all(&path);
     }
     path
+}
+
+pub fn create_empty_game(conn: &Connection, game_id: &str, display_title: &str, steam_appid: Option<u32>, steam_name: Option<String>, steam_logo_path: Option<String>) -> Result<()> {
+    let timestamp = chrono::Utc::now().timestamp();
+    
+    let cache = GameCache {
+        game_id: game_id.to_string(),
+        exe_path: None,
+        icon_path: None,
+        display_title: Some(display_title.to_string()),
+        last_updated: timestamp,
+        steam_appid,
+        steam_name,
+        steam_logo_path,
+        steam_match_status: Some("manual".to_string()),
+    };
+    
+    set_game_cache(conn, &cache)?;
+    
+    println!("[数据库] 创建空白游戏: {} ({})", display_title, game_id);
+    Ok(())
+}
+
+pub fn delete_game(conn: &Connection, game_id: &str) -> Result<()> {
+    conn.execute("DELETE FROM screenshots WHERE game_id = ?1", params![game_id])?;
+    conn.execute("DELETE FROM game_cache WHERE game_id = ?1", params![game_id])?;
+    println!("[数据库] 删除游戏及其所有数据: {}", game_id);
+    Ok(())
+}
+
+pub fn delete_games(conn: &Connection, game_ids: &[String]) -> Result<()> {
+    if game_ids.is_empty() {
+        return Ok(());
+    }
+    
+    for game_id in game_ids {
+        conn.execute("DELETE FROM screenshots WHERE game_id = ?1", params![game_id])?;
+        conn.execute("DELETE FROM game_cache WHERE game_id = ?1", params![game_id])?;
+    }
+    
+    println!("[数据库] 批量删除 {} 个游戏", game_ids.len());
+    Ok(())
+}
+
+pub fn get_game_screenshot_count(conn: &Connection, game_id: &str) -> Result<i32> {
+    let count: i32 = conn.query_row(
+        "SELECT COUNT(*) FROM screenshots WHERE game_id = ?1",
+        params![game_id],
+        |row| row.get(0)
+    )?;
+    Ok(count)
+}
+
+pub fn import_screenshot(
+    conn: &Connection,
+    file_path: &str,
+    thumbnail_path: &str,
+    game_id: &str,
+    game_title: &str,
+    timestamp: i64,
+) -> Result<i64> {
+    insert_screenshot(conn, file_path, thumbnail_path, game_id, game_title, timestamp, None)
+}
+
+pub fn get_all_games(conn: &Connection) -> Result<Vec<GameSummary>> {
+    let mut stmt = conn.prepare(
+        "SELECT gc.game_id, gc.display_title, gc.steam_logo_path, gc.icon_path
+         FROM game_cache gc
+         ORDER BY gc.last_updated DESC",
+    )?;
+
+    let iter = stmt.query_map([], |row| {
+        Ok(GameSummary {
+            game_id: row.get(0)?,
+            game_title: row.get::<_, Option<String>>(0)?.unwrap_or_default(),
+            display_title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+            game_banner_url: String::new(),
+            count: 0,
+            last_timestamp: 0,
+            game_icon_path: row.get(3)?,
+            steam_logo_path: row.get(2)?,
+        })
+    })?;
+
+    iter.collect()
 }
