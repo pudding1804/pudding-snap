@@ -1,0 +1,395 @@
+export const translations = {
+  zh: {
+    nav: {
+      time: '按时间浏览',
+      games: '按游戏浏览',
+      settings: '设置'
+    },
+    header: {
+      sort_newest: '从新到旧',
+      sort_oldest: '从旧到新',
+      multi_select: '多选删除',
+      cancel_select: '取消选定',
+      confirm_delete: '确定删除',
+      game_sort_newest: '时间从新到旧',
+      game_sort_oldest: '时间从旧到新',
+      game_sort_alpha_asc: '按字母升序',
+      game_sort_alpha_desc: '按字母降序',
+      search_info: '检索信息',
+      steam_found: 'Steam信息检索成功',
+      steam_not_found: '未找到Steam信息',
+      steam_mismatch: 'Steam信息不匹配',
+      steam_searching: '正在检索Steam信息...',
+      more_options: '更多选项',
+      sort_by: '排序方式',
+      note_hint: '附注 (最多120字)',
+      note_shortcut: '按Ctrl+Enter保存',
+      note_saved: '附注已保存',
+      icon_large: '大图标',
+      icon_small: '小图标'
+    },
+    search: {
+      title: '检索游戏信息',
+      select_source: '选择信息来源',
+      coming_soon: '即将推出',
+      placeholder: '输入游戏名称搜索...',
+      search: '搜索',
+      searching: '搜索中...',
+      back: '返回',
+      found_results: '找到 {count} 个结果',
+      no_results: '未找到相关游戏',
+      applying: '拉取信息中...',
+      apply_success: '信息已拉取完成',
+      confirm: '确认'
+    },
+    empty: {
+      no_screenshots: '还没有截图',
+      no_games: '还没有游戏记录',
+      no_game_screenshots: '该游戏没有截图',
+      screenshot_hint: '按 PrintScreen 或 F12 进行截图',
+      game_hint: '截图后会自动识别游戏'
+    },
+    settings: {
+      title: '设置',
+      theme: '主题',
+      storage: '存储位置',
+      current_path: '当前存储位置:',
+      change_path: '更改存储位置',
+      migrating: '迁移中...',
+      storage_hint: '数据库和截图在同一目录，可直接复制整个文件夹到其他电脑使用',
+      hotkeys: '快捷键',
+      hotkey_print: 'PrintScreen - 截图',
+      hotkey_f12: 'F12 - 测试截图（调试模式）',
+      system: '系统选项',
+      autostart: '开机自启动',
+      autostart_hint: '启用后，程序会在系统启动时自动运行',
+      screenshot: '截图选项',
+      capture_mouse: '捕捉鼠标光标',
+      capture_mouse_hint: '启用后，截图时会包含鼠标光标',
+      about: '关于',
+      version: '极简游戏截图管理器 v0.1.0',
+      tech: 'Rust + Tauri + React',
+      language: '语言',
+      delete_all: '删除所有数据',
+      delete_all_hint: '此操作将删除所有截图、数据库和设置，无法恢复',
+      delete_all_confirm: '确定要删除所有数据吗？此操作无法恢复！',
+      restart_required: '需要重启程序',
+      restart_now: '现在重启',
+      cancel: '取消',
+      languages: {
+        zh: '中文',
+        en: 'English',
+        ja: '日本语'
+      },
+      steam_language: 'Steam搜索语言',
+      steam_languages: {
+        schinese: '简体中文',
+        english: 'English',
+        japanese: '日本語'
+      },
+      import_directory: '导入已有目录',
+      import_path: '目录路径',
+      import_warning: '此操作将覆盖当前的数据目录设置，现有数据将不再显示。程序将重启以应用更改。',
+      confirm_import: '确认导入',
+      import_success_msg: '数据目录已成功切换，程序将重启以加载新数据。',
+      later: '稍后',
+      total_files: '总文件数',
+      copied_files: '已复制',
+      failed_files: '失败',
+      total_size: '总大小'
+    },
+    game: {
+      last_updated: '最后更新于:',
+      screenshots: '张截图'
+    },
+    detail: {
+      note: '附注:',
+      save_note: '保存附注',
+      delete: '删除',
+      open_folder: '打开文件夹',
+      confirm_delete: '确定要删除这张截图吗？'
+    },
+    notifications: {
+      save_success: '保存成功',
+      note_saved: '附注已保存',
+      delete_success: '删除成功',
+      delete_failed: '删除失败',
+      folder_opened: '打开文件夹',
+      folder_failed: '打开文件夹失败',
+      storage_changed: '存储位置已更改',
+      storage_failed: '存储位置更改失败',
+      migration_failed: '数据迁移失败',
+      autostart_saved: '开机自启动设置已保存',
+      autostart_failed: '保存开机自启动设置失败',
+      mouse_capture_saved: '鼠标捕捉设置已保存',
+      mouse_capture_failed: '保存鼠标捕捉设置失败'
+    },
+    logs: {
+      title: '日志'
+    }
+  },
+  en: {
+    nav: {
+      time: 'Browse by Time',
+      games: 'Browse by Game',
+      settings: 'Settings'
+    },
+    header: {
+      sort_newest: 'Newest First',
+      sort_oldest: 'Oldest First',
+      multi_select: 'Multi-Select Delete',
+      cancel_select: 'Cancel Selection',
+      confirm_delete: 'Confirm Delete',
+      game_sort_newest: 'Newest First',
+      game_sort_oldest: 'Oldest First',
+      game_sort_alpha_asc: 'Alphabetical (A-Z)',
+      game_sort_alpha_desc: 'Alphabetical (Z-A)',
+      search_info: 'Search Info',
+      steam_found: 'Steam info found',
+      steam_not_found: 'Steam info not found',
+      steam_mismatch: 'Steam info mismatch',
+      steam_searching: 'Searching Steam info...',
+      more_options: 'More Options',
+      sort_by: 'Sort By',
+      note_hint: 'Note (max 120 chars)',
+      note_shortcut: 'Press Ctrl+Enter to save',
+      note_saved: 'Note saved',
+      icon_large: 'Large Icons',
+      icon_small: 'Small Icons'
+    },
+    search: {
+      title: 'Search Game Info',
+      select_source: 'Select Source',
+      coming_soon: 'Coming Soon',
+      placeholder: 'Enter game name to search...',
+      search: 'Search',
+      searching: 'Searching...',
+      back: 'Back',
+      found_results: 'Found {count} results',
+      no_results: 'No games found',
+      applying: 'Applying info...',
+      apply_success: 'Info applied successfully',
+      confirm: 'Confirm'
+    },
+    empty: {
+      no_screenshots: 'No screenshots yet',
+      no_games: 'No games yet',
+      no_game_screenshots: 'No screenshots for this game',
+      screenshot_hint: 'Press PrintScreen or F12 to take screenshot',
+      game_hint: 'Games will be auto-detected from screenshots'
+    },
+    settings: {
+      title: 'Settings',
+      theme: 'Theme',
+      storage: 'Storage Location',
+      current_path: 'Current storage location:',
+      change_path: 'Change Storage Location',
+      migrating: 'Migrating...',
+      storage_hint: 'Database and screenshots are in the same directory, you can directly copy the entire folder to another computer',
+      hotkeys: 'Hotkeys',
+      hotkey_print: 'PrintScreen - Take screenshot',
+      hotkey_f12: 'F12 - Test screenshot (debug mode)',
+      system: 'System Options',
+      autostart: 'Start on boot',
+      autostart_hint: 'When enabled, the program will automatically run when the system starts',
+      screenshot: 'Screenshot Options',
+      capture_mouse: 'Capture mouse cursor',
+      capture_mouse_hint: 'When enabled, screenshots will include the mouse cursor',
+      about: 'About',
+      version: 'Minimal Game Screenshot Manager v0.1.0',
+      tech: 'Rust + Tauri + React',
+      language: 'Language',
+      delete_all: 'Delete All Data',
+      delete_all_hint: 'This operation will delete all screenshots, database and settings, cannot be recovered',
+      delete_all_confirm: 'Are you sure you want to delete all data? This operation cannot be recovered!',
+      restart_required: 'Restart required',
+      restart_now: 'Restart Now',
+      cancel: 'Cancel',
+      languages: {
+        zh: '中文',
+        en: 'English',
+        ja: '日本语'
+      },
+      steam_language: 'Steam Search Language',
+      steam_languages: {
+        schinese: 'Simplified Chinese',
+        english: 'English',
+        japanese: 'Japanese'
+      },
+      import_directory: 'Import Existing Directory',
+      import_path: 'Directory Path',
+      import_warning: 'This will override current data directory settings. The program will restart to apply changes.',
+      confirm_import: 'Confirm Import',
+      import_success_msg: 'Data directory switched successfully. The program will restart to load new data.',
+      later: 'Later',
+      total_files: 'Total Files',
+      copied_files: 'Copied',
+      failed_files: 'Failed',
+      total_size: 'Total Size'
+    },
+    game: {
+      last_updated: 'Last updated:',
+      screenshots: 'screenshots'
+    },
+    detail: {
+      note: 'Note:',
+      save_note: 'Save Note',
+      delete: 'Delete',
+      open_folder: 'Open Folder',
+      confirm_delete: 'Are you sure you want to delete this screenshot?'
+    },
+    notifications: {
+      save_success: 'Saved successfully',
+      note_saved: 'Note saved',
+      delete_success: 'Deleted successfully',
+      delete_failed: 'Failed to delete screenshot',
+      folder_opened: 'Folder opened',
+      folder_failed: 'Failed to open folder',
+      storage_changed: 'Storage location changed',
+      storage_failed: 'Failed to change storage location',
+      migration_failed: 'Data migration failed',
+      autostart_saved: 'Autostart setting saved',
+      autostart_failed: 'Failed to save autostart setting',
+      mouse_capture_saved: 'Mouse capture setting saved',
+      mouse_capture_failed: 'Failed to save mouse capture setting'
+    },
+    logs: {
+      title: 'Logs'
+    }
+  },
+  ja: {
+    nav: {
+      time: '時間で参照',
+      games: 'ゲームで参照',
+      settings: '設定'
+    },
+    header: {
+      sort_newest: '新しい順',
+      sort_oldest: '古い順',
+      multi_select: '複数選択削除',
+      cancel_select: '選択をキャンセル',
+      confirm_delete: '削除を確認',
+      game_sort_newest: '新しい順',
+      game_sort_oldest: '古い順',
+      game_sort_alpha_asc: 'アルファベット順 (A-Z)',
+      game_sort_alpha_desc: 'アルファベット順 (Z-A)',
+      search_info: '情報検索',
+      steam_found: 'Steam情報が見つかりました',
+      steam_not_found: 'Steam情報が見つかりません',
+      steam_mismatch: 'Steam情報が一致しません',
+      steam_searching: 'Steam情報を検索中...',
+      more_options: 'その他のオプション',
+      sort_by: '並び替え',
+      note_hint: 'メモ (最大120文字)',
+      note_shortcut: 'Ctrl+Enterで保存',
+      note_saved: 'メモを保存しました',
+      icon_large: '大きなアイコン',
+      icon_small: '小さなアイコン'
+    },
+    search: {
+      title: 'ゲーム情報検索',
+      select_source: '情報源を選択',
+      coming_soon: '近日公開',
+      placeholder: 'ゲーム名を入力して検索...',
+      search: '検索',
+      searching: '検索中...',
+      back: '戻る',
+      found_results: '{count}件の結果が見つかりました',
+      no_results: '関連するゲームが見つかりません',
+      applying: '情報を取得中...',
+      apply_success: '情報の取得が完了しました',
+      confirm: '確認'
+    },
+    empty: {
+      no_screenshots: 'まだスクリーンショットはありません',
+      no_games: 'まだゲームの記録はありません',
+      no_game_screenshots: 'このゲームにはスクリーンショットがありません',
+      screenshot_hint: 'PrintScreen または F12 を押してスクリーンショットを撮ります',
+      game_hint: 'スクリーンショットを撮るとゲームが自動的に認識されます'
+    },
+    settings: {
+      title: '設定',
+      theme: 'テーマ',
+      storage: 'ストレージの場所',
+      current_path: '現在のストレージの場所:',
+      change_path: 'ストレージの場所を変更',
+      migrating: '移行中...',
+      storage_hint: 'データベースとスクリーンショットは同じディレクトリにあります。フォルダ全体を別のコンピュータに直接コピーできます',
+      hotkeys: 'ホットキー',
+      hotkey_print: 'PrintScreen - スクリーンショットを撮る',
+      hotkey_f12: 'F12 - テストスクリーンショット（デバッグモード）',
+      system: 'システムオプション',
+      autostart: '起動時に実行',
+      autostart_hint: '有効にすると、システムの起動時にプログラムが自動的に実行されます',
+      screenshot: 'スクリーンショットオプション',
+      capture_mouse: 'マウスカーソルをキャプチャ',
+      capture_mouse_hint: '有効にすると、スクリーンショットにマウスカーソルが含まれます',
+      about: 'について',
+      version: 'ミニマルゲームスクリーンショットマネージャー v0.1.0',
+      tech: 'Rust + Tauri + React',
+      language: '言語',
+      delete_all: 'すべてのデータを削除',
+      delete_all_hint: 'この操作により、すべてのスクリーンショット、データベース、設定が削除され、回復することはできません',
+      delete_all_confirm: '本当にすべてのデータを削除しますか？この操作は元に戻すことができません！',
+      restart_required: '再起動が必要',
+      restart_now: '今すぐ再起動',
+      cancel: 'キャンセル',
+      languages: {
+        zh: '中文',
+        en: 'English',
+        ja: '日本语'
+      },
+      steam_language: 'Steam検索言語',
+      steam_languages: {
+        schinese: '簡体字中国語',
+        english: 'English',
+        japanese: '日本語'
+      },
+      import_directory: '既存のディレクトリをインポート',
+      import_path: 'ディレクトリパス',
+      import_warning: 'この操作により、現在のデータディレクトリ設定が上書きされます。プログラムは変更を適用するために再起動します。',
+      confirm_import: 'インポートを確認',
+      import_success_msg: 'データディレクトリが正常に切り替わりました。プログラムは新しいデータを読み込むために再起動します。',
+      later: '後で',
+      total_files: '総ファイル数',
+      copied_files: 'コピー済み',
+      failed_files: '失敗',
+      total_size: '合計サイズ'
+    },
+    game: {
+      last_updated: '最終更新:',
+      screenshots: '枚のスクリーンショット'
+    },
+    detail: {
+      note: 'メモ:',
+      save_note: 'メモを保存',
+      delete: '削除',
+      open_folder: 'フォルダを開く',
+      confirm_delete: 'このスクリーンショットを削除してもよろしいですか？'
+    },
+    notifications: {
+      save_success: '保存成功',
+      note_saved: 'メモを保存しました',
+      delete_success: '削除成功',
+      delete_failed: 'スクリーンショットの削除に失敗しました',
+      folder_opened: 'フォルダを開きました',
+      folder_failed: 'フォルダを開けませんでした',
+      storage_changed: 'ストレージの場所が変更されました',
+      storage_failed: 'ストレージの場所の変更に失敗しました',
+      migration_failed: 'データ移行に失敗しました',
+      autostart_saved: '自動起動設定が保存されました',
+      autostart_failed: '自動起動設定の保存に失敗しました',
+      mouse_capture_saved: 'マウスキャプチャ設定が保存されました',
+      mouse_capture_failed: 'マウスキャプチャ設定の保存に失敗しました'
+    },
+    logs: {
+      title: 'ログ'
+    }
+  }
+};
+
+export const getTranslation = (language) => {
+  return translations[language] || translations.zh;
+};
+
+export default translations;
