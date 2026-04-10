@@ -242,18 +242,6 @@ fn switch_data_directory(new_path: String) -> Result<MigrationResult, String> {
 }
 
 #[tauri::command]
-fn get_capture_mouse(state: State<AppState>) -> Result<bool, String> {
-    let conn = state.db.lock().unwrap();
-    Ok(db::get_capture_mouse(&conn))
-}
-
-#[tauri::command]
-fn set_capture_mouse(enabled: bool, state: State<AppState>) -> Result<(), String> {
-    let conn = state.db.lock().unwrap();
-    db::set_capture_mouse(&conn, enabled).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 fn get_shutter_sound(state: State<AppState>) -> Result<String, String> {
     let conn = state.db.lock().unwrap();
     Ok(db::get_shutter_sound(&conn))
@@ -1322,15 +1310,10 @@ fn main() {
                             };
                             let _ = play_shutter_sound_with_type(&shutter_sound);
                             
-                            let capture_mouse = {
-                                let conn = db_for_hotkey.lock().unwrap();
-                                db::get_capture_mouse(&conn)
-                            };
-                            
                             let process_info = get_foreground_process_info();
                             println!("[截图] 进程: {}, exe: {:?}", process_info.process_name, process_info.exe_path);
                             
-                            match capture_screenshot(capture_mouse) {
+                            match capture_screenshot(false) {
                                 Ok(image) => {
                                     println!("[截图] 屏幕捕获成功");
                                     
@@ -1664,8 +1647,6 @@ fn main() {
             migrate_data,
             check_data_directory,
             switch_data_directory,
-            get_capture_mouse,
-            set_capture_mouse,
             get_shutter_sound,
             set_shutter_sound,
             play_sound_preview,

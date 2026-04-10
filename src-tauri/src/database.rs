@@ -772,16 +772,6 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn get_capture_mouse(conn: &Connection) -> bool {
-    get_setting(conn, "capture_mouse")
-        .map(|v| v == "true")
-        .unwrap_or(false)
-}
-
-pub fn set_capture_mouse(conn: &Connection, enabled: bool) -> Result<()> {
-    set_setting(conn, "capture_mouse", if enabled { "true" } else { "false" })
-}
-
 pub fn get_shutter_sound(conn: &Connection) -> String {
     get_setting(conn, "shutter_sound")
         .unwrap_or_else(|| "default".to_string())

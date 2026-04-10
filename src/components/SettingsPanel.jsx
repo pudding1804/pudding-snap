@@ -20,7 +20,6 @@ export function SettingsPanel({
   migrationTotal,
   migrationStatus,
   autostart,
-  captureMouse,
   shutterSound,
   screenshotFormat,
   screenshotQuality,
@@ -30,7 +29,6 @@ export function SettingsPanel({
   onChangeStoragePath,
   onImportDirectory,
   onAutostartChange,
-  onCaptureMouseChange,
   onShutterSoundChange,
   onPlaySoundPreview,
   onScreenshotFormatChange,
@@ -194,23 +192,8 @@ export function SettingsPanel({
 
         <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
           <h3 style={{ marginBottom: 12 }}>{t.settings.screenshot}</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <input
-              type="checkbox"
-              id="captureMouse"
-              checked={captureMouse}
-              onChange={(e) => onCaptureMouseChange(e.target.checked)}
-              style={{ width: 18, height: 18, cursor: 'pointer' }}
-            />
-            <label htmlFor="captureMouse" style={{ cursor: 'pointer', color: theme.text }}>
-              {t.settings.capture_mouse}
-            </label>
-          </div>
-          <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
-            {t.settings.capture_mouse_hint}
-          </p>
           
-          <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
+          <div style={{ marginTop: 0, paddingTop: 0 }}>
             <h4 style={{ marginBottom: 12 }}>{t.settings.shutter_sound}</h4>
             <p style={{ color: theme.textMuted, fontSize: 12, marginBottom: 12 }}>
               {t.settings.shutter_sound_hint}

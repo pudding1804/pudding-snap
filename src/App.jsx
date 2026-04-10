@@ -62,6 +62,7 @@ function App() {
   const [notification, setNotification] = useState(null)
   const [error, setError] = useState(null)
   const [logs, setLogs] = useState(['应用启动...'])
+  const [showDebug, setShowDebug] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [currentTheme, setCurrentTheme] = useState('night')
   
@@ -94,7 +95,6 @@ function App() {
   const [screenshotToDelete, setScreenshotToDelete] = useState(null)
   const [multiDeleteCount, setMultiDeleteCount] = useState(0)
   
-  const [captureMouse, setCaptureMouse] = useState(false)
   const [shutterSound, setShutterSound] = useState('default')
   const [autostart, setAutostart] = useState(false)
   const [language, setLanguage] = useState('zh')
@@ -252,25 +252,6 @@ function App() {
       setStoragePath(path || '程序目录/screenshot-data/')
     } catch (e) {
       addLog(`获取存储路径失败: ${e}`)
-    }
-  }, [addLog])
-
-  const loadCaptureMouse = useCallback(async () => {
-    try {
-      const enabled = await invoke('get_capture_mouse')
-      setCaptureMouse(enabled)
-    } catch (e) {
-      addLog(`获取鼠标捕捉设置失败: ${e}`)
-    }
-  }, [addLog])
-
-  const saveCaptureMouse = useCallback(async (enabled) => {
-    try {
-      await invoke('set_capture_mouse', { enabled })
-      setCaptureMouse(enabled)
-      addLog(`鼠标捕捉设置已保存: ${enabled}`)
-    } catch (e) {
-      addLog(`保存鼠标捕捉设置失败: ${e}`)
     }
   }, [addLog])
 
@@ -707,7 +688,6 @@ function App() {
       addLog('开始加载数据')
       try {
         await loadStoragePath()
-        await loadCaptureMouse()
         await loadShutterSound()
         await loadAutostart()
         await loadScreenshotQuality()
@@ -823,13 +803,19 @@ function App() {
         }
       })
       
-      const unlistenFocused = await listen('window-focused', () => {
+      const unlistenFocused = await listen('window-focused', async () => {
         addLog('窗口获得焦点，刷新数据')
         loadGames()
         if (selectedGameRef.current) {
           loadScreenshotsWithPagination(1, selectedGameRef.current.game_id)
         } else {
           loadScreenshotsWithPagination(1, null)
+        }
+        try {
+          await invoke('reset_unread_count')
+          addLog('未读数量已重置')
+        } catch (e) {
+          addLog(`重置未读数量失败: ${e}`)
         }
       })
       
@@ -862,6 +848,19 @@ function App() {
     }
   }, [closeAction, addLog, loadGames, loadScreenshotsWithPagination])
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'F5') {
+        e.preventDefault()
+        setShowDebug(prev => !prev)
+        addLog(`调试窗口: ${!showDebug ? '显示' : '隐藏'}`)
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showDebug, addLog])
+
   return (
     <ErrorBoundary>
       <style>{modalKeyframes}</style>
@@ -884,6 +883,7 @@ function App() {
             currentView={currentView}
             sidebarCollapsed={sidebarCollapsed}
             logs={logs}
+            showDebug={showDebug}
             t={t}
             onNavigate={(view) => {
               if (view === 'time') switchToTimeView()
@@ -1053,9 +1053,8 @@ function App() {
               migrationTotal={migrationTotal}
               migrationStatus={migrationStatus}
               autostart={autostart}
-              captureMouse={captureMouse}
-              shutterSound={shutterSound}
-              screenshotFormat={screenshotFormat}
+            shutterSound={shutterSound}
+            screenshotFormat={screenshotFormat}
               screenshotQuality={screenshotQuality}
               onLanguageChange={setLanguage}
               onSteamLanguageChange={setSteamLanguage}
@@ -1063,7 +1062,6 @@ function App() {
               onChangeStoragePath={changeStoragePath}
               onImportDirectory={importExistingDirectory}
               onAutostartChange={saveAutostart}
-              onCaptureMouseChange={saveCaptureMouse}
               onShutterSoundChange={saveShutterSound}
               onPlaySoundPreview={playSoundPreview}
               onScreenshotFormatChange={saveScreenshotFormat}
