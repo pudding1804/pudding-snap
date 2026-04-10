@@ -23,6 +23,8 @@ export function SettingsPanel({
   shutterSound,
   screenshotFormat,
   screenshotQuality,
+  bangumiAccessToken,
+  bangumiCookie,
   onLanguageChange,
   onSteamLanguageChange,
   onThemeChange,
@@ -33,6 +35,7 @@ export function SettingsPanel({
   onPlaySoundPreview,
   onScreenshotFormatChange,
   onScreenshotQualityChange,
+  onBangumiAuthChange,
   onDeleteAll,
 }) {
   return (
@@ -344,6 +347,66 @@ export function SettingsPanel({
           >
             {t.settings.delete_all}
           </button>
+        </div>
+
+        <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
+          <h3 style={{ marginBottom: 12 }}>Bangumi 认证</h3>
+          <p style={{ color: theme.textMuted, fontSize: 12, marginBottom: 12 }}>
+            部分 Bangumi 游戏需要登录才能搜索。请输入您的 Access Token 或 Cookie。
+          </p>
+          
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: theme.textMuted }}>
+              Access Token
+            </label>
+            <input
+              type="password"
+              value={bangumiAccessToken || ''}
+              onChange={(e) => onBangumiAuthChange(e.target.value, bangumiCookie)}
+              placeholder="输入 Bangumi Access Token"
+              style={{ 
+                ...styles.input, 
+                width: '100%',
+                fontSize: 12
+              }}
+            />
+          </div>
+          
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: theme.textMuted }}>
+              Cookie (可选)
+            </label>
+            <textarea
+              value={bangumiCookie || ''}
+              onChange={(e) => onBangumiAuthChange(bangumiAccessToken, e.target.value)}
+              placeholder="输入 Bangumi Cookie"
+              style={{ 
+                ...styles.input, 
+                width: '100%',
+                minHeight: 60,
+                fontSize: 12,
+                resize: 'vertical'
+              }}
+            />
+          </div>
+          
+          <button
+            style={{
+              ...styles.btnPrimary,
+              width: '100%',
+              padding: '10px 16px',
+              fontSize: 14,
+              marginTop: 8
+            }}
+            {...btnEvents}
+            onClick={() => onBangumiAuthChange(bangumiAccessToken, bangumiCookie, true)}
+          >
+            保存认证信息
+          </button>
+          
+          <p style={{ color: theme.textMuted, fontSize: 11, marginTop: 8 }}>
+            提示：您可以在 next.bgm.tv/demo/access-token 生成 Access Token
+          </p>
         </div>
 
         <div style={{ background: theme.card, padding: 16, borderRadius: 8 }}>

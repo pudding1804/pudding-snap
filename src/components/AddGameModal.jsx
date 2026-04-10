@@ -11,6 +11,7 @@ export function AddGameModal({
   searchTerm,
   searchResults,
   isAdding,
+  source,
   onClose,
   onStepChange,
   onSearchTermChange,
@@ -52,11 +53,10 @@ export function AddGameModal({
                   alignItems: 'center', 
                   justifyContent: 'center',
                   gap: 12,
-                  fontSize: 16,
-                  opacity: 0.5,
-                  cursor: 'not-allowed'
+                  fontSize: 16
                 }}
-                disabled
+                {...btnEvents}
+                onClick={() => onStepChange('bangumi-search')}
               >
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10"/>
@@ -91,6 +91,42 @@ export function AddGameModal({
                 style={styles.btnPrimary}
                 {...btnEvents}
                 onClick={() => onAddGame && onAddGame('search', searchTerm)}
+                disabled={isAdding}
+              >
+                {isAdding ? t.add_game.searching : t.add_game.search}
+              </button>
+            </div>
+            <button 
+              style={{ ...styles.btn, width: '100%' }}
+              {...btnEvents}
+              onClick={() => onStepChange('platform')}
+            >
+              {t.add_game.back}
+            </button>
+          </div>
+        )}
+        
+        {step === 'bangumi-search' && (
+          <div style={{ padding: 24 }}>
+            <h2 style={{ marginBottom: 16, textAlign: 'center' }}>{t.add_game.title}</h2>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => onSearchTermChange(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter' && searchTerm.trim()) {
+                    onAddGame && onAddGame('bangumi-search', searchTerm)
+                  }
+                }}
+                placeholder={t.add_game.search_placeholder}
+                style={{ ...styles.input, flex: 1 }}
+                autoFocus
+              />
+              <button 
+                style={styles.btnPrimary}
+                {...btnEvents}
+                onClick={() => onAddGame && onAddGame('bangumi-search', searchTerm)}
                 disabled={isAdding}
               >
                 {isAdding ? t.add_game.searching : t.add_game.search}
@@ -148,7 +184,7 @@ export function AddGameModal({
                         e.currentTarget.style.transform = 'scale(1)'
                         e.currentTarget.style.background = theme.accent
                       }}
-                      onClick={() => onAddGame && onAddGame('create', result)}
+                      onClick={() => onAddGame && onAddGame(source === 'bangumi' ? 'create-bangumi' : 'create', result)}
                     >
                       {result.tiny_image && (
                         <img 

@@ -815,6 +815,10 @@ pub fn update_game_display_title(conn: &Connection, game_id: &str, display_title
         "UPDATE screenshots SET display_title = ?1 WHERE game_id = ?2",
         params![display_title, game_id],
     )?;
+    conn.execute(
+        "UPDATE game_cache SET display_title = ?1 WHERE game_id = ?2",
+        params![display_title, game_id],
+    )?;
     println!("[数据库] 更新游戏 {} 的显示标题为: {}", game_id, display_title);
     Ok(())
 }
@@ -822,8 +826,8 @@ pub fn update_game_display_title(conn: &Connection, game_id: &str, display_title
 pub fn update_game_cache(conn: &Connection, game_id: &str, steam_appid: Option<u32>, steam_name: Option<String>, steam_logo_path: Option<String>) -> Result<()> {
     let timestamp = chrono::Utc::now().timestamp();
     conn.execute(
-        "UPDATE game_cache SET steam_appid = ?1, steam_name = ?2, steam_logo_path = ?3, steam_match_status = 'manual', display_title = ?4, last_updated = ?5 WHERE game_id = ?6",
-        params![steam_appid, steam_name, steam_logo_path, steam_name, timestamp, game_id],
+        "UPDATE game_cache SET steam_appid = ?1, steam_name = ?2, steam_logo_path = ?3, steam_match_status = 'manual', last_updated = ?4 WHERE game_id = ?5",
+        params![steam_appid, steam_name, steam_logo_path, timestamp, game_id],
     )?;
     println!("[数据库] 更新游戏 {} 的Steam信息", game_id);
     Ok(())

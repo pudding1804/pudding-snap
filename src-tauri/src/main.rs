@@ -6,6 +6,7 @@ mod windows_utils;
 mod screenshot;
 mod audio;
 mod steam;
+mod bangumi;
 
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
@@ -736,6 +737,145 @@ fn update_game_steam_info(
         game_id: game_id.clone(),
         game_title: info.name.clone(),
         display_title: info.name.clone(),
+        game_banner_url: String::new(),
+        count,
+        last_timestamp,
+        game_icon_path: None,
+        steam_logo_path: logo_path_str,
+    })
+}
+
+#[tauri::command]
+fn save_bangumi_auth(access_token: Option<String>, cookie: Option<String>) -> Result<(), String> {
+    let auth = bangumi::BangumiAuth {
+        access_token,
+        cookie,
+    };
+    bangumi::save_bangumi_auth(&auth)
+}
+
+#[tauri::command]
+fn get_bangumi_auth() -> Result<bangumi::BangumiAuth, String> {
+    bangumi::load_bangumi_auth()
+}
+
+#[tauri::command]
+async fn search_bangumi_games(search_term: String) -> Result<Vec<bangumi::BangumiSearchResult>, String> {
+    println!("[Bangumi] 手动搜索游戏: {}", search_term);
+    bangumi::search_bangumi_games_async(&search_term).await
+}
+
+#[tauri::command]
+async fn create_game_from_bangumi(
+    subject_id: u32,
+    game_name: String,
+    language: String,
+    state: State<'_, AppState>,
+) -> Result<GameSummary, String> {
+    println!("[游戏] 从Bangumi创建游戏: {} ({}) (语言: {})", game_name, subject_id, language);
+    
+    let game_id = format!("bangumi_{}", subject_id);
+    
+    {
+        let conn = state.db.lock().unwrap();
+        if db::get_game_cache(&conn, &game_id).is_some() {
+            return Err("游戏已存在".to_string());
+        }
+    }
+    
+    let info = bangumi::get_bangumi_subject_details_async(subject_id).await?
+        .ok_or_else(|| format!("未找到 Bangumi 游戏: {}", subject_id))?;
+    
+    let logos_dir = bangumi::get_bangumi_logos_dir();
+    let logo_filename = format!("bangumi_{}.jpg", info.id);
+    let logo_path = logos_dir.join(&logo_filename);
+    
+    let mut logo_path_str = None;
+    if let Some(url) = &info.image {
+        if let Err(e) = bangumi::download_bangumi_image_async(url, &logo_path).await {
+            println!("[游戏] 下载logo失败: {}", e);
+        } else {
+            logo_path_str = Some(logo_path.to_string_lossy().to_string());
+        }
+    }
+    
+    let display_title = if language == "zh" {
+        info.name_cn.as_ref().unwrap_or(&info.name)
+    } else {
+        &info.name
+    };
+    
+    let conn = state.db.lock().unwrap();
+    db::create_empty_game(
+        &conn,
+        &game_id,
+        display_title,
+        None,
+        Some(info.name.clone()),
+        logo_path_str.clone(),
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(GameSummary {
+        game_id: game_id.clone(),
+        game_title: info.name.clone(),
+        display_title: display_title.clone(),
+        game_banner_url: String::new(),
+        count: 0,
+        last_timestamp: chrono::Utc::now().timestamp(),
+        game_icon_path: None,
+        steam_logo_path: logo_path_str,
+    })
+}
+
+#[tauri::command]
+async fn apply_bangumi_game_info(game_id: String, subject_id: u32, language: String, state: State<'_, AppState>) -> Result<GameSummary, String> {
+    println!("[Bangumi] 应用游戏信息: {} -> {} (语言: {})", game_id, subject_id, language);
+    
+    let info = bangumi::get_bangumi_subject_details_async(subject_id).await?
+        .ok_or_else(|| format!("未找到 Bangumi 游戏: {}", subject_id))?;
+    
+    let logos_dir = bangumi::get_bangumi_logos_dir();
+    let logo_filename = format!("bangumi_{}.jpg", info.id);
+    let logo_path = logos_dir.join(&logo_filename);
+    
+    let mut logo_path_str = None;
+    if let Some(url) = &info.image {
+        if let Err(e) = bangumi::download_bangumi_image_async(url, &logo_path).await {
+            println!("[Bangumi] 下载logo失败: {}", e);
+        } else {
+            logo_path_str = Some(logo_path.to_string_lossy().to_string());
+        }
+    }
+    
+    let display_title = if language == "zh" {
+        info.name_cn.as_ref().unwrap_or(&info.name)
+    } else {
+        &info.name
+    };
+    
+    let conn = state.db.lock().unwrap();
+    db::update_game_cache(&conn, &game_id, None, Some(info.name.clone()), logo_path_str.clone())
+        .map_err(|e| e.to_string())?;
+    
+    db::update_game_display_title(&conn, &game_id, display_title)
+        .map_err(|e| e.to_string())?;
+    
+    let count: i32 = conn.query_row(
+        "SELECT COUNT(*) FROM screenshots WHERE game_id = ?1",
+        params![game_id],
+        |row| row.get(0)
+    ).unwrap_or(0);
+    
+    let last_timestamp: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(timestamp), 0) FROM screenshots WHERE game_id = ?1",
+        params![game_id],
+        |row| row.get(0)
+    ).unwrap_or(0);
+    
+    Ok(GameSummary {
+        game_id: game_id.clone(),
+        game_title: info.name.clone(),
+        display_title: display_title.clone(),
         game_banner_url: String::new(),
         count,
         last_timestamp,
@@ -1668,6 +1808,11 @@ fn main() {
             apply_steam_game_info,
             create_game_from_steam,
             update_game_steam_info,
+            search_bangumi_games,
+            create_game_from_bangumi,
+            apply_bangumi_game_info,
+            save_bangumi_auth,
+            get_bangumi_auth,
             delete_game,
             delete_games,
             get_game_screenshot_count,

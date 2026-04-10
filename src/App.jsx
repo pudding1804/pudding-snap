@@ -102,8 +102,12 @@ function App() {
   const [screenshotFormat, setScreenshotFormat] = useState('webp')
   const [screenshotQuality, setScreenshotQuality] = useState('medium')
   
+  const [bangumiAccessToken, setBangumiAccessToken] = useState('')
+  const [bangumiCookie, setBangumiCookie] = useState('')
+  
   const [showSearchModal, setShowSearchModal] = useState(false)
   const [searchModalStep, setSearchModalStep] = useState('source')
+  const [searchSource, setSearchSource] = useState('steam')
   const [steamSearchTerm, setSteamSearchTerm] = useState('')
   const [steamSearchResults, setSteamSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
@@ -117,6 +121,7 @@ function App() {
   const [addGameSearchTerm, setAddGameSearchTerm] = useState('')
   const [addGameSearchResults, setAddGameSearchResults] = useState([])
   const [isAddingGame, setIsAddingGame] = useState(false)
+  const [addGameSource, setAddGameSource] = useState('steam')
   
   const [isGameMultiSelectMode, setIsGameMultiSelectMode] = useState(false)
   const [selectedGames, setSelectedGames] = useState([])
@@ -252,6 +257,30 @@ function App() {
       setStoragePath(path || '程序目录/screenshot-data/')
     } catch (e) {
       addLog(`获取存储路径失败: ${e}`)
+    }
+  }, [addLog])
+
+  const loadBangumiAuth = useCallback(async () => {
+    try {
+      const auth = await invoke('get_bangumi_auth')
+      setBangumiAccessToken(auth.access_token || '')
+      setBangumiCookie(auth.cookie || '')
+    } catch (e) {
+      addLog(`加载 Bangumi 认证信息失败: ${e}`)
+    }
+  }, [addLog])
+
+  const handleBangumiAuthChange = useCallback((accessToken, cookie, shouldSave = false) => {
+    setBangumiAccessToken(accessToken || '')
+    setBangumiCookie(cookie || '')
+    
+    if (shouldSave) {
+      invoke('save_bangumi_auth', { 
+        accessToken: accessToken || null, 
+        cookie: cookie || null 
+      })
+        .then(() => addLog('Bangumi 认证信息已保存'))
+        .catch(e => addLog(`保存 Bangumi 认证信息失败: ${e}`))
     }
   }, [addLog])
 
@@ -611,6 +640,7 @@ function App() {
   const handleAddGame = useCallback(async (action, data) => {
     if (action === 'search') {
       setIsAddingGame(true)
+      setAddGameSource('steam')
       try {
         const results = await invoke('search_steam_games', { searchTerm: data, language: steamLanguage })
         setAddGameSearchResults(results)
@@ -621,6 +651,23 @@ function App() {
         addLog(`搜索失败: ${err}`)
       }
       setIsAddingGame(false)
+    } else if (action === 'bangumi-search') {
+      setIsAddingGame(true)
+      setAddGameSource('bangumi')
+      try {
+        const results = await invoke('search_bangumi_games', { searchTerm: data })
+        setAddGameSearchResults(results.map(r => ({
+          appid: r.id,
+          name: language === 'zh' ? (r.name_cn || r.name) : r.name,
+          tiny_image: r.image
+        })))
+        if (results.length > 0) {
+          setAddGameStep('results')
+        }
+      } catch (err) {
+        addLog(`Bangumi搜索失败: ${err}`)
+      }
+      setIsAddingGame(false)
     } else if (action === 'create') {
       setIsAddingGame(true)
       try {
@@ -628,6 +675,25 @@ function App() {
           appid: data.appid,
           gameName: data.name,
           language: steamLanguage
+        })
+        addLog(`创建游戏成功: ${game.display_title}`)
+        setShowAddGameModal(false)
+        await loadGames()
+        showNotification(t.add_game.create_success, game.display_title)
+      } catch (err) {
+        addLog(`创建游戏失败: ${err}`)
+        if (err.includes('已存在')) {
+          showNotification(t.add_game.already_exists)
+        }
+      }
+      setIsAddingGame(false)
+    } else if (action === 'create-bangumi') {
+      setIsAddingGame(true)
+      try {
+        const game = await invoke('create_game_from_bangumi', {
+          subjectId: data.appid,
+          gameName: data.name,
+          language: language
         })
         addLog(`创建游戏成功: ${game.display_title}`)
         setShowAddGameModal(false)
@@ -690,6 +756,7 @@ function App() {
         await loadStoragePath()
         await loadShutterSound()
         await loadAutostart()
+        await loadBangumiAuth()
         await loadScreenshotQuality()
         await loadScreenshotsWithPagination(1, null)
       } catch (e) {
@@ -1053,9 +1120,11 @@ function App() {
               migrationTotal={migrationTotal}
               migrationStatus={migrationStatus}
               autostart={autostart}
-            shutterSound={shutterSound}
-            screenshotFormat={screenshotFormat}
+              shutterSound={shutterSound}
+              screenshotFormat={screenshotFormat}
               screenshotQuality={screenshotQuality}
+              bangumiAccessToken={bangumiAccessToken}
+              bangumiCookie={bangumiCookie}
               onLanguageChange={setLanguage}
               onSteamLanguageChange={setSteamLanguage}
               onThemeChange={setCurrentTheme}
@@ -1066,6 +1135,7 @@ function App() {
               onPlaySoundPreview={playSoundPreview}
               onScreenshotFormatChange={saveScreenshotFormat}
               onScreenshotQualityChange={saveScreenshotQuality}
+              onBangumiAuthChange={handleBangumiAuthChange}
               onDeleteAll={() => setShowDeleteConfirm(true)}
             />
           )}
@@ -1145,6 +1215,7 @@ function App() {
           searchTerm={addGameSearchTerm}
           searchResults={addGameSearchResults}
           isAdding={isAddingGame}
+          source={addGameSource}
           onClose={() => setShowAddGameModal(false)}
           onStepChange={setAddGameStep}
           onSearchTermChange={setAddGameSearchTerm}
@@ -1169,7 +1240,10 @@ function App() {
                         fontSize: 16
                       }}
                       {...btnEvents}
-                      onClick={() => setSearchModalStep('search')}
+                      onClick={() => {
+                        setSearchSource('steam')
+                        setSearchModalStep('search')
+                      }}
                     >
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
@@ -1184,11 +1258,13 @@ function App() {
                         alignItems: 'center', 
                         justifyContent: 'center',
                         gap: 12,
-                        fontSize: 16,
-                        opacity: 0.5,
-                        cursor: 'not-allowed'
+                        fontSize: 16
                       }}
-                      disabled
+                      {...btnEvents}
+                      onClick={() => {
+                        setSearchSource('bangumi')
+                        setSearchModalStep('search')
+                      }}
                     >
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <circle cx="12" cy="12" r="10"/>
@@ -1204,7 +1280,9 @@ function App() {
               
               {searchModalStep === 'search' && (
                 <div style={{ padding: 24 }}>
-                  <h2 style={{ marginBottom: 16, textAlign: 'center' }}>{t.search.title}</h2>
+                  <h2 style={{ marginBottom: 16, textAlign: 'center' }}>
+                    {searchSource === 'steam' ? t.search.title : '搜索 Bangumi 游戏'}
+                  </h2>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                     <input
                       type="text"
@@ -1214,18 +1292,28 @@ function App() {
                         if (e.key === 'Enter' && steamSearchTerm.trim()) {
                           setIsSearching(true)
                           try {
-                            const results = await invoke('search_steam_games', { searchTerm: steamSearchTerm, language: steamLanguage })
-                            setSteamSearchResults(results)
+                            let results = []
+                            if (searchSource === 'steam') {
+                              results = await invoke('search_steam_games', { searchTerm: steamSearchTerm, language: steamLanguage })
+                              setSteamSearchResults(results)
+                            } else {
+                              results = await invoke('search_bangumi_games', { searchTerm: steamSearchTerm })
+                              setSteamSearchResults(results.map(r => ({
+                                appid: r.id,
+                                name: language === 'zh' ? (r.name_cn || r.name) : r.name,
+                                tiny_image: r.image
+                              })))
+                            }
                             if (results.length > 0) {
                               setSearchModalStep('results')
                             }
                           } catch (err) {
-                            addLog(`搜索失败: ${err}`)
+                            addLog(`${searchSource === 'steam' ? 'Steam' : 'Bangumi'}搜索失败: ${err}`)
                           }
                           setIsSearching(false)
                         }
                       }}
-                      placeholder={t.search.placeholder}
+                      placeholder={searchSource === 'steam' ? t.search.placeholder : '输入游戏名称搜索...'}
                       style={{ ...styles.input, flex: 1 }}
                       autoFocus
                     />
@@ -1236,13 +1324,23 @@ function App() {
                         if (!steamSearchTerm.trim()) return
                         setIsSearching(true)
                         try {
-                          const results = await invoke('search_steam_games', { searchTerm: steamSearchTerm, language: steamLanguage })
-                          setSteamSearchResults(results)
+                          let results = []
+                          if (searchSource === 'steam') {
+                            results = await invoke('search_steam_games', { searchTerm: steamSearchTerm, language: steamLanguage })
+                            setSteamSearchResults(results)
+                          } else {
+                            results = await invoke('search_bangumi_games', { searchTerm: steamSearchTerm })
+                            setSteamSearchResults(results.map(r => ({
+                              appid: r.id,
+                              name: language === 'zh' ? (r.name_cn || r.name) : r.name,
+                              tiny_image: r.image
+                            })))
+                          }
                           if (results.length > 0) {
                             setSearchModalStep('results')
                           }
                         } catch (err) {
-                          addLog(`搜索失败: ${err}`)
+                          addLog(`${searchSource === 'steam' ? 'Steam' : 'Bangumi'}搜索失败: ${err}`)
                         }
                         setIsSearching(false)
                       }}
@@ -1307,13 +1405,23 @@ function App() {
                               if (!selectedGame) return
                               setIsApplyingInfo(true)
                               try {
-                                const updatedGame = await invoke('update_game_steam_info', {
-                                  gameId: selectedGame.game_id,
-                                  appid: result.appid,
-                                  gameName: result.name,
-                                  language: steamLanguage
-                                })
-                                addLog(`更新游戏信息成功: ${result.name}`)
+                                let updatedGame
+                                if (searchSource === 'steam') {
+                                  updatedGame = await invoke('update_game_steam_info', {
+                                    gameId: selectedGame.game_id,
+                                    appid: result.appid,
+                                    gameName: result.name,
+                                    language: steamLanguage
+                                  })
+                                  addLog(`更新游戏信息成功: ${result.name}`)
+                                } else {
+                                  updatedGame = await invoke('apply_bangumi_game_info', {
+                                    gameId: selectedGame.game_id,
+                                    subjectId: result.appid,
+                                    language: language
+                                  })
+                                  addLog(`更新游戏信息成功: ${result.name}`)
+                                }
                                 setAppliedGameName(result.name)
                                 setShowApplySuccess(true)
                                 setTimeout(() => setShowApplySuccess(false), 2000)
@@ -1322,6 +1430,7 @@ function App() {
                                 setSteamSearchTerm('')
                                 setSteamSearchResults([])
                                 setSelectedGame(updatedGame)
+                                setCurrentView('game-detail')
                                 await loadGames()
                                 await loadScreenshotsWithPagination(1, updatedGame.game_id)
                               } catch (err) {

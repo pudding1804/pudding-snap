@@ -50,6 +50,7 @@ ScreenshotProject/
 │       ├── models.rs             # 数据模型
 │       ├── screenshot.rs         # 截图处理
 │       ├── steam.rs              # Steam API
+│       ├── bangumi.rs            # Bangumi API
 │       └── main.rs               # 应用入口
 │
 └── docs/
@@ -92,11 +93,13 @@ const result = await invoke('command_name', { param1: value1 })
 1. 全局热键截图 (PrintScreen)
 2. 自动识别游戏进程
 3. Steam 信息自动匹配
-4. 截图分类管理
-5. 数据迁移与导入
-6. 手动添加游戏
-7. 批量导入截图
-8. 多选删除功能
+4. Bangumi 游戏信息拉取
+5. 截图分类管理
+6. 数据迁移与导入
+7. 手动添加游戏
+8. 批量导入截图
+9. 多选删除功能
+10. 系统托盘未读徽章
 
 ## 注意事项
 1. 所有路径使用绝对路径存储
@@ -104,6 +107,9 @@ const result = await invoke('command_name', { param1: value1 })
 3. Windows 路径分隔符处理
 4. 删除文件前先删除数据库记录
 5. 导入时保留原始创建时间
+6. Bangumi API 必须遵守 User-Agent 格式要求
+7. Bangumi API 搜索使用 POST 请求
+8. Bangumi API 速率限制：1秒间隔
 
 ## 编译命令
 - 后端检查: `cd src-tauri && cargo check`

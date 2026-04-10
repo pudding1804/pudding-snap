@@ -1,8 +1,8 @@
 # 极简游戏截图管理器 - 技术设计文档
 
 ## 文档版本
-- 版本: 2.0.0
-- 更新日期: 2026-04-08
+- 版本: 2.1.0
+- 更新日期: 2026-04-10
 - 作者: AI Assistant
 
 ---
@@ -38,11 +38,13 @@
 - 全局热键截图 (PrintScreen)
 - 自动识别游戏进程
 - Steam 信息自动匹配
+- Bangumi 游戏信息拉取
 - 截图分类管理
 - 数据迁移与导入
 - 手动添加游戏
 - 批量导入截图
 - 多选删除功能
+- 系统托盘未读徽章
 
 ---
 
@@ -87,6 +89,7 @@ ScreenshotProject/
 │       ├── models.rs             # 数据模型
 │       ├── screenshot.rs         # 截图处理
 │       ├── steam.rs              # Steam API
+│       ├── bangumi.rs            # Bangumi API
 │       ├── windows_utils.rs      # Windows 工具
 │       ├── audio.rs              # 音频播放
 │       ├── lib.rs                # 库入口
@@ -218,6 +221,12 @@ Steam相关命令：
 - `search_steam_games` - 搜索Steam游戏列表
 - `apply_steam_game_info` - 应用Steam游戏信息
 
+#### commands/bangumi.rs
+Bangumi相关命令：
+- `search_bangumi_games` - 搜索Bangumi游戏列表
+- `create_game_from_bangumi` - 从Bangumi创建游戏
+- `apply_bangumi_game_info` - 应用Bangumi游戏信息
+
 #### commands/migration.rs
 迁移相关命令：
 - `migrate_data` - 迁移数据
@@ -227,8 +236,8 @@ Steam相关命令：
 #### commands/settings.rs
 设置相关命令：
 - `get_storage_path` - 获取存储路径
-- `get_capture_mouse` - 获取鼠标捕捉设置
-- `set_capture_mouse` - 设置鼠标捕捉
+- `get_shutter_sound` - 获取快门音效设置
+- `set_shutter_sound` - 设置快门音效
 - `delete_all_data` - 删除所有数据
 - `restart_app` - 重启应用
 
@@ -383,7 +392,15 @@ CREATE TABLE IF NOT EXISTS game_cache (
 - 图片下载保存到本地 logos 目录
 - 支持多语言搜索
 
-### 8.3 文件操作
+### 8.3 Bangumi API
+- 使用 Bangumi v0 REST API
+- 搜索接口使用 POST 请求
+- 必须遵守 User-Agent 格式要求
+- 速率限制：1秒间隔
+- 优先显示中文标题 (name_cn)
+- 图片下载保存到本地 bangumi-logos 目录
+
+### 8.4 文件操作
 - 删除文件前先删除数据库记录
 - 导入时保留原始创建时间
 - 错误处理要完善
@@ -396,6 +413,14 @@ CREATE TABLE IF NOT EXISTS game_cache (
 ---
 
 ## 9. 更新日志
+
+### v2.1.0 (2026-04-10)
+- 添加 Bangumi (番组计划) 游戏信息拉取功能
+- 添加系统托盘未读徽章显示
+- 移除鼠标捕捉功能
+- 优化侧边栏布局
+- 调试窗口默认隐藏，通过 F5 切换
+- 更新版本号至 1.0.0
 
 ### v2.0.0 (2026-04-08)
 - 重构前端组件架构
