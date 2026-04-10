@@ -16,7 +16,8 @@ import {
   SettingsPanel,
   AddGameModal,
   ImportModal,
-  ErrorBoundary 
+  ErrorBoundary,
+  ShareModal 
 } from './components'
 
 function getImageSrc(path) {
@@ -134,6 +135,13 @@ function App() {
   })
   
   const [importConfirmPath, setImportConfirmPath] = useState(null)
+  
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [shareScreenshot, setShareScreenshot] = useState(null)
+  const [shareUsername, setShareUsername] = useState(() => {
+    const saved = localStorage.getItem('shareUsername')
+    return saved || ''
+  })
   
   const refreshDebounceRef = useRef(null)
   const isRefreshingRef = useRef(false)
@@ -1001,7 +1009,53 @@ function App() {
           onSaveNote={saveNote}
           onOpenFolder={openInExplorer}
           onDelete={deleteScreenshot}
+          onShare={(screenshot) => {
+            setShareScreenshot(screenshot)
+            setShowShareModal(true)
+          }}
         />
+
+        {showShareModal && (
+          <ShareModal
+            theme={theme}
+            styles={styles}
+            t={t}
+            screenshot={shareScreenshot}
+            gameInfo={selectedGame}
+            onClose={() => {
+              setShowShareModal(false)
+              setShareScreenshot(null)
+            }}
+            username={shareUsername}
+            onUsernameChange={(name) => {
+              setShareUsername(name)
+              localStorage.setItem('shareUsername', name)
+            }}
+            onExport={async (dataUrl, format) => {
+              try {
+                const { save } = await import('@tauri-apps/plugin-dialog')
+                const filePath = await save({
+                  defaultPath: `share_${Date.now()}.${format}`,
+                  filters: [{
+                    name: format.toUpperCase(),
+                    extensions: [format]
+                  }]
+                })
+                if (filePath) {
+                  await invoke('save_share_image', {
+                    imagePath: filePath,
+                    imageData: dataUrl.split(',')[1],
+                    format: format
+                  })
+                  showNotification(t.share.save_success)
+                }
+              } catch (err) {
+                addLog(`导出分享图片失败: ${err}`)
+                showNotification(t.share.save_failed)
+              }
+            }}
+          />
+        )}
 
         <AddGameModal
           theme={theme}

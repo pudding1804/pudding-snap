@@ -192,6 +192,27 @@ export const translations = {
     },
     logs: {
       title: '日志'
+    },
+    share: {
+      title: '分享截图',
+      style: '样式',
+      format: '格式',
+      note: '附注',
+      note_placeholder: '添加附注...',
+      username: '用户名',
+      edit: '修改',
+      set_username: '设置用户名',
+      username_hint: '请输入您的用户名（最多15个字符）',
+      username_placeholder: '用户名',
+      cancel: '取消',
+      confirm: '确定',
+      export: '导出图片',
+      exporting: '导出中...',
+      copy_clipboard: '复制到剪贴板',
+      copy_success: '已复制到剪贴板',
+      copy_failed: '复制失败',
+      save_success: '图片已保存',
+      save_failed: '保存失败'
     }
   },
   en: {
@@ -387,6 +408,27 @@ export const translations = {
     },
     logs: {
       title: 'Logs'
+    },
+    share: {
+      title: 'Share Screenshot',
+      style: 'Style',
+      format: 'Format',
+      note: 'Note',
+      note_placeholder: 'Add a note...',
+      username: 'Username',
+      edit: 'Edit',
+      set_username: 'Set Username',
+      username_hint: 'Please enter your username (max 15 characters)',
+      username_placeholder: 'Username',
+      cancel: 'Cancel',
+      confirm: 'Confirm',
+      export: 'Export Image',
+      exporting: 'Exporting...',
+      copy_clipboard: 'Copy to Clipboard',
+      copy_success: 'Copied to clipboard',
+      copy_failed: 'Copy failed',
+      save_success: 'Image saved',
+      save_failed: 'Save failed'
     }
   },
   ja: {
@@ -582,6 +624,27 @@ export const translations = {
     },
     logs: {
       title: 'ログ'
+    },
+    share: {
+      title: 'スクリーンショットを共有',
+      style: 'スタイル',
+      format: 'フォーマット',
+      note: 'メモ',
+      note_placeholder: 'メモを追加...',
+      username: 'ユーザー名',
+      edit: '編集',
+      set_username: 'ユーザー名を設定',
+      username_hint: 'ユーザー名を入力してください（最大15文字）',
+      username_placeholder: 'ユーザー名',
+      cancel: 'キャンセル',
+      confirm: '確認',
+      export: '画像をエクスポート',
+      exporting: 'エクスポート中...',
+      copy_clipboard: 'クリップボードにコピー',
+      copy_success: 'クリップボードにコピーしました',
+      copy_failed: 'コピーに失敗しました',
+      save_success: '画像を保存しました',
+      save_failed: '保存に失敗しました'
     }
   }
 };

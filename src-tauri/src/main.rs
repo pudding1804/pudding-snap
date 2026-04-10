@@ -964,6 +964,28 @@ struct FileMetadata {
 }
 
 #[tauri::command]
+fn save_share_image(image_path: String, image_data: String, format: String) -> Result<(), String> {
+    use base64::{Engine as _, engine::general_purpose};
+    
+    let decoded = general_purpose::STANDARD
+        .decode(&image_data)
+        .map_err(|e| format!("Base64解码失败: {}", e))?;
+    
+    let path = std::path::Path::new(&image_path);
+    
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+    
+    std::fs::write(path, decoded)
+        .map_err(|e| format!("写入文件失败: {}", e))?;
+    
+    println!("[分享] 图片已保存: {}", image_path);
+    Ok(())
+}
+
+#[tauri::command]
 fn get_file_metadata(path: String) -> Result<FileMetadata, String> {
     let metadata = std::fs::metadata(&path)
         .map_err(|e| format!("无法获取文件信息: {}", e))?;
@@ -1480,7 +1502,8 @@ fn main() {
             get_game_screenshot_count,
             import_screenshots,
             get_all_games_with_empty,
-            get_file_metadata
+            get_file_metadata,
+            save_share_image
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -30,6 +30,7 @@ export function ScreenshotModal({
   onSaveNote,
   onOpenFolder,
   onDelete,
+  onShare,
 }) {
   if (!selectedScreenshot) return null
 
@@ -271,6 +272,28 @@ export function ScreenshotModal({
               title={t.detail.open_folder}
             >
               📁
+            </button>
+            <button 
+              style={{ 
+                width: 28,
+                height: 28,
+                background: theme.primary, 
+                border: 'none', 
+                borderRadius: 6, 
+                color: '#fff', 
+                cursor: 'pointer', 
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'opacity 0.15s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              onClick={() => onShare(selectedScreenshot)}
+              title={t.share?.title || '分享'}
+            >
+              ⬆
             </button>
             <button 
               style={{ 
