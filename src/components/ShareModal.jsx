@@ -50,22 +50,25 @@ function ShareCard({
   const gameTitle = gameInfo?.display_title || gameInfo?.game_title || '未知游戏'
   const displayUsername = username || 'Player'
   const dateTime = formatDateTime(screenshot.timestamp)
+  const imageSrc = getImageSrc(screenshot.file_path)
+
+  const baseStyle = {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'relative',
+    boxSizing: 'border-box',
+    overflow: 'hidden'
+  }
 
   const renderMinimalist = () => (
-    <div 
-      style={{ 
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT,
-        background: '#ffffff',
-        padding: 24,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        boxSizing: 'border-box'
-      }} 
-      ref={cardRef}
-    >
+    <div style={{
+      ...baseStyle,
+      background: '#ffffff',
+      padding: 24,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }} ref={cardRef}>
       <div style={{ 
         flex: 1,
         borderRadius: 8,
@@ -77,26 +80,25 @@ function ShareCard({
         marginBottom: 20
       }}>
         <img 
-          src={getImageSrc(screenshot.file_path)} 
+          src={imageSrc} 
           alt="截图" 
           style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
         />
       </div>
-      <div style={{ textAlign: 'center' }}>
+      <div style={{ textAlign: 'center', flexShrink: 0 }}>
         <div style={{ 
           fontSize: 28, 
           fontWeight: 300, 
           color: '#1a1a1a', 
           marginBottom: 8,
-          letterSpacing: '-0.5px'
+          letterSpacing: '-0.5px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
         }}>
           {gameTitle}
         </div>
-        <div style={{ 
-          fontSize: 14, 
-          color: '#888', 
-          marginBottom: 12
-        }}>
+        <div style={{ fontSize: 14, color: '#888', marginBottom: 12 }}>
           {dateTime}
         </div>
         {note && (
@@ -105,35 +107,43 @@ function ShareCard({
             color: '#555', 
             lineHeight: 1.6,
             fontStyle: 'italic',
-            marginBottom: 12
+            marginBottom: 12,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical'
           }}>
             "{note}"
           </div>
         )}
-        <div style={{ fontSize: 12, color: '#aaa' }}>
-          by {displayUsername} · Pudding Snapper
+        <div style={{ fontSize: 12, color: '#999' }}>
+          by {displayUsername}
         </div>
+      </div>
+      <div style={{
+        position: 'absolute',
+        bottom: 10,
+        right: 14,
+        fontSize: 10,
+        color: 'rgba(0,0,0,0.2)',
+        fontWeight: 500,
+        letterSpacing: '0.3px'
+      }}>
+        PuddingSnap
       </div>
     </div>
   )
 
   const renderCyberpunk = () => (
-    <div 
-      style={{ 
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT,
-        background: 'linear-gradient(180deg, #0a0a0a 0%, #1a0a2e 100%)',
-        padding: 20,
-        fontFamily: '"Courier New", monospace',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        boxSizing: 'border-box',
-        border: '2px solid #ff00ff',
-        boxShadow: '0 0 30px rgba(255,0,255,0.3)'
-      }} 
-      ref={cardRef}
-    >
+    <div style={{
+      ...baseStyle,
+      background: 'linear-gradient(180deg, #0a0a0a 0%, #1a0a2e 100%)',
+      padding: 20,
+      fontFamily: '"Courier New", monospace',
+      border: '2px solid #ff00ff',
+      boxShadow: '0 0 30px rgba(255,0,255,0.3)'
+    }} ref={cardRef}>
       <div style={{
         position: 'absolute',
         top: 0,
@@ -154,7 +164,7 @@ function ShareCard({
         marginBottom: 16
       }}>
         <img 
-          src={getImageSrc(screenshot.file_path)} 
+          src={imageSrc} 
           alt="截图" 
           style={{ 
             maxWidth: '100%', 
@@ -164,7 +174,7 @@ function ShareCard({
           }} 
         />
       </div>
-      <div style={{ textAlign: 'center' }}>
+      <div style={{ textAlign: 'center', flexShrink: 0 }}>
         <div style={{ 
           fontSize: 22, 
           fontWeight: 'bold', 
@@ -172,7 +182,10 @@ function ShareCard({
           marginBottom: 6,
           textShadow: '0 0 10px rgba(0,255,255,0.8)',
           textTransform: 'uppercase',
-          letterSpacing: '2px'
+          letterSpacing: '2px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
         }}>
           {gameTitle}
         </div>
@@ -189,62 +202,74 @@ function ShareCard({
             fontSize: 14, 
             color: '#ddd', 
             lineHeight: 1.5,
-            marginBottom: 10
+            marginBottom: 10,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical'
           }}>
             "{note}"
           </div>
         )}
         <div style={{ 
-          fontSize: 11, 
+          fontSize: 12, 
           color: '#ff00ff',
-          letterSpacing: '2px',
-          textTransform: 'uppercase'
+          letterSpacing: '1px'
         }}>
-          @{displayUsername} // PUDDING_SNAPPER
+          @{displayUsername}
         </div>
+      </div>
+      <div style={{
+        position: 'absolute',
+        bottom: 8,
+        right: 12,
+        fontSize: 9,
+        color: 'rgba(0,255,255,0.25)',
+        letterSpacing: '1px',
+        textTransform: 'uppercase'
+      }}>
+        PuddingSnap
       </div>
     </div>
   )
 
   const renderPolaroid = () => (
-    <div 
-      style={{ 
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT,
-        background: '#f5f5f0',
-        padding: 20,
-        fontFamily: '"Georgia", serif',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        boxSizing: 'border-box',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.15)'
-      }} 
-      ref={cardRef}
-    >
+    <div style={{
+      ...baseStyle,
+      background: '#f5f5f0',
+      padding: 20,
+      fontFamily: '"Georgia", serif',
+      boxShadow: '0 10px 40px rgba(0,0,0,0.15)'
+    }} ref={cardRef}>
       <div style={{ 
-        flex: 1,
+        width: '100%',
         background: '#fff',
         padding: 16,
         boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 16
+        marginBottom: 16,
+        flex: 1,
+        overflow: 'hidden'
       }}>
         <img 
-          src={getImageSrc(screenshot.file_path)} 
+          src={imageSrc} 
           alt="截图" 
           style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
         />
       </div>
-      <div style={{ textAlign: 'center' }}>
+      <div style={{ textAlign: 'center', flexShrink: 0 }}>
         <div style={{ 
           fontSize: 22, 
           fontWeight: 'normal', 
           color: '#333', 
           marginBottom: 6,
-          fontFamily: '"Georgia", serif'
+          fontFamily: '"Georgia", serif',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
         }}>
           {gameTitle}
         </div>
@@ -262,52 +287,54 @@ function ShareCard({
             color: '#555', 
             lineHeight: 1.5,
             fontStyle: 'italic',
-            marginBottom: 10
+            marginBottom: 10,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical'
           }}>
             "{note}"
           </div>
         )}
-        <div style={{ fontSize: 12, color: '#888' }}>
-          by {displayUsername} · Pudding Snapper
+        <div style={{ fontSize: 12, color: '#777' }}>
+          by {displayUsername}
         </div>
+      </div>
+      <div style={{
+        position: 'absolute',
+        bottom: 8,
+        right: 12,
+        fontSize: 9,
+        color: 'rgba(0,0,0,0.18)',
+        fontWeight: 500
+      }}>
+        PuddingSnap
       </div>
     </div>
   )
 
   const renderVaporwave = () => (
-    <div 
-      style={{ 
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT,
-        background: 'linear-gradient(180deg, #ff71ce 0%, #01cdfe 50%, #05ffa1 100%)',
-        padding: 20,
-        fontFamily: '"Courier New", monospace',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        boxSizing: 'border-box'
-      }} 
-      ref={cardRef}
-    >
-      <div style={{
-        position: 'absolute',
-        top: 10,
-        left: 14,
-        fontSize: 20
-      }}>✧</div>
+    <div style={{
+      ...baseStyle,
+      background: 'linear-gradient(180deg, #ff71ce 0%, #01cdfe 50%, #05ffa1 100%)',
+      padding: 20,
+      fontFamily: '"Courier New", monospace'
+    }} ref={cardRef}>
       <div style={{ 
         flex: 1,
         background: 'rgba(0,0,0,0.85)',
-        padding: 12,
         borderRadius: 8,
+        overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 16
       }}>
         <div style={{ 
-          width: '100%',
-          height: '100%',
+          width: 'calc(100% - 24px)',
+          height: 'calc(100% - 24px)',
+          margin: 12,
           overflow: 'hidden',
           borderRadius: 4,
           border: '3px solid #ff71ce',
@@ -317,7 +344,7 @@ function ShareCard({
           justifyContent: 'center'
         }}>
           <img 
-            src={getImageSrc(screenshot.file_path)} 
+            src={imageSrc} 
             alt="截图" 
             style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
           />
@@ -327,7 +354,8 @@ function ShareCard({
         background: 'rgba(0,0,0,0.75)',
         borderRadius: 8,
         padding: 16,
-        textAlign: 'center'
+        textAlign: 'center',
+        flexShrink: 0
       }}>
         <div style={{ 
           fontSize: 20, 
@@ -336,7 +364,10 @@ function ShareCard({
           marginBottom: 6,
           textShadow: '2px 2px 0 #ff71ce',
           textTransform: 'uppercase',
-          letterSpacing: '2px'
+          letterSpacing: '2px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
         }}>
           {gameTitle}
         </div>
@@ -353,38 +384,42 @@ function ShareCard({
             fontSize: 14, 
             color: '#fff', 
             lineHeight: 1.5,
-            marginBottom: 10
+            marginBottom: 10,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical'
           }}>
             "{note}"
           </div>
         )}
         <div style={{ 
           fontSize: 12, 
-          color: '#01cdfe',
-          fontWeight: 'bold',
-          letterSpacing: '1px'
+          color: '#01cdfe'
         }}>
-          @{displayUsername} ★ Pudding Snapper
+          @{displayUsername}
         </div>
+      </div>
+      <div style={{
+        position: 'absolute',
+        bottom: 8,
+        right: 12,
+        fontSize: 9,
+        color: 'rgba(255,255,255,0.2)',
+        letterSpacing: '0.5px'
+      }}>
+        PuddingSnap
       </div>
     </div>
   )
 
   const renderEditorial = () => (
-    <div 
-      style={{ 
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT,
-        background: '#1a1a1a',
-        fontFamily: '"Georgia", serif',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        boxSizing: 'border-box',
-        overflow: 'hidden'
-      }} 
-      ref={cardRef}
-    >
+    <div style={{
+      ...baseStyle,
+      background: '#1a1a1a',
+      fontFamily: '"Georgia", serif'
+    }} ref={cardRef}>
       <div style={{ 
         flex: 1,
         position: 'relative',
@@ -395,7 +430,7 @@ function ShareCard({
         background: '#111'
       }}>
         <img 
-          src={getImageSrc(screenshot.file_path)} 
+          src={imageSrc} 
           alt="截图" 
           style={{ 
             maxWidth: '100%', 
@@ -407,13 +442,17 @@ function ShareCard({
       <div style={{ 
         background: 'linear-gradient(180deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98))',
         padding: 24,
-        textAlign: 'center'
+        textAlign: 'center',
+        flexShrink: 0
       }}>
         <div style={{ 
           fontSize: 24, 
           fontWeight: 'bold', 
           color: '#fff', 
-          marginBottom: 8
+          marginBottom: 8,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
         }}>
           {gameTitle}
         </div>
@@ -432,14 +471,29 @@ function ShareCard({
             color: 'rgba(255,255,255,0.7)', 
             lineHeight: 1.6,
             fontStyle: 'italic',
-            marginBottom: 12
+            marginBottom: 12,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical'
           }}>
             "{note}"
           </div>
         )}
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-          by {displayUsername} · Pudding Snapper
+          by {displayUsername}
         </div>
+      </div>
+      <div style={{
+        position: 'absolute',
+        bottom: 8,
+        right: 12,
+        fontSize: 9,
+        color: 'rgba(255,255,255,0.18)',
+        letterSpacing: '0.3px'
+      }}>
+        PuddingSnap
       </div>
     </div>
   )
@@ -702,7 +756,7 @@ export function ShareModal({
                   style={{
                     fontSize: 10,
                     color: theme.primary,
-                    background: 'transparent',
+                    background: 'none',
                     border: 'none',
                     cursor: 'pointer',
                     padding: 0
@@ -713,96 +767,147 @@ export function ShareModal({
                 </button>
               </div>
               <div style={{ 
-                fontSize: 12, 
+                fontSize: 13, 
                 color: theme.text,
                 padding: '6px 8px',
                 background: theme.accent,
                 borderRadius: 4,
                 border: `1px solid ${theme.border}`
               }}>
-                {username || 'Player'}
+                @{username || 'Player'}
               </div>
             </div>
 
-            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <button
-                style={{
-                  ...styles.btnPrimary,
-                  padding: '8px 12px',
-                  opacity: isExporting ? 0.6 : 1,
-                  pointerEvents: isExporting ? 'none' : 'auto'
-                }}
-                onClick={handleExport}
-                disabled={isExporting}
-              >
-                {isExporting ? (t.share?.exporting || '导出中...') : (t.share?.export || '导出图片')}
-              </button>
-              <button
-                style={{
-                  ...styles.btn,
-                  padding: '8px 12px',
-                  opacity: isExporting ? 0.6 : 1,
-                  pointerEvents: isExporting ? 'none' : 'auto'
-                }}
-                onClick={handleCopyToClipboard}
-                disabled={isExporting}
-              >
-                {t.share?.copy_clipboard || '复制到剪贴板'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+            <div style={{ flex: 1 }} />
 
-      {showUsernameInput && (
-        <div style={styles.modal} onClick={e => e.stopPropagation()}>
-          <div style={{ 
-            ...styles.modalContent, 
-            width: 320,
-            padding: 20
-          }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ ...styles.modalTitle, marginBottom: 12 }}>
-              {t.share?.set_username || '设置用户名'}
-            </h3>
-            <p style={{ 
-              fontSize: 12, 
-              color: theme.textMuted, 
-              marginBottom: 12 
-            }}>
-              {t.share?.username_hint || '请输入您的用户名（最多15个字符）'}
-            </p>
-            <input
-              type="text"
-              value={tempUsername}
-              onChange={e => setTempUsername(e.target.value.slice(0, 15))}
-              maxLength={15}
-              placeholder={t.share?.username_placeholder || '用户名'}
-              style={{ 
-                ...styles.input,
-                marginBottom: 12
+            <button
+              style={{
+                width: '100%',
+                padding: '10px 16px',
+                fontSize: 13,
+                borderRadius: 6,
+                border: 'none',
+                background: theme.primary,
+                color: '#fff',
+                cursor: 'pointer',
+                fontWeight: 500,
+                opacity: isExporting ? 0.6 : 1
               }}
-              autoFocus
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleSaveUsername()
+              onClick={handleExport}
+              disabled={isExporting}
+            >
+              {isExporting ? (t.share?.exporting || '导出中...') : (t.share?.export || '导出图片')}
+            </button>
+
+            <button
+              style={{
+                width: '100%',
+                padding: '10px 16px',
+                fontSize: 13,
+                borderRadius: 6,
+                border: `1px solid ${theme.border}`,
+                background: theme.accent,
+                color: theme.text,
+                cursor: 'pointer',
+                fontWeight: 500,
+                opacity: isExporting ? 0.6 : 1
               }}
-            />
-            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-              {username && (
-                <button style={styles.btn} onClick={() => setShowUsernameInput(false)}>
-                  {t.share?.cancel || '取消'}
-                </button>
-              )}
-              <button 
-                style={styles.btnPrimary} 
-                onClick={handleSaveUsername}
-                disabled={!tempUsername.trim()}
-              >
-                {t.share?.confirm || '确定'}
-              </button>
-            </div>
+              onClick={handleCopyToClipboard}
+              disabled={isExporting}
+            >
+              {t.share?.copy || '复制到剪贴板'}
+            </button>
           </div>
         </div>
-      )}
+
+        {showUsernameInput && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10
+          }}>
+            <div style={{
+              background: theme.card,
+              padding: 24,
+              borderRadius: 12,
+              width: 300,
+              boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+            }}>
+              <h4 style={{ margin: '0 0 12px 0', color: theme.text, fontSize: 16 }}>
+                {t.share?.set_username || '设置用户名'}
+              </h4>
+              <p style={{ margin: '0 0 16px 0', color: theme.textMuted, fontSize: 13 }}>
+                {t.share?.username_desc || '用户名将显示在分享图片上'}
+              </p>
+              <input
+                type="text"
+                value={tempUsername}
+                onChange={e => setTempUsername(e.target.value.slice(0, 15))}
+                placeholder={t.share?.username_placeholder || '输入用户名'}
+                maxLength={15}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  fontSize: 14,
+                  borderRadius: 6,
+                  border: `1px solid ${theme.border}`,
+                  background: theme.accent,
+                  color: theme.text,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  marginBottom: 16
+                }}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    fontSize: 13,
+                    borderRadius: 6,
+                    border: `1px solid ${theme.border}`,
+                    background: theme.accent,
+                    color: theme.text,
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    if (username) {
+                      setShowUsernameInput(false)
+                    }
+                  }}
+                >
+                  {t.common?.cancel || '取消'}
+                </button>
+                <button
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    fontSize: 13,
+                    borderRadius: 6,
+                    border: 'none',
+                    background: theme.primary,
+                    color: '#fff',
+                    cursor: 'pointer',
+                    opacity: tempUsername.trim() ? 1 : 0.5
+                  }}
+                  onClick={handleSaveUsername}
+                  disabled={!tempUsername.trim()}
+                >
+                  {t.common?.confirm || '确定'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

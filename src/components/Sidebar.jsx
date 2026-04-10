@@ -22,7 +22,7 @@ export function Sidebar({
         opacity: sidebarCollapsed ? 0 : 1,
         transition: 'opacity 0.2s ease',
         whiteSpace: 'nowrap'
-      }}>截图管理器</div>
+      }}>PuddingSnap</div>
       
       <div 
         style={{ 

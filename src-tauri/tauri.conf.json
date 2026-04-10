@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2.0.0",
-  "productName": "screenshot-manager",
+  "productName": "PuddingSnap",
   "version": "0.1.0",
-  "identifier": "com.screenshot-manager.app",
+  "identifier": "com.puddingsnap.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -13,14 +13,15 @@
     "windows": [
       {
         "label": "main",
-        "title": "Screenshot Manager",
+        "title": "PuddingSnap",
         "width": 1200,
         "height": 800,
         "minWidth": 800,
         "minHeight": 600,
         "visible": false,
         "center": true,
-        "dragDropEnabled": true
+        "dragDropEnabled": true,
+        "decorations": false
       }
     ],
     "security": {

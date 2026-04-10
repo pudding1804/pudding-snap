@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 
 function getImageSrc(path) {
@@ -32,6 +33,42 @@ export function ScreenshotModal({
   onDelete,
   onShare,
 }) {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
+        return
+      }
+      
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault()
+          if (selectedScreenshotIndex > 0) {
+            onNavigate('prev')
+          }
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          if (selectedScreenshotIndex < screenshots.length - 1) {
+            onNavigate('next')
+          }
+          break
+        case 'Escape':
+          e.preventDefault()
+          onClose()
+          break
+        case 'Delete':
+          e.preventDefault()
+          if (selectedScreenshot) {
+            onDelete(selectedScreenshot.id)
+          }
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedScreenshotIndex, screenshots.length, selectedScreenshot, onNavigate, onClose, onDelete])
+
   if (!selectedScreenshot) return null
 
   return (

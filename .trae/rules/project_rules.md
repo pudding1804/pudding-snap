@@ -1,3 +1,7 @@
+---
+alwaysApply: false
+description: 
+---
 # 极简游戏截图管理器 - 项目规则
 
 ## 项目概述

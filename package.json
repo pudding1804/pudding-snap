@@ -1,7 +1,7 @@
 {
-  "name": "screenshot-manager",
+  "name": "puddingsnap",
   "version": "0.1.0",
-  "description": "Minimal game screenshot manager",
+  "description": "PuddingSnap - Minimal game screenshot manager",
   "type": "module",
   "scripts": {
     "dev": "vite",

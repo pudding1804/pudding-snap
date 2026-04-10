@@ -17,7 +17,8 @@ import {
   AddGameModal,
   ImportModal,
   ErrorBoundary,
-  ShareModal 
+  ShareModal,
+  TitleBar 
 } from './components'
 
 function getImageSrc(path) {
@@ -89,6 +90,9 @@ function App() {
   const [migrationStats, setMigrationStats] = useState(null)
   
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showScreenshotDeleteConfirm, setShowScreenshotDeleteConfirm] = useState(false)
+  const [screenshotToDelete, setScreenshotToDelete] = useState(null)
+  const [multiDeleteCount, setMultiDeleteCount] = useState(0)
   
   const [captureMouse, setCaptureMouse] = useState(false)
   const [autostart, setAutostart] = useState(false)
@@ -143,9 +147,16 @@ function App() {
     return saved || ''
   })
   
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [closeAction, setCloseAction] = useState(() => {
+    const saved = localStorage.getItem('closeAction')
+    return saved || ''
+  })
+  
   const refreshDebounceRef = useRef(null)
   const isRefreshingRef = useRef(false)
   const selectedGameRef = useRef(null)
+  const sortOrderRef = useRef(sortOrder)
   const gridRef = useRef(null)
 
   const theme = themes[currentTheme].colors
@@ -162,6 +173,11 @@ function App() {
     selectedGameRef.current = selectedGame
     console.log(`[DEBUG] selectedGameRef 更新: ${selectedGame?.game_id || 'null'}`)
   }, [selectedGame])
+
+  useEffect(() => {
+    sortOrderRef.current = sortOrder
+    console.log(`[DEBUG] sortOrderRef 更新: ${sortOrder}`)
+  }, [sortOrder])
 
   const showScreenshotNotification = useCallback(() => {
     setScreenshotNotification(true)
@@ -211,10 +227,13 @@ function App() {
       addLog(`加载截图: 页码=${page}, 游戏ID=${gameId || '全部'}`)
       const result = await invoke('get_screenshots_with_pagination', {
         gameId: gameId,
-        sortOrder: sortOrder,
+        sortOrder: sortOrderRef.current,
         page: page,
         pageSize: pageSize
       })
+      
+      console.log(`[DEBUG] loadScreenshotsWithPagination 返回 ${result.screenshots.length} 条截图`)
+      console.log(`[DEBUG] 截图ID列表:`, result.screenshots.map(s => s.id))
       
       setScreenshots(result.screenshots)
       setCurrentPage(result.page)
@@ -224,7 +243,7 @@ function App() {
       addLog(`截图加载失败: ${e}`)
       setError('加载截图失败: ' + String(e))
     }
-  }, [addLog, sortOrder, pageSize])
+  }, [addLog, pageSize])
 
   const loadStoragePath = useCallback(async () => {
     try {
@@ -289,10 +308,16 @@ function App() {
 
   const loadAutostart = useCallback(async () => {
     try {
-      const { isEnabled } = await import('@tauri-apps/plugin-autostart')
+      const { isEnabled, enable } = await import('@tauri-apps/plugin-autostart')
       const enabled = await isEnabled()
-      setAutostart(enabled)
-      addLog(`开机自启动状态: ${enabled}`)
+      if (!enabled) {
+        await enable()
+        setAutostart(true)
+        addLog('开机自启动已默认启用')
+      } else {
+        setAutostart(true)
+        addLog(`开机自启动状态: ${enabled}`)
+      }
     } catch (e) {
       addLog(`获取开机自启动设置失败: ${e}`)
     }
@@ -355,8 +380,9 @@ function App() {
 
   const handleSortChange = useCallback(async (newOrder) => {
     setSortOrder(newOrder)
-    await loadScreenshotsWithPagination(1, selectedGame?.game_id || null)
-  }, [loadScreenshotsWithPagination, selectedGame])
+    sortOrderRef.current = newOrder
+    await loadScreenshotsWithPagination(1, selectedGameRef.current?.game_id || null)
+  }, [loadScreenshotsWithPagination])
 
   const handleGameSortChange = useCallback(async (newOrder) => {
     setGameSortOrder(newOrder)
@@ -409,57 +435,58 @@ function App() {
     }
   }, [addLog, t])
 
-  const deleteScreenshot = useCallback(async (id) => {
-    if (!confirm(t.detail.confirm_delete)) return
+  const doDeleteScreenshot = useCallback(async (id) => {
+    const currentGameId = selectedGameRef.current?.game_id
+    
     try {
       await invoke('delete_screenshot', { id })
       addLog(`截图删除成功: ID=${id}`)
       showNotification(t.notifications.delete_success)
       
-      const newScreenshots = screenshots.filter(ss => ss.id !== id)
+      closeModal()
       
-      if (newScreenshots.length === 0) {
-        closeModal()
-        if (selectedGame) {
-          setDeleteConfirmMode('last_screenshot')
-          setShowDeleteGameConfirm(true)
-          setDeleteGameCallback(() => async (deleteGame) => {
-            if (deleteGame) {
-              await invoke('delete_game', { gameId: selectedGame.game_id })
-              addLog(`已删除游戏: ${selectedGame.game_id}`)
-              showNotification('游戏已删除')
-            }
-            setShowDeleteGameConfirm(false)
-            setDeleteGameCallback(null)
-            setIsMultiSelectMode(false)
-            setSelectedScreenshots([])
-            setSelectedGame(null)
-            setCurrentView('games')
-            await loadGames()
-          })
-        } else {
-          await loadScreenshotsWithPagination(currentPage, null)
-        }
-      } else {
-        let newIndex = selectedScreenshotIndex
-        if (selectedScreenshotIndex >= newScreenshots.length) {
-          newIndex = newScreenshots.length - 1
-        }
-        
-        setScreenshots(newScreenshots)
-        setSelectedScreenshot(newScreenshots[newIndex])
-        setSelectedScreenshotIndex(newIndex)
-        setNoteText(newScreenshots[newIndex].note || '')
-        
-        if (selectedGame) {
-          await loadGames()
-        }
+      if (selectedGameRef.current) {
+        await loadGames()
       }
+      await loadScreenshotsWithPagination(1, currentGameId || null)
     } catch (e) {
       addLog(`截图删除失败: ${e}`)
       setError('删除截图失败: ' + String(e))
     }
-  }, [addLog, screenshots, selectedScreenshotIndex, selectedGame, closeModal, loadGames, loadScreenshotsWithPagination, currentPage, t, showNotification])
+  }, [addLog, closeModal, loadGames, loadScreenshotsWithPagination, t, showNotification])
+
+  const deleteScreenshot = useCallback((id) => {
+    setScreenshotToDelete(id)
+    setMultiDeleteCount(0)
+    setShowScreenshotDeleteConfirm(true)
+  }, [])
+
+  const doDeleteSelectedScreenshots = useCallback(async () => {
+    const deleteCount = selectedScreenshots.length
+    const currentGameId = selectedGameRef.current?.game_id
+    
+    try {
+      await invoke('delete_screenshots', { ids: selectedScreenshots })
+      addLog(`批量删除成功: ${deleteCount} 张`)
+      
+      setIsMultiSelectMode(false)
+      setSelectedScreenshots([])
+      showNotification('删除成功', `已删除 ${deleteCount} 张截图`)
+      
+      await loadGames()
+      await loadScreenshotsWithPagination(1, currentGameId || null)
+    } catch (e) {
+      addLog(`批量删除失败: ${e}`)
+      setError('批量删除失败: ' + String(e))
+    }
+  }, [selectedScreenshots, addLog, loadScreenshotsWithPagination, loadGames, showNotification])
+
+  const deleteSelectedScreenshots = useCallback(() => {
+    if (selectedScreenshots.length === 0) return
+    setScreenshotToDelete(null)
+    setMultiDeleteCount(selectedScreenshots.length)
+    setShowScreenshotDeleteConfirm(true)
+  }, [selectedScreenshots])
 
   const openInExplorer = useCallback(async (filePath) => {
     try {
@@ -470,55 +497,6 @@ function App() {
       setError('打开文件夹失败: ' + String(e))
     }
   }, [addLog])
-
-  const deleteSelectedScreenshots = useCallback(async () => {
-    if (selectedScreenshots.length === 0) return
-    
-    if (!confirm(`确定要删除 ${selectedScreenshots.length} 张截图吗？`)) return
-    
-    const deleteCount = selectedScreenshots.length
-    const currentGameId = selectedGame?.game_id
-    
-    const willBeEmpty = currentGameId && screenshots.length === deleteCount
-    
-    try {
-      await invoke('delete_screenshots', { ids: selectedScreenshots })
-      addLog(`批量删除成功: ${deleteCount} 张`)
-      
-      if (willBeEmpty && currentGameId) {
-        setDeleteConfirmMode('last_screenshot')
-        setShowDeleteGameConfirm(true)
-        setDeleteGameCallback(() => async (deleteGame) => {
-          if (deleteGame) {
-            await invoke('delete_game', { gameId: currentGameId })
-            addLog(`已删除游戏: ${currentGameId}`)
-            showNotification('游戏已删除')
-          }
-          setShowDeleteGameConfirm(false)
-          setDeleteGameCallback(null)
-          setIsMultiSelectMode(false)
-          setSelectedScreenshots([])
-          setSelectedGame(null)
-          if (deleteGame) {
-            setCurrentView('games')
-            await loadGames()
-          } else {
-            await loadGames()
-            await loadScreenshotsWithPagination(1, currentGameId)
-          }
-        })
-      } else {
-        setIsMultiSelectMode(false)
-        setSelectedScreenshots([])
-        showNotification('删除成功', `已删除 ${deleteCount} 张截图`)
-        await loadGames()
-        await loadScreenshotsWithPagination(currentPage, currentGameId || null)
-      }
-    } catch (e) {
-      addLog(`批量删除失败: ${e}`)
-      setError('批量删除失败: ' + String(e))
-    }
-  }, [selectedScreenshots, selectedGame, screenshots, addLog, loadScreenshotsWithPagination, currentPage, loadGames, showNotification])
 
   const toggleSelectScreenshot = useCallback((id) => {
     setSelectedScreenshots(prev => {
@@ -616,10 +594,10 @@ function App() {
     const { scrollTop, scrollHeight, clientHeight } = e.target
     if (scrollHeight - scrollTop - clientHeight < 100 && !isLoadingMore && currentPage < totalPages) {
       setIsLoadingMore(true)
-      loadScreenshotsWithPagination(currentPage + 1, selectedGame?.game_id || null)
+      loadScreenshotsWithPagination(currentPage + 1, selectedGameRef.current?.game_id || null)
         .finally(() => setIsLoadingMore(false))
     }
-  }, [isLoadingMore, currentPage, totalPages, loadScreenshotsWithPagination, selectedGame])
+  }, [isLoadingMore, currentPage, totalPages, loadScreenshotsWithPagination])
 
   const handleAddGame = useCallback(async (action, data) => {
     if (action === 'search') {
@@ -659,6 +637,8 @@ function App() {
   const handleImport = useCallback(async () => {
     if (importFiles.length === 0 || !selectedGame) return
     
+    const currentGameId = selectedGame.game_id
+    
     setIsImporting(true)
     setImportProgress({ current: 0, total: importFiles.length, current_file: '', status: '准备中' })
     setImportResult(null)
@@ -681,7 +661,7 @@ function App() {
       setImportFiles([])
       setImportProgress(null)
       setImportResult(result)
-      await loadScreenshotsWithPagination(1, selectedGame.game_id)
+      await loadScreenshotsWithPagination(1, currentGameId)
     } catch (e) {
       addLog(`导入失败: ${e}`)
       showNotification(t.import.import_failed.replace('{error}', e))
@@ -797,27 +777,88 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    const setupWindowListeners = async () => {
+      const { listen } = await import('@tauri-apps/api/event')
+      
+      const unlistenClose = await listen('close-requested', () => {
+        addLog('收到关闭请求')
+        if (closeAction) {
+          if (closeAction === 'minimize') {
+            invoke('minimize_to_tray')
+          } else {
+            invoke('close_app')
+          }
+        } else {
+          setShowCloseConfirm(true)
+        }
+      })
+      
+      const unlistenFocused = await listen('window-focused', () => {
+        addLog('窗口获得焦点，刷新数据')
+        loadGames()
+        if (selectedGameRef.current) {
+          loadScreenshotsWithPagination(1, selectedGameRef.current.game_id)
+        } else {
+          loadScreenshotsWithPagination(1, null)
+        }
+      })
+      
+      const unlistenShown = await listen('window-shown', () => {
+        addLog('窗口显示，刷新数据')
+        loadGames()
+        if (selectedGameRef.current) {
+          loadScreenshotsWithPagination(1, selectedGameRef.current.game_id)
+        } else {
+          loadScreenshotsWithPagination(1, null)
+        }
+      })
+      
+      return () => {
+        unlistenClose()
+        unlistenFocused()
+        unlistenShown()
+      }
+    }
+    
+    const cleanup = setupWindowListeners()
+    return () => {
+      cleanup.then(fn => fn())
+    }
+  }, [closeAction, addLog, loadGames, loadScreenshotsWithPagination])
+
   return (
     <ErrorBoundary>
       <style>{modalKeyframes}</style>
       
-      <div style={styles.container}>
-        <Sidebar
-          theme={theme}
-          styles={styles}
-          currentView={currentView}
-          sidebarCollapsed={sidebarCollapsed}
-          logs={logs}
-          t={t}
-          onNavigate={(view) => {
-            if (view === 'time') switchToTimeView()
-            else if (view === 'games') switchToGames()
-            else setCurrentView(view)
-          }}
-          onToggleSidebar={toggleSidebar}
+      <div style={{ 
+        ...styles.container, 
+        flexDirection: 'column',
+        paddingTop: 0
+      }}>
+        <TitleBar 
+          theme={theme} 
+          t={t} 
+          onCloseConfirm={() => setShowCloseConfirm(true)}
         />
+        
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          <Sidebar
+            theme={theme}
+            styles={styles}
+            currentView={currentView}
+            sidebarCollapsed={sidebarCollapsed}
+            logs={logs}
+            t={t}
+            onNavigate={(view) => {
+              if (view === 'time') switchToTimeView()
+              else if (view === 'games') switchToGames()
+              else setCurrentView(view)
+            }}
+            onToggleSidebar={toggleSidebar}
+          />
 
-        <main style={styles.main} ref={gridRef} onScroll={handleScroll}>
+          <main style={styles.main} ref={gridRef} onScroll={handleScroll}>
           {notification && (
             <div style={styles.notification}>
               {notification.title}: {notification.body}
@@ -993,6 +1034,7 @@ function App() {
             />
           )}
         </main>
+        </div>
 
         <ScreenshotModal
           theme={theme}
@@ -1245,7 +1287,7 @@ function App() {
                                 setSteamSearchResults([])
                                 setSelectedGame(updatedGame)
                                 await loadGames()
-                                await loadScreenshotsWithPagination(1, selectedGame.game_id)
+                                await loadScreenshotsWithPagination(1, updatedGame.game_id)
                               } catch (err) {
                                 addLog(`更新游戏信息失败: ${err}`)
                               }
@@ -1604,7 +1646,7 @@ function App() {
                         </linearGradient>
                       </defs>
                     </svg>
-                    <h2 style={{ color: currentTheme === 'night' ? '#fff' : '#333', margin: 0, fontSize: 24 }}>欢迎使用极简游戏截图管理器</h2>
+                    <h2 style={{ color: currentTheme === 'night' ? '#fff' : '#333', margin: 0, fontSize: 24 }}>欢迎使用 PuddingSnap</h2>
                   </div>
                   <p style={{ color: currentTheme === 'night' ? 'rgba(255,255,255,0.7)' : '#666', textAlign: 'center', marginBottom: 24 }}>
                     一个简单高效的截图管理工具，帮助你整理和浏览游戏截图
@@ -1750,6 +1792,195 @@ function App() {
                     }}
                   />
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showCloseConfirm && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000
+          }}>
+            <div style={{
+              background: theme.card,
+              padding: 24,
+              borderRadius: 12,
+              width: 360,
+              maxWidth: '90vw',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+            }}>
+              <h4 style={{ margin: '0 0 12px 0', color: theme.text, fontSize: 18, fontWeight: 600 }}>
+                {t.close_confirm?.title || '关闭确认'}
+              </h4>
+              <p style={{ margin: '0 0 20px 0', color: theme.textMuted, fontSize: 14, lineHeight: 1.5 }}>
+                {t.close_confirm?.message || '您想要关闭程序还是最小化到系统托盘？'}
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+                <input
+                  type="checkbox"
+                  id="rememberCloseAction"
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      localStorage.setItem('closeAction', 'ask')
+                    } else {
+                      localStorage.removeItem('closeAction')
+                    }
+                  }}
+                  style={{ width: 16, height: 16, cursor: 'pointer' }}
+                />
+                <label htmlFor="rememberCloseAction" style={{ 
+                  color: theme.textMuted,
+                  cursor: 'pointer',
+                  fontSize: 13
+                }}>
+                  {t.close_confirm?.remember || '记住我的选择'}
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    fontSize: 14,
+                    borderRadius: 8,
+                    border: `1px solid ${theme.border}`,
+                    background: theme.accent,
+                    color: theme.text,
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    transition: 'all 0.15s'
+                  }}
+                  onClick={() => {
+                    setShowCloseConfirm(false)
+                    invoke('minimize_to_tray')
+                  }}
+                >
+                  {t.close_confirm?.minimize || '最小化到托盘'}
+                </button>
+                <button
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    fontSize: 14,
+                    borderRadius: 8,
+                    border: 'none',
+                    background: theme.danger,
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    transition: 'all 0.15s'
+                  }}
+                  onClick={() => {
+                    setShowCloseConfirm(false)
+                    invoke('close_app')
+                  }}
+                >
+                  {t.close_confirm?.close || '关闭程序'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showScreenshotDeleteConfirm && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000
+          }}>
+            <div style={{
+              background: theme.card,
+              padding: 24,
+              borderRadius: 12,
+              width: 360,
+              maxWidth: '90vw',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+            }}>
+              <div style={{ 
+                width: 56, 
+                height: 56, 
+                borderRadius: '50%', 
+                background: 'rgba(239, 68, 68, 0.1)', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                margin: '0 auto 16px'
+              }}>
+                <span style={{ fontSize: 28 }}>🗑️</span>
+              </div>
+              <h4 style={{ margin: '0 0 12px 0', color: theme.text, fontSize: 18, fontWeight: 600, textAlign: 'center' }}>
+                {t.detail?.confirm_delete || '确定删除'}
+              </h4>
+              <p style={{ margin: '0 0 20px 0', color: theme.textMuted, fontSize: 14, lineHeight: 1.5, textAlign: 'center' }}>
+                {multiDeleteCount > 0 
+                  ? `确定要删除 ${multiDeleteCount} 张截图吗？此操作不可撤销。`
+                  : (t.detail?.confirm_delete_message || '确定要删除这张截图吗？此操作不可撤销。')
+                }
+              </p>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    fontSize: 14,
+                    borderRadius: 8,
+                    border: `1px solid ${theme.border}`,
+                    background: theme.accent,
+                    color: theme.text,
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    transition: 'all 0.15s'
+                  }}
+                  onClick={() => {
+                    setShowScreenshotDeleteConfirm(false)
+                    setScreenshotToDelete(null)
+                    setMultiDeleteCount(0)
+                  }}
+                >
+                  {t.common?.cancel || '取消'}
+                </button>
+                <button
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    fontSize: 14,
+                    borderRadius: 8,
+                    border: 'none',
+                    background: theme.danger,
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    transition: 'all 0.15s'
+                  }}
+                  onClick={async () => {
+                    setShowScreenshotDeleteConfirm(false)
+                    if (multiDeleteCount > 0) {
+                      await doDeleteSelectedScreenshots()
+                    } else if (screenshotToDelete) {
+                      await doDeleteScreenshot(screenshotToDelete)
+                    }
+                    setScreenshotToDelete(null)
+                    setMultiDeleteCount(0)
+                  }}
+                >
+                  {t.common?.confirm || '确定'}
+                </button>
               </div>
             </div>
           </div>

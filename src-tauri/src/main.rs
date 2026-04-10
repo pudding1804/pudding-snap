@@ -298,7 +298,28 @@ fn show_main_window(app: AppHandle, state: State<AppState>) -> Result<(), String
     if let Some(window) = app.get_webview_window("main") {
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
+        let _ = window.emit("window-shown", ());
     }
+    Ok(())
+}
+
+#[tauri::command]
+fn minimize_to_tray(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    let mut window_shown = state.window_shown.lock().unwrap();
+    *window_shown = false;
+    drop(window_shown);
+    
+    if let Some(window) = app.get_webview_window("main") {
+        window.hide().map_err(|e| e.to_string())?;
+    }
+    println!("[窗口] 最小化到系统托盘");
+    Ok(())
+}
+
+#[tauri::command]
+fn close_app(app: AppHandle) -> Result<(), String> {
+    println!("[窗口] 关闭应用");
+    app.exit(0);
     Ok(())
 }
 
@@ -1031,7 +1052,7 @@ fn show_notification(app: &AppHandle, title: &str, body: &str) {
 }
 
 fn main() {
-    println!("[启动] 截图管理器启动中...");
+    println!("[启动] PuddingSnap 启动中...");
     if DEBUG_MODE {
         println!("[调试] 调试模式已开启 - 按 F12 进行测试截图");
     }
@@ -1134,17 +1155,38 @@ fn main() {
                         ..
                     } = event
                     {
-                        // 更新窗口显示状态
                         {
                             let mut shown = window_shown_for_tray.lock().unwrap();
                             *shown = true;
                         }
-                        let _ = tray.app_handle().emit("tray-click", ());
+                        if let Some(window) = tray.app_handle().get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            let _ = window.emit("window-shown", ());
+                        }
                     }
                 })
                 .build(app)?;
             
             println!("[启动] 系统托盘创建成功");
+
+            if let Some(window) = app.get_webview_window("main") {
+                let window_clone = window.clone();
+                window.on_window_event(move |event| {
+                    match event {
+                        tauri::WindowEvent::CloseRequested { api, .. } => {
+                            api.prevent_close();
+                            let _ = window_clone.emit("close-requested", ());
+                        }
+                        tauri::WindowEvent::Focused(focused) => {
+                            if *focused {
+                                let _ = window_clone.emit("window-focused", ());
+                            }
+                        }
+                        _ => {}
+                    }
+                });
+            }
 
             let state = app.state::<AppState>();
             let queue_clone = state.screenshot_queue.clone();
@@ -1487,6 +1529,8 @@ fn main() {
             show_window,
             hide_window,
             show_main_window,
+            minimize_to_tray,
+            close_app,
             open_in_explorer,
             get_game_icon,
             extract_game_icon,

@@ -63,6 +63,7 @@ pub fn get_foreground_process_info() -> ForegroundProcessInfo {
     }
 }
 
+#[allow(dead_code)]
 pub fn get_foreground_process_name() -> String {
     unsafe {
         let hwnd = GetForegroundWindow();
@@ -91,6 +92,7 @@ pub fn get_foreground_process_name() -> String {
     }
 }
 
+#[allow(dead_code)]
 pub fn get_process_exe_path() -> Option<String> {
     unsafe {
         let hwnd = GetForegroundWindow();

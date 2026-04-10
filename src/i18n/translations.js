@@ -67,7 +67,7 @@ export const translations = {
       capture_mouse: '捕捉鼠标光标',
       capture_mouse_hint: '启用后，截图时会包含鼠标光标',
       about: '关于',
-      version: '极简游戏截图管理器 v0.1.0',
+      version: 'PuddingSnap v0.1.0',
       tech: 'Rust + Tauri + React',
       language: '语言',
       delete_all: '删除所有数据',
@@ -213,6 +213,13 @@ export const translations = {
       copy_failed: '复制失败',
       save_success: '图片已保存',
       save_failed: '保存失败'
+    },
+    close_confirm: {
+      title: '关闭确认',
+      message: '您想要关闭程序还是最小化到系统托盘？',
+      close: '关闭程序',
+      minimize: '最小化到托盘',
+      remember: '记住我的选择'
     }
   },
   en: {
@@ -283,7 +290,7 @@ export const translations = {
       capture_mouse: 'Capture mouse cursor',
       capture_mouse_hint: 'When enabled, screenshots will include the mouse cursor',
       about: 'About',
-      version: 'Minimal Game Screenshot Manager v0.1.0',
+      version: 'PuddingSnap v0.1.0',
       tech: 'Rust + Tauri + React',
       language: 'Language',
       delete_all: 'Delete All Data',
@@ -429,6 +436,13 @@ export const translations = {
       copy_failed: 'Copy failed',
       save_success: 'Image saved',
       save_failed: 'Save failed'
+    },
+    close_confirm: {
+      title: 'Close Confirmation',
+      message: 'Do you want to close the program or minimize to system tray?',
+      close: 'Close Program',
+      minimize: 'Minimize to Tray',
+      remember: 'Remember my choice'
     }
   },
   ja: {
@@ -645,6 +659,13 @@ export const translations = {
       copy_failed: 'コピーに失敗しました',
       save_success: '画像を保存しました',
       save_failed: '保存に失敗しました'
+    },
+    close_confirm: {
+      title: '終了確認',
+      message: 'プログラムを終了しますか、それともシステムトレイに最小化しますか？',
+      close: 'プログラムを終了',
+      minimize: 'トレイに最小化',
+      remember: '選択を記憶'
     }
   }
 };
