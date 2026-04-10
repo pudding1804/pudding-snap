@@ -49,7 +49,8 @@ function ShareCard({
   cardRef,
   cardWidth
 }) {
-  const gameTitle = gameInfo?.display_title || gameInfo?.game_title || '未知游戏'
+  const processName = screenshot?.game_id?.split('\\').pop().split('/').pop().replace('.exe', '') || '未知游戏'
+  const gameTitle = screenshot?.display_title || screenshot?.game_title || gameInfo?.display_title || gameInfo?.game_title || processName
   const displayUsername = username || 'Player'
   const dateTime = formatDateTime(screenshot.timestamp)
   const imageSrc = getImageSrc(screenshot.file_path)

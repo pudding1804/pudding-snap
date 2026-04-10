@@ -37,6 +37,7 @@ struct AppState {
     window_shown: Arc<Mutex<bool>>,
     screenshot_queue: Arc<Mutex<VecDeque<ScreenshotTask>>>,
     is_processing: Arc<Mutex<bool>>,
+    unread_count: Arc<Mutex<u32>>,
 }
 
 #[tauri::command]
@@ -330,6 +331,27 @@ fn minimize_to_tray(app: AppHandle, state: State<AppState>) -> Result<(), String
         window.hide().map_err(|e| e.to_string())?;
     }
     println!("[窗口] 最小化到系统托盘");
+    Ok(())
+}
+
+#[tauri::command]
+fn reset_unread_count(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    let mut count = state.unread_count.lock().unwrap();
+    *count = 0;
+    println!("[托盘] 未读数量已重置");
+    
+    let icon_bytes = include_bytes!("../icons/32x32.png");
+    let base_icon = image::load_from_memory(icon_bytes)
+        .map_err(|e| format!("无法加载图标: {}", e))?;
+    let img = base_icon.to_rgba8();
+    let (width, height) = img.dimensions();
+    let rgba = img.as_raw().clone();
+    let icon = tauri::image::Image::new_owned(rgba, width, height);
+    
+    if let Some(tray) = app.tray_by_id("main") {
+        let _ = tray.set_icon(Some(icon));
+    }
+    
     Ok(())
 }
 
@@ -1060,6 +1082,70 @@ impl std::fmt::Display for SteamMatchStatus {
     }
 }
 
+fn generate_badge_icon(count: u32, base_icon_bytes: &[u8]) -> Result<tauri::image::Image<'static>, String> {
+    use image::{Rgba, DynamicImage};
+    use imageproc::drawing::draw_filled_circle_mut;
+    use ab_glyph::{FontArc, PxScale, Font, ScaleFont};
+    use std::fs;
+    
+    let base_icon = image::load_from_memory(base_icon_bytes)
+        .map_err(|e| format!("无法加载基础图标: {}", e))?;
+    
+    let mut img = base_icon.to_rgba8();
+    let (width, height) = img.dimensions();
+    
+    if count == 0 {
+        let rgba = img.as_raw().clone();
+        return Ok(tauri::image::Image::new_owned(rgba, width, height));
+    }
+    
+    let badge_radius = (width as f32 * 0.35) as i32;
+    let badge_x = width as i32 - badge_radius - 2;
+    let badge_y = badge_radius + 2;
+    
+    draw_filled_circle_mut(
+        &mut img,
+        (badge_x as i32, badge_y as i32),
+        badge_radius,
+        Rgba([220, 38, 38, 255])
+    );
+    
+    let count_str = if count > 99 { "99+".to_string() } else { count.to_string() };
+    
+    let font = fs::read("C:\\Windows\\Fonts\\arialbd.ttf")
+        .ok()
+        .and_then(|bytes| FontArc::try_from_vec(bytes).ok())
+        .or_else(|| {
+            fs::read("C:\\Windows\\Fonts\\arial.ttf")
+                .ok()
+                .and_then(|bytes| FontArc::try_from_vec(bytes).ok())
+        })
+        .ok_or_else(|| "无法加载字体".to_string())?;
+    
+    let scale = PxScale::from(badge_radius as f32 * 1.2);
+    let scaled_font = font.as_scaled(scale);
+    
+    let text_width = count_str.chars().map(|c| {
+        scaled_font.h_advance(scaled_font.glyph_id(c))
+    }).sum::<f32>();
+    
+    let text_x = badge_x as f32 - text_width / 2.0;
+    let text_y = badge_y as f32 - badge_radius as f32 * 0.4;
+    
+    imageproc::drawing::draw_text_mut(
+        &mut img,
+        Rgba([255, 255, 255, 255]),
+        text_x as i32,
+        text_y as i32,
+        scale,
+        &font,
+        &count_str,
+    );
+    
+    let rgba = img.as_raw().clone();
+    Ok(tauri::image::Image::new_owned(rgba, width, height))
+}
+
 fn show_notification(app: &AppHandle, title: &str, body: &str) {
     println!("[通知] {}: {}", title, body);
     let _ = app.emit("show-notification", serde_json::json!({
@@ -1089,6 +1175,7 @@ fn main() {
     let window_shown = Arc::new(Mutex::new(false));
     let screenshot_queue = Arc::new(Mutex::new(VecDeque::new()));
     let is_processing = Arc::new(Mutex::new(false));
+    let unread_count = Arc::new(Mutex::new(0u32));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -1111,6 +1198,7 @@ fn main() {
             window_shown,
             screenshot_queue,
             is_processing,
+            unread_count,
         })
         .setup(move |app| {
             println!("[启动] Tauri应用设置中...");
@@ -1139,7 +1227,7 @@ fn main() {
             let icon = tauri::image::Image::new_owned(icon_data.to_vec(), icon_image.width(), icon_image.height());
 
             let window_shown_for_tray = window_shown_for_menu.clone();
-            let _ = TrayIconBuilder::new()
+            let _ = TrayIconBuilder::with_id("main")
                 .icon(icon)
                 .menu(&menu)
                 .on_menu_event(move |app, event| {
@@ -1218,6 +1306,7 @@ fn main() {
             let processing_clone = state.is_processing.clone();
             let db_for_hotkey = state.db.clone();
             let window_shown_clone = state.window_shown.clone();
+            let unread_count_clone = state.unread_count.clone();
 
             std::thread::spawn(move || {
                 println!("[启动] 热键监听线程启动");
@@ -1262,6 +1351,7 @@ fn main() {
                                     let queue_h = queue_clone.clone();
                                     let processing_h = processing_clone.clone();
                                     let window_shown_h = window_shown_clone.clone();
+                                    let unread_count_h = unread_count_clone.clone();
                                     
                                     let mut processing = processing_h.lock().unwrap();
                                     if *processing {
@@ -1361,6 +1451,29 @@ fn main() {
                                                                     println!("[Steam] 检查Steam信息: game_id={}, has_steam_info={}", game_id, has_steam_info);
                                                                     
                                                                     drop(conn);
+                                                                    
+                                                                    // 更新未读数量和托盘图标
+                                                                     {
+                                                                         let mut count = unread_count_h.lock().unwrap();
+                                                                         *count += 1;
+                                                                         let current_count = *count;
+                                                                         println!("[托盘] 未读数量更新: {}", current_count);
+                                                                         
+                                                                         let icon_bytes = include_bytes!("../icons/32x32.png");
+                                                                         match generate_badge_icon(current_count, icon_bytes) {
+                                                                             Ok(badge_icon) => {
+                                                                                 if let Some(tray) = app_h.tray_by_id("main") {
+                                                                                     match tray.set_icon(Some(badge_icon)) {
+                                                                                         Ok(_) => println!("[托盘] 图标更新成功"),
+                                                                                         Err(e) => println!("[托盘] 图标更新失败: {}", e),
+                                                                                     }
+                                                                                 } else {
+                                                                                     println!("[托盘] 未找到托盘图标");
+                                                                                 }
+                                                                             }
+                                                                             Err(e) => println!("[托盘] 生成徽章图标失败: {}", e),
+                                                                         }
+                                                                     }
                                                                     
                                                                     // 立即发送事件通知前端刷新
                                                                     let is_window_shown = {
@@ -1563,6 +1676,7 @@ fn main() {
             show_main_window,
             minimize_to_tray,
             close_app,
+            reset_unread_count,
             open_in_explorer,
             get_game_icon,
             extract_game_icon,

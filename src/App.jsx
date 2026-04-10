@@ -833,13 +833,19 @@ function App() {
         }
       })
       
-      const unlistenShown = await listen('window-shown', () => {
+      const unlistenShown = await listen('window-shown', async () => {
         addLog('窗口显示，刷新数据')
         loadGames()
         if (selectedGameRef.current) {
           loadScreenshotsWithPagination(1, selectedGameRef.current.game_id)
         } else {
           loadScreenshotsWithPagination(1, null)
+        }
+        try {
+          await invoke('reset_unread_count')
+          addLog('未读数量已重置')
+        } catch (e) {
+          addLog(`重置未读数量失败: ${e}`)
         }
       })
       
