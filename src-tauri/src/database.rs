@@ -782,6 +782,15 @@ pub fn set_capture_mouse(conn: &Connection, enabled: bool) -> Result<()> {
     set_setting(conn, "capture_mouse", if enabled { "true" } else { "false" })
 }
 
+pub fn get_shutter_sound(conn: &Connection) -> String {
+    get_setting(conn, "shutter_sound")
+        .unwrap_or_else(|| "default".to_string())
+}
+
+pub fn set_shutter_sound(conn: &Connection, sound_type: &str) -> Result<()> {
+    set_setting(conn, "shutter_sound", sound_type)
+}
+
 pub fn get_game_cache(conn: &Connection, game_id: &str) -> Option<GameCache> {
     conn.query_row(
         "SELECT exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status FROM game_cache WHERE game_id = ?1",

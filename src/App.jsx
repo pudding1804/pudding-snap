@@ -95,6 +95,7 @@ function App() {
   const [multiDeleteCount, setMultiDeleteCount] = useState(0)
   
   const [captureMouse, setCaptureMouse] = useState(false)
+  const [shutterSound, setShutterSound] = useState('default')
   const [autostart, setAutostart] = useState(false)
   const [language, setLanguage] = useState('zh')
   const [steamLanguage, setSteamLanguage] = useState('schinese')
@@ -270,6 +271,33 @@ function App() {
       addLog(`鼠标捕捉设置已保存: ${enabled}`)
     } catch (e) {
       addLog(`保存鼠标捕捉设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const loadShutterSound = useCallback(async () => {
+    try {
+      const sound = await invoke('get_shutter_sound')
+      setShutterSound(sound || 'default')
+    } catch (e) {
+      addLog(`获取音效设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const saveShutterSound = useCallback(async (soundType) => {
+    try {
+      await invoke('set_shutter_sound', { soundType })
+      setShutterSound(soundType)
+      addLog(`音效设置已保存: ${soundType}`)
+    } catch (e) {
+      addLog(`保存音效设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const playSoundPreview = useCallback(async (soundType) => {
+    try {
+      await invoke('play_sound_preview', { soundType })
+    } catch (e) {
+      addLog(`播放音效预览失败: ${e}`)
     }
   }, [addLog])
 
@@ -680,6 +708,7 @@ function App() {
       try {
         await loadStoragePath()
         await loadCaptureMouse()
+        await loadShutterSound()
         await loadAutostart()
         await loadScreenshotQuality()
         await loadScreenshotsWithPagination(1, null)
@@ -1019,6 +1048,7 @@ function App() {
               migrationStatus={migrationStatus}
               autostart={autostart}
               captureMouse={captureMouse}
+              shutterSound={shutterSound}
               screenshotFormat={screenshotFormat}
               screenshotQuality={screenshotQuality}
               onLanguageChange={setLanguage}
@@ -1028,6 +1058,8 @@ function App() {
               onImportDirectory={importExistingDirectory}
               onAutostartChange={saveAutostart}
               onCaptureMouseChange={saveCaptureMouse}
+              onShutterSoundChange={saveShutterSound}
+              onPlaySoundPreview={playSoundPreview}
               onScreenshotFormatChange={saveScreenshotFormat}
               onScreenshotQualityChange={saveScreenshotQuality}
               onDeleteAll={() => setShowDeleteConfirm(true)}

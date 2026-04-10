@@ -21,6 +21,7 @@ export function SettingsPanel({
   migrationStatus,
   autostart,
   captureMouse,
+  shutterSound,
   screenshotFormat,
   screenshotQuality,
   onLanguageChange,
@@ -30,6 +31,8 @@ export function SettingsPanel({
   onImportDirectory,
   onAutostartChange,
   onCaptureMouseChange,
+  onShutterSoundChange,
+  onPlaySoundPreview,
   onScreenshotFormatChange,
   onScreenshotQualityChange,
   onDeleteAll,
@@ -206,6 +209,58 @@ export function SettingsPanel({
           <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
             {t.settings.capture_mouse_hint}
           </p>
+          
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
+            <h4 style={{ marginBottom: 12 }}>{t.settings.shutter_sound}</h4>
+            <p style={{ color: theme.textMuted, fontSize: 12, marginBottom: 12 }}>
+              {t.settings.shutter_sound_hint}
+            </p>
+            
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[
+                { id: 'none', name: t.settings.sound_none },
+                { id: 'default', name: t.settings.sound_default },
+                { id: 'camera1', name: t.settings.sound_camera1 },
+                { id: 'camera2', name: t.settings.sound_camera2 },
+                { id: 'click', name: t.settings.sound_click },
+                { id: 'soft', name: t.settings.sound_soft },
+                { id: 'digital', name: t.settings.sound_digital }
+              ].map(sound => (
+                <button
+                  key={sound.id}
+                  onClick={() => {
+                    onShutterSoundChange(sound.id)
+                    if (sound.id !== 'none') {
+                      onPlaySoundPreview(sound.id)
+                    }
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: shutterSound === sound.id ? theme.primary : theme.accent,
+                    border: `1px solid ${shutterSound === sound.id ? theme.primary : theme.border}`,
+                    borderRadius: 6,
+                    color: shutterSound === sound.id ? '#fff' : theme.text,
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => {
+                    if (shutterSound !== sound.id) {
+                      e.currentTarget.style.background = theme.accent
+                      e.currentTarget.style.transform = 'scale(1.02)'
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (shutterSound !== sound.id) {
+                      e.currentTarget.style.transform = 'scale(1)'
+                    }
+                  }}
+                >
+                  {sound.name}
+                </button>
+              ))}
+            </div>
+          </div>
           
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
             <h4 style={{ marginBottom: 12 }}>{t.settings.screenshot_quality}</h4>

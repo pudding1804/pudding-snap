@@ -15,7 +15,8 @@ const EXPORT_FORMATS = [
   { id: 'jpg', name: 'JPG' }
 ]
 
-const CARD_WIDTH = 720
+const MAX_CARD_WIDTH = 720
+const MIN_CARD_WIDTH = 480
 const CARD_HEIGHT = 540
 
 function getImageSrc(path) {
@@ -45,7 +46,8 @@ function ShareCard({
   gameInfo, 
   note, 
   username, 
-  cardRef 
+  cardRef,
+  cardWidth
 }) {
   const gameTitle = gameInfo?.display_title || gameInfo?.game_title || '未知游戏'
   const displayUsername = username || 'Player'
@@ -53,7 +55,7 @@ function ShareCard({
   const imageSrc = getImageSrc(screenshot.file_path)
 
   const baseStyle = {
-    width: CARD_WIDTH,
+    width: cardWidth,
     height: CARD_HEIGHT,
     display: 'flex',
     flexDirection: 'column',
@@ -525,6 +527,7 @@ export function ShareModal({
   const [showUsernameInput, setShowUsernameInput] = useState(false)
   const [tempUsername, setTempUsername] = useState(username || '')
   const [editNote, setEditNote] = useState(screenshot?.note || '')
+  const [cardWidth, setCardWidth] = useState(MAX_CARD_WIDTH)
   const cardRef = useRef(null)
 
   useEffect(() => {
@@ -532,6 +535,29 @@ export function ShareModal({
       setShowUsernameInput(true)
     }
   }, [username])
+
+  useEffect(() => {
+    if (screenshot?.file_path) {
+      const img = new Image()
+      img.onload = () => {
+        const imgWidth = img.naturalWidth
+        const imgHeight = img.naturalHeight
+        const aspectRatio = imgWidth / imgHeight
+        
+        const targetHeight = CARD_HEIGHT - 120
+        let calculatedWidth = targetHeight * aspectRatio
+        
+        if (calculatedWidth > MAX_CARD_WIDTH) {
+          calculatedWidth = MAX_CARD_WIDTH
+        } else if (calculatedWidth < MIN_CARD_WIDTH) {
+          calculatedWidth = MIN_CARD_WIDTH
+        }
+        
+        setCardWidth(Math.round(calculatedWidth))
+      }
+      img.src = getImageSrc(screenshot.file_path)
+    }
+  }, [screenshot?.file_path])
 
   const handleSaveUsername = () => {
     if (tempUsername.trim()) {
@@ -633,6 +659,7 @@ export function ShareModal({
               note={editNote}
               username={username || 'Player'}
               cardRef={cardRef}
+              cardWidth={cardWidth}
             />
           </div>
 

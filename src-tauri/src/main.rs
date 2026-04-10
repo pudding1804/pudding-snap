@@ -17,7 +17,7 @@ use database as db;
 use models::*;
 use windows_utils::*;
 use screenshot::*;
-use audio::play_shutter_sound;
+use audio::play_shutter_sound_with_type;
 use steam::{SteamMatchStatus, SteamMatchResult, SteamGameInfo, SteamSearchResult};
 
 #[cfg(debug_assertions)]
@@ -250,6 +250,23 @@ fn get_capture_mouse(state: State<AppState>) -> Result<bool, String> {
 fn set_capture_mouse(enabled: bool, state: State<AppState>) -> Result<(), String> {
     let conn = state.db.lock().unwrap();
     db::set_capture_mouse(&conn, enabled).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_shutter_sound(state: State<AppState>) -> Result<String, String> {
+    let conn = state.db.lock().unwrap();
+    Ok(db::get_shutter_sound(&conn))
+}
+
+#[tauri::command]
+fn set_shutter_sound(sound_type: String, state: State<AppState>) -> Result<(), String> {
+    let conn = state.db.lock().unwrap();
+    db::set_shutter_sound(&conn, &sound_type).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn play_sound_preview(sound_type: String) -> Result<(), String> {
+    play_shutter_sound_with_type(&sound_type)
 }
 
 #[tauri::command]
@@ -1076,6 +1093,14 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            println!("[单实例] 检测到另一个实例尝试启动，聚焦当前窗口");
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+                let _ = window.emit("single-instance-activated", ());
+            }
+        }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
@@ -1202,7 +1227,11 @@ fn main() {
                         if key == Key::PrintScreen {
                             println!("[热键] 检测到PrintScreen按键!");
                             
-                            let _ = play_shutter_sound();
+                            let shutter_sound = {
+                                let conn = db_for_hotkey.lock().unwrap();
+                                db::get_shutter_sound(&conn)
+                            };
+                            let _ = play_shutter_sound_with_type(&shutter_sound);
                             
                             let capture_mouse = {
                                 let conn = db_for_hotkey.lock().unwrap();
@@ -1524,6 +1553,9 @@ fn main() {
             switch_data_directory,
             get_capture_mouse,
             set_capture_mouse,
+            get_shutter_sound,
+            set_shutter_sound,
+            play_sound_preview,
             get_setting,
             set_setting,
             show_window,

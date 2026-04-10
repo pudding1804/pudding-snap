@@ -36,7 +36,7 @@ export const createStyles = (theme, iconSize = 'large') => {
     modalBody: { padding: 16 },
     modalFooter: { padding: 16, borderTop: `1px solid ${theme.border}` },
     input: { width: '100%', padding: 8, background: theme.accent, border: `1px solid ${theme.border}`, borderRadius: 4, color: theme.text, boxSizing: 'border-box' },
-    notification: { position: 'fixed', top: 16, right: 16, background: theme.primary, color: '#fff', padding: '12px 24px', borderRadius: 8, zIndex: 2000, fontWeight: 'bold' },
+    notification: { position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', background: theme.primary, color: '#fff', padding: '12px 24px', borderRadius: 8, zIndex: 2000, fontWeight: 'bold' },
     debugPanel: { marginTop: 'auto', padding: 8, background: theme.accent, borderRadius: 4, fontSize: 10, maxHeight: 100, overflow: 'auto' },
     debugLine: { color: theme.primary, marginBottom: 2 },
     empty: { textAlign: 'center', padding: 48, color: theme.textMuted },
