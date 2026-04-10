@@ -37,7 +37,8 @@ export const translations = {
       searching: '搜索中...',
       back: '返回',
       found_results: '找到 {count} 个结果',
-      no_results: '未找到相关游戏',
+      no_results: '未找到相关游戏，请尝试更换关键词',
+      network_error: '网络异常，请检查网络连接后重试',
       applying: '拉取信息中...',
       apply_success: '信息已拉取完成',
       confirm: '确认'
@@ -267,7 +268,8 @@ export const translations = {
       searching: 'Searching...',
       back: 'Back',
       found_results: 'Found {count} results',
-      no_results: 'No games found',
+      no_results: 'No games found, please try different keywords',
+      network_error: 'Network error, please check your connection and try again',
       applying: 'Applying info...',
       apply_success: 'Info applied successfully',
       confirm: 'Confirm'
@@ -497,7 +499,8 @@ export const translations = {
       searching: '検索中...',
       back: '戻る',
       found_results: '{count}件の結果が見つかりました',
-      no_results: '関連するゲームが見つかりません',
+      no_results: '関連するゲームが見つかりません、別のキーワードをお試しください',
+      network_error: 'ネットワークエラー、接続を確認して再試行してください',
       applying: '情報を取得中...',
       apply_success: '情報の取得が完了しました',
       confirm: '確認'

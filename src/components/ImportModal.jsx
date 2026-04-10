@@ -92,7 +92,8 @@ export function ImportModal({
             path,
             name: fileName,
             size: stat?.size || 0,
-            created: stat?.created || Math.floor(Date.now() / 1000)
+            created: stat?.created || Math.floor(Date.now() / 1000),
+            modified: stat?.modified || Math.floor(Date.now() / 1000)
           })
         }
         
@@ -136,7 +137,8 @@ export function ImportModal({
           path,
           name: fileName,
           size: stat?.size || 0,
-          created: stat?.created || Math.floor(Date.now() / 1000)
+          created: stat?.created || Math.floor(Date.now() / 1000),
+          modified: stat?.modified || Math.floor(Date.now() / 1000)
         }
       }))
       onFilesChange(prev => [...prev, ...newFiles])

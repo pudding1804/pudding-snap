@@ -73,7 +73,11 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [pageSize, setPageSize] = useState(50)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  
+  const [gameCurrentPage, setGameCurrentPage] = useState(1)
+  const [gameTotalPages, setGameTotalPages] = useState(1)
+  const [gamePageSize] = useState(20)
+  const [isGamesLoading, setIsGamesLoading] = useState(false)
   
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedScreenshots, setSelectedScreenshots] = useState([])
@@ -164,6 +168,7 @@ function App() {
   const selectedGameRef = useRef(null)
   const sortOrderRef = useRef(sortOrder)
   const gridRef = useRef(null)
+  const selectedScreenshotRef = useRef(null)
 
   const theme = themes[currentTheme].colors
   const t = getTranslation(language)
@@ -185,6 +190,10 @@ function App() {
     console.log(`[DEBUG] sortOrderRef 更新: ${sortOrder}`)
   }, [sortOrder])
 
+  useEffect(() => {
+    selectedScreenshotRef.current = selectedScreenshot
+  }, [selectedScreenshot])
+
   const showScreenshotNotification = useCallback(() => {
     setScreenshotNotification(true)
     setTimeout(() => {
@@ -205,11 +214,15 @@ function App() {
 
   const loadGames = useCallback(async (sortType = null) => {
     try {
-      addLog('调用 get_all_games_with_empty')
-      const gData = await invoke('get_all_games_with_empty')
-      addLog(`游戏数据: ${gData ? gData.length : 0} 条`)
+      setIsGamesLoading(true)
+      addLog(`调用 get_games_with_pagination: 页码=${gameCurrentPage}`)
+      const result = await invoke('get_games_with_pagination', {
+        page: gameCurrentPage,
+        pageSize: gamePageSize
+      })
+      addLog(`游戏数据: ${result.games ? result.games.length : 0} 条`)
       
-      let sortedGames = gData || []
+      let sortedGames = result.games || []
       const currentSort = sortType || gameSortOrder
       
       if (currentSort === 'alpha_asc') {
@@ -223,28 +236,82 @@ function App() {
       }
       
       setGames(sortedGames)
+      setGameTotalPages(result.total_pages)
+      setGameCurrentPage(result.page)
+      
+      if (gridRef.current) {
+        gridRef.current.scrollTop = 0
+      }
+      
+      addLog(`游戏加载完成: 总页数=${result.total_pages}`)
     } catch (e) {
       addLog(`游戏加载失败: ${e}`)
+    } finally {
+      setIsGamesLoading(false)
     }
-  }, [addLog, gameSortOrder])
+  }, [addLog, gameSortOrder, gamePageSize, gameCurrentPage])
+
+  const loadGamesWithPage = useCallback(async (page) => {
+    const validPage = (typeof page === 'number' && !isNaN(page) && page > 0) ? page : 1
+    try {
+      setIsGamesLoading(true)
+      addLog(`调用 get_games_with_pagination: 页码=${validPage}`)
+      const result = await invoke('get_games_with_pagination', {
+        page: validPage,
+        pageSize: gamePageSize
+      })
+      addLog(`游戏数据: ${result.games ? result.games.length : 0} 条`)
+      
+      let sortedGames = result.games || []
+      const currentSort = gameSortOrder
+      
+      if (currentSort === 'alpha_asc') {
+        sortedGames.sort((a, b) => (a.display_title || a.game_title).localeCompare(b.display_title || b.game_title, 'zh-CN'))
+      } else if (currentSort === 'alpha_desc') {
+        sortedGames.sort((a, b) => (b.display_title || b.game_title).localeCompare(a.display_title || a.game_title, 'zh-CN'))
+      } else if (currentSort === 'time_asc') {
+        sortedGames.sort((a, b) => (a.last_timestamp || 0) - (b.last_timestamp || 0))
+      } else {
+        sortedGames.sort((a, b) => (b.last_timestamp || 0) - (a.last_timestamp || 0))
+      }
+      
+      setGames(sortedGames)
+      setGameTotalPages(result.total_pages)
+      setGameCurrentPage(result.page)
+      addLog(`游戏加载完成: 总页数=${result.total_pages}`)
+    } catch (e) {
+      addLog(`游戏加载失败: ${e}`)
+    } finally {
+      setIsGamesLoading(false)
+    }
+  }, [addLog, gameSortOrder, gamePageSize])
 
   const loadScreenshotsWithPagination = useCallback(async (page, gameId = null) => {
+    const validPage = (typeof page === 'number' && !isNaN(page) && page > 0) ? page : 1
     try {
-      addLog(`加载截图: 页码=${page}, 游戏ID=${gameId || '全部'}`)
+      addLog(`加载截图: 页码=${validPage}, 游戏ID=${gameId || '全部'}`)
       const result = await invoke('get_screenshots_with_pagination', {
         gameId: gameId,
         sortOrder: sortOrderRef.current,
-        page: page,
+        page: validPage,
         pageSize: pageSize
       })
       
-      console.log(`[DEBUG] loadScreenshotsWithPagination 返回 ${result.screenshots.length} 条截图`)
-      console.log(`[DEBUG] 截图ID列表:`, result.screenshots.map(s => s.id))
+      console.log(`[DEBUG] loadScreenshotsWithPagination 返回:`, {
+        screenshotsCount: result.screenshots.length,
+        page: result.page,
+        totalPages: result.total_pages
+      })
       
       setScreenshots(result.screenshots)
       setCurrentPage(result.page)
       setTotalPages(result.total_pages)
-      addLog(`截图加载完成: ${result.screenshots.length} 条`)
+      
+      if (gridRef.current) {
+        gridRef.current.scrollTop = 0
+      }
+      
+      addLog(`截图加载完成: ${result.screenshots.length} 条, 当前页=${result.page}, 总页数=${result.total_pages}`)
     } catch (e) {
       addLog(`截图加载失败: ${e}`)
       setError('加载截图失败: ' + String(e))
@@ -416,6 +483,38 @@ function App() {
     loadGames()
   }, [loadGames])
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (currentView === 'game-detail' && e.key === 'Backspace') {
+        if (selectedScreenshotRef.current) {
+          return
+        }
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.isContentEditable) {
+          e.preventDefault()
+          backToGames()
+        }
+      }
+    }
+    
+    const handleMouseDown = (e) => {
+      if (currentView === 'game-detail' && (e.button === 3 || e.button === 4)) {
+        if (selectedScreenshotRef.current) {
+          return
+        }
+        e.preventDefault()
+        backToGames()
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('mousedown', handleMouseDown)
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('mousedown', handleMouseDown)
+    }
+  }, [currentView, backToGames])
+
   const handleSortChange = useCallback(async (newOrder) => {
     setSortOrder(newOrder)
     sortOrderRef.current = newOrder
@@ -551,57 +650,53 @@ function App() {
       const selectedPath = await open({
         directory: true,
         multiple: false,
-        title: '选择新的存储目录'
+        title: '选择存储目录'
       })
       
       if (!selectedPath) return
       
-      setIsMigrating(true)
-      setMigrationProgress(0)
-      setMigrationTotal(0)
-      setMigrationStatus('准备迁移...')
-      setMigrationStats(null)
+      const checkResult = await invoke('check_data_directory', { path: selectedPath })
       
-      addLog(`开始迁移数据到: ${selectedPath}`)
-      const result = await invoke('migrate_data', { newPath: selectedPath })
-      
-      if (result.success) {
-        setStoragePath(selectedPath)
-        setMigrationStats(result.stats)
-        showNotification('迁移成功', '数据已成功迁移到新目录')
+      if (checkResult.valid) {
+        setImportConfirmPath(selectedPath)
       } else {
-        setError('迁移失败: ' + (result.error || '未知错误'))
+        setIsMigrating(true)
+        setMigrationProgress(0)
+        setMigrationTotal(0)
+        setMigrationStatus('准备迁移...')
+        setMigrationStats(null)
+        
+        addLog(`开始迁移数据到: ${selectedPath}`)
+        const result = await invoke('migrate_data', { newPath: selectedPath })
+        
+        if (result.success) {
+          setStoragePath(selectedPath)
+          setMigrationStats(result.stats)
+          let message = '数据已成功迁移到新目录，程序将重启。'
+          if (result.old_dir_pending_delete) {
+            message += `\n\n原目录将在下次启动时自动删除: ${result.old_dir_pending_delete}`
+          } else if (result.old_dir_deleted) {
+            message += '\n\n原目录已删除。'
+          }
+          showNotification('迁移成功', message)
+          setTimeout(async () => {
+            try {
+              await invoke('restart_app')
+            } catch (e) {
+              addLog(`重启失败: ${e}`)
+            }
+          }, 1500)
+        } else {
+          setError('迁移失败: ' + (result.error || '未知错误'))
+        }
+        setIsMigrating(false)
+        setMigrationStatus('')
       }
     } catch (e) {
       addLog(`更改存储路径失败: ${e}`)
       setError('更改存储路径失败: ' + String(e))
-    } finally {
       setIsMigrating(false)
       setMigrationStatus('')
-    }
-  }, [addLog])
-
-  const importExistingDirectory = useCallback(async () => {
-    try {
-      const selectedPath = await open({
-        directory: true,
-        multiple: false,
-        title: '选择已有数据目录'
-      })
-      
-      if (!selectedPath) return
-      
-      const result = await invoke('check_data_directory', { path: selectedPath })
-      
-      if (!result.valid) {
-        setError(result.message || '所选目录不是有效的数据目录')
-        return
-      }
-      
-      setImportConfirmPath(selectedPath)
-    } catch (e) {
-      addLog(`检查目录失败: ${e}`)
-      setError('检查目录失败: ' + String(e))
     }
   }, [addLog])
 
@@ -615,7 +710,15 @@ function App() {
       
       if (result.success) {
         setMigrationStats({ ...result.stats, is_import: true })
-        showNotification('导入成功', '数据目录已切换')
+        showNotification(t.settings.import_success_msg || '数据目录已成功切换，程序将重启以加载新数据。', '')
+        setImportConfirmPath(null)
+        setTimeout(async () => {
+          try {
+            await invoke('restart_app')
+          } catch (e) {
+            addLog(`重启失败: ${e}`)
+          }
+        }, 1000)
       } else {
         setError('导入失败: ' + (result.error || '未知错误'))
       }
@@ -624,18 +727,8 @@ function App() {
       setError('切换数据目录失败: ' + String(e))
     } finally {
       setIsMigrating(false)
-      setImportConfirmPath(null)
     }
-  }, [importConfirmPath, addLog])
-
-  const handleScroll = useCallback((e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target
-    if (scrollHeight - scrollTop - clientHeight < 100 && !isLoadingMore && currentPage < totalPages) {
-      setIsLoadingMore(true)
-      loadScreenshotsWithPagination(currentPage + 1, selectedGameRef.current?.game_id || null)
-        .finally(() => setIsLoadingMore(false))
-    }
-  }, [isLoadingMore, currentPage, totalPages, loadScreenshotsWithPagination])
+  }, [importConfirmPath, addLog, t])
 
   const handleAddGame = useCallback(async (action, data) => {
     if (action === 'search') {
@@ -646,9 +739,17 @@ function App() {
         setAddGameSearchResults(results)
         if (results.length > 0) {
           setAddGameStep('results')
+        } else {
+          showNotification(t.search.no_results)
         }
       } catch (err) {
         addLog(`搜索失败: ${err}`)
+        const errorMsg = String(err).toLowerCase()
+        if (errorMsg.includes('network') || errorMsg.includes('timeout') || errorMsg.includes('connection') || errorMsg.includes('请求失败')) {
+          showNotification(t.search.network_error)
+        } else {
+          showNotification(t.search.no_results)
+        }
       }
       setIsAddingGame(false)
     } else if (action === 'bangumi-search') {
@@ -663,9 +764,17 @@ function App() {
         })))
         if (results.length > 0) {
           setAddGameStep('results')
+        } else {
+          showNotification(t.search.no_results)
         }
       } catch (err) {
         addLog(`Bangumi搜索失败: ${err}`)
+        const errorMsg = String(err).toLowerCase()
+        if (errorMsg.includes('network') || errorMsg.includes('timeout') || errorMsg.includes('connection') || errorMsg.includes('请求失败')) {
+          showNotification(t.search.network_error)
+        } else {
+          showNotification(t.search.no_results)
+        }
       }
       setIsAddingGame(false)
     } else if (action === 'create') {
@@ -678,7 +787,7 @@ function App() {
         })
         addLog(`创建游戏成功: ${game.display_title}`)
         setShowAddGameModal(false)
-        await loadGames()
+        await loadGamesWithPage(1)
         showNotification(t.add_game.create_success, game.display_title)
       } catch (err) {
         addLog(`创建游戏失败: ${err}`)
@@ -697,7 +806,7 @@ function App() {
         })
         addLog(`创建游戏成功: ${game.display_title}`)
         setShowAddGameModal(false)
-        await loadGames()
+        await loadGamesWithPage(1)
         showNotification(t.add_game.create_success, game.display_title)
       } catch (err) {
         addLog(`创建游戏失败: ${err}`)
@@ -707,7 +816,7 @@ function App() {
       }
       setIsAddingGame(false)
     }
-  }, [steamLanguage, addLog, loadGames, t])
+  }, [steamLanguage, language, addLog, loadGamesWithPage, t])
 
   const handleImport = useCallback(async () => {
     if (importFiles.length === 0 || !selectedGame) return
@@ -960,7 +1069,7 @@ function App() {
             onToggleSidebar={toggleSidebar}
           />
 
-          <main style={styles.main} ref={gridRef} onScroll={handleScroll}>
+          <main style={styles.main} ref={gridRef}>
           {notification && (
             <div style={styles.notification}>
               {notification.title}: {notification.body}
@@ -981,7 +1090,6 @@ function App() {
               iconSize={iconSize}
               currentPage={currentPage}
               totalPages={totalPages}
-              isLoadingMore={isLoadingMore}
               onSortChange={handleSortChange}
               onIconSizeChange={handleIconSizeChange}
               onToggleMultiSelect={setIsMultiSelectMode}
@@ -1010,6 +1118,9 @@ function App() {
               gameSortOrder={gameSortOrder}
               iconSize={iconSize}
               showMenu={showGameListMenu}
+              currentPage={gameCurrentPage}
+              totalPages={gameTotalPages}
+              isLoading={isGamesLoading}
               onSortChange={handleGameSortChange}
               onIconSizeChange={handleIconSizeChange}
               onToggleMultiSelect={setIsGameMultiSelectMode}
@@ -1059,6 +1170,7 @@ function App() {
                 console.log('[DEBUG] GameList onToggleMenu:', show)
                 setShowGameListMenu(show)
               }}
+              onLoadPage={(page) => loadGamesWithPage(page)}
             />
           ) : currentView === 'game-detail' ? (
             <GameDetail
@@ -1073,6 +1185,8 @@ function App() {
               iconSize={iconSize}
               showMenu={showGameDetailMenu}
               showSortMenu={showSortMenu}
+              currentPage={currentPage}
+              totalPages={totalPages}
               onBack={backToGames}
               onSortChange={handleSortChange}
               onIconSizeChange={handleIconSizeChange}
@@ -1104,6 +1218,7 @@ function App() {
                 setShowGameDetailMenu(show)
               }}
               onToggleSortMenu={setShowSortMenu}
+              onLoadPage={(page) => loadScreenshotsWithPagination(page, selectedGame?.game_id)}
             />
           ) : (
             <SettingsPanel
@@ -1129,7 +1244,6 @@ function App() {
               onSteamLanguageChange={setSteamLanguage}
               onThemeChange={setCurrentTheme}
               onChangeStoragePath={changeStoragePath}
-              onImportDirectory={importExistingDirectory}
               onAutostartChange={saveAutostart}
               onShutterSoundChange={saveShutterSound}
               onPlaySoundPreview={playSoundPreview}
@@ -1306,9 +1420,17 @@ function App() {
                             }
                             if (results.length > 0) {
                               setSearchModalStep('results')
+                            } else {
+                              showNotification(t.search.no_results)
                             }
                           } catch (err) {
                             addLog(`${searchSource === 'steam' ? 'Steam' : 'Bangumi'}搜索失败: ${err}`)
+                            const errorMsg = String(err).toLowerCase()
+                            if (errorMsg.includes('network') || errorMsg.includes('timeout') || errorMsg.includes('connection') || errorMsg.includes('请求失败')) {
+                              showNotification(t.search.network_error)
+                            } else {
+                              showNotification(t.search.no_results)
+                            }
                           }
                           setIsSearching(false)
                         }
@@ -1338,9 +1460,17 @@ function App() {
                           }
                           if (results.length > 0) {
                             setSearchModalStep('results')
+                          } else {
+                            showNotification(t.search.no_results)
                           }
                         } catch (err) {
                           addLog(`${searchSource === 'steam' ? 'Steam' : 'Bangumi'}搜索失败: ${err}`)
+                          const errorMsg = String(err).toLowerCase()
+                          if (errorMsg.includes('network') || errorMsg.includes('timeout') || errorMsg.includes('connection') || errorMsg.includes('请求失败')) {
+                            showNotification(t.search.network_error)
+                          } else {
+                            showNotification(t.search.no_results)
+                          }
                         }
                         setIsSearching(false)
                       }}
@@ -1676,6 +1806,38 @@ function App() {
                     onClick={() => deleteGameCallback && deleteGameCallback(false)}
                   >
                     {deleteConfirmMode === 'delete_game' ? t.delete_game_confirm.cancel : t.delete_last_screenshot.keep_game}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {importConfirmPath && (
+          <div style={styles.modalOverlay} onClick={() => setImportConfirmPath(null)}>
+            <div style={{ ...styles.modalContent, maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+              <div style={{ padding: 32 }}>
+                <h3 style={{ marginBottom: 16, color: theme.text, textAlign: 'center' }}>{t.settings.import_directory}</h3>
+                <p style={{ color: theme.textMuted, fontSize: 14, marginBottom: 12 }}>
+                  {t.settings.import_path}: <span style={{ color: theme.text, wordBreak: 'break-all' }}>{importConfirmPath}</span>
+                </p>
+                <p style={{ color: theme.warning || '#ff9800', fontSize: 13, marginBottom: 24 }}>
+                  {t.settings.import_warning}
+                </p>
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                  <button 
+                    style={{ ...styles.btn, padding: '12px 24px' }}
+                    {...btnEvents}
+                    onClick={() => setImportConfirmPath(null)}
+                  >
+                    {t.settings.cancel || '取消'}
+                  </button>
+                  <button 
+                    style={{ ...styles.btnPrimary, padding: '12px 24px' }}
+                    {...btnEvents}
+                    onClick={confirmImportDirectory}
+                  >
+                    {t.settings.confirm_import}
                   </button>
                 </div>
               </div>

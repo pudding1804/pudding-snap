@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{State, Emitter};
 use crate::models::*;
 use crate::AppState;
 use database as db;
@@ -134,6 +134,7 @@ pub struct ImportFileInfo {
     pub name: String,
     pub size: u64,
     pub created: i64,
+    pub modified: i64,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -208,7 +209,8 @@ pub fn import_screenshots(
             continue;
         }
         
-        let timestamp = file.created;
+        let timestamp = super::utils::parse_filename_timestamp(&file.name)
+            .unwrap_or(file.modified);
         let original_ext = src_path
             .extension()
             .and_then(|e| e.to_str())

@@ -26,6 +26,9 @@ export function GameList({
   gameSortOrder,
   iconSize,
   showMenu,
+  currentPage = 1,
+  totalPages = 1,
+  isLoading = false,
   onSortChange,
   onIconSizeChange,
   onToggleMultiSelect,
@@ -33,6 +36,7 @@ export function GameList({
   onToggleSelectGame,
   onAddGame,
   onToggleMenu,
+  onLoadPage,
 }) {
   console.log('[DEBUG] GameList render, showMenu:', showMenu, 'games count:', games?.length)
   
@@ -200,101 +204,147 @@ export function GameList({
           <p style={{ fontSize: 12, marginTop: 8 }}>{t.empty.game_hint}</p>
         </div>
       ) : (
-        <div style={styles.grid}>
-          {games.map((game, index) => {
-            const hasSteamLogo = !!game.steam_logo_path;
-            const iconSrc = game.steam_logo_path || game.game_icon_path;
-            return (
-            <div 
-              key={game.game_id} 
-              style={{ 
-                ...styles.gameCard,
-                ...(isGameMultiSelectMode ? styles.cardWithCheckbox : {}),
-                ...(isGameMultiSelectMode && selectedGames.includes(game.game_id) ? styles.cardSelected : {})
-              }}
-              onClick={() => onToggleSelectGame && onToggleSelectGame(game)}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = 'scale(1.03)'
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = 'scale(1)'
-                e.currentTarget.style.boxShadow = 'none'
-              }}
-              onMouseDown={e => {
-                e.currentTarget.style.transform = 'scale(0.98)'
-              }}
-              onMouseUp={e => {
-                e.currentTarget.style.transform = 'scale(1.03)'
-              }}
-            >
-              {isGameMultiSelectMode && (
-                <div style={{
-                  ...styles.selectCheckbox,
-                  ...(selectedGames.includes(game.game_id) ? styles.selectCheckboxChecked : {})
-                }}>
-                  {selectedGames.includes(game.game_id) && (
-                    <div style={styles.selectCheckboxInner} />
-                  )}
-                </div>
-              )}
-              <div style={styles.gameIcon}>
-                {iconSrc ? (
-                  hasSteamLogo ? (
-                    <img 
-                      src={getImageSrc(iconSrc)} 
-                      alt={`${game.display_title || game.game_title} 图标`}
-                      style={styles.gameLogoImage}
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        e.target.parentElement.innerHTML = game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?';
-                        e.target.parentElement.style.background = theme.accent;
-                      }}
-                    />
-                  ) : (
-                    <div style={{ 
-                      width: 48, 
-                      height: 48, 
-                      borderRadius: 8, 
-                      overflow: 'hidden',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: theme.accent
-                    }}>
+        <>
+          <div style={styles.grid}>
+            {games.map((game, index) => {
+              const hasSteamLogo = !!game.steam_logo_path;
+              const iconSrc = game.steam_logo_path || game.game_icon_path;
+              return (
+              <div 
+                key={game.game_id} 
+                style={{ 
+                  ...styles.gameCard,
+                  ...(isGameMultiSelectMode ? styles.cardWithCheckbox : {}),
+                  ...(isGameMultiSelectMode && selectedGames.includes(game.game_id) ? styles.cardSelected : {})
+                }}
+                onClick={() => onToggleSelectGame && onToggleSelectGame(game)}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = 'scale(1.03)'
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = 'scale(1)'
+                  e.currentTarget.style.boxShadow = 'none'
+                }}
+                onMouseDown={e => {
+                  e.currentTarget.style.transform = 'scale(0.98)'
+                }}
+                onMouseUp={e => {
+                  e.currentTarget.style.transform = 'scale(1.03)'
+                }}
+              >
+                {isGameMultiSelectMode && (
+                  <div style={{
+                    ...styles.selectCheckbox,
+                    ...(selectedGames.includes(game.game_id) ? styles.selectCheckboxChecked : {})
+                  }}>
+                    {selectedGames.includes(game.game_id) && (
+                      <div style={styles.selectCheckboxInner} />
+                    )}
+                  </div>
+                )}
+                <div style={styles.gameIcon}>
+                  {iconSrc ? (
+                    hasSteamLogo ? (
                       <img 
                         src={getImageSrc(iconSrc)} 
                         alt={`${game.display_title || game.game_title} 图标`}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        style={styles.gameLogoImage}
                         onError={(e) => {
                           e.target.style.display = 'none';
                           e.target.parentElement.innerHTML = game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?';
+                          e.target.parentElement.style.background = theme.accent;
                         }}
                       />
+                    ) : (
+                      <div style={{ 
+                        width: 48, 
+                        height: 48, 
+                        borderRadius: 8, 
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: theme.accent
+                      }}>
+                        <img 
+                          src={getImageSrc(iconSrc)} 
+                          alt={`${game.display_title || game.game_title} 图标`}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.parentElement.innerHTML = game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?';
+                          }}
+                        />
+                      </div>
+                    )
+                  ) : (
+                    <div style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: theme.accent,
+                      borderRadius: 6
+                    }}>
+                      {game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?'}
                     </div>
-                  )
-                ) : (
-                  <div style={{
-                    width: '100%',
-                    height: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: theme.accent,
-                    borderRadius: 6
-                  }}>
-                    {game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?'}
-                  </div>
-                )}
+                  )}
+                </div>
+                <div style={styles.gameTitle}>{game.display_title || game.game_title}</div>
+                <div style={styles.gameCount}>{game.count} {t.game.screenshots}</div>
+                <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>
+                  {t.game.last_updated} {formatDate(game.last_timestamp)}
+                </div>
               </div>
-              <div style={styles.gameTitle}>{game.display_title || game.game_title}</div>
-              <div style={styles.gameCount}>{game.count} {t.game.screenshots}</div>
-              <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>
-                {t.game.last_updated} {formatDate(game.last_timestamp)}
-              </div>
+            );})}
+          </div>
+          
+          {isLoading && (
+            <div style={styles.loading}>加载中...</div>
+          )}
+          
+          {totalPages > 1 && onLoadPage && (
+            <div style={styles.pagination}>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => onLoadPage(1)}
+                disabled={currentPage === 1}
+              >
+                首页
+              </button>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => onLoadPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                上一页
+              </button>
+              <span style={styles.paginationInfo}>
+                第 {currentPage} 页，共 {totalPages} 页
+              </span>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => onLoadPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                下一页
+              </button>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => onLoadPage(totalPages)}
+                disabled={currentPage === totalPages}
+              >
+                末页
+              </button>
             </div>
-          );})}
-        </div>
+          )}
+        </>
       )}
     </div>
   )

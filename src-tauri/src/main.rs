@@ -59,6 +59,12 @@ fn get_games(state: State<AppState>) -> Result<Vec<GameSummary>, String> {
 }
 
 #[tauri::command]
+fn get_games_with_pagination(page: i32, page_size: i32, state: State<AppState>) -> Result<PaginatedGames, String> {
+    let conn = state.db.lock().unwrap();
+    db::get_games_with_pagination(&conn, page, page_size).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn delete_screenshot(id: i32, state: State<AppState>) -> Result<(), String> {
     let conn = state.db.lock().unwrap();
 
@@ -133,12 +139,24 @@ async fn migrate_data(app: AppHandle, new_path: String, state: State<'_, AppStat
     
     println!("[迁移] 从 {:?} 迁移到 {:?}", old_data_dir, new_data_dir);
     
+    if old_data_dir == new_data_dir {
+        return Ok(MigrationResult {
+            success: false,
+            error: Some("新路径与原路径相同".to_string()),
+            stats: None,
+            old_dir_deleted: false,
+            old_dir_pending_delete: None,
+        });
+    }
+    
     if !new_data_dir.exists() {
         if let Err(e) = std::fs::create_dir_all(&new_data_dir) {
             return Ok(MigrationResult {
                 success: false,
                 error: Some(format!("无法创建新目录: {}", e)),
                 stats: None,
+                old_dir_deleted: false,
+                old_dir_pending_delete: None,
             });
         }
     }
@@ -168,12 +186,91 @@ async fn migrate_data(app: AppHandle, new_path: String, state: State<'_, AppStat
             success: false,
             error: Some(format!("复制文件失败: {}", e)),
             stats: Some(stats),
+            old_dir_deleted: false,
+            old_dir_pending_delete: None,
         });
     }
     
-    let _ = app.emit("migration-progress", MigrationProgress { current: stats.copied_files, total: stats.total_files, status: "迁移完成".to_string() });
+    let _ = app.emit("migration-progress", MigrationProgress { current: stats.copied_files, total: stats.total_files, status: "清理原目录...".to_string() });
     
     db::save_custom_data_dir(&new_data_dir);
+    
+    println!("[迁移] 检查原目录是否可以删除...");
+    println!("[迁移] 原目录路径: {:?}", old_data_dir);
+    
+    let is_valid_data_dir = old_data_dir.join("screenshots.db").exists() 
+        || old_data_dir.join("screenshots_v2.db").exists()
+        || old_data_dir.join("screenshots").exists()
+        || old_data_dir.join("thumbnails").exists();
+    
+    println!("[迁移] 原目录有效性检查:");
+    println!("[迁移]   - screenshots.db 存在: {}", old_data_dir.join("screenshots.db").exists());
+    println!("[迁移]   - screenshots_v2.db 存在: {}", old_data_dir.join("screenshots_v2.db").exists());
+    println!("[迁移]   - screenshots 目录存在: {}", old_data_dir.join("screenshots").exists());
+    println!("[迁移]   - thumbnails 目录存在: {}", old_data_dir.join("thumbnails").exists());
+    println!("[迁移]   - is_valid_data_dir: {}", is_valid_data_dir);
+    
+    let is_safe_to_delete = {
+        let old_str = old_data_dir.to_string_lossy().to_lowercase();
+        let old_str_trimmed = old_str.trim_end_matches(|c| c == '/' || c == '\\');
+        
+        println!("[迁移] 原目录路径(小写): {}", old_str);
+        println!("[迁移] 原目录路径(去除尾部斜杠): {}", old_str_trimmed);
+        
+        let dangerous_paths = [
+            "c:", "d:", "e:", "f:", "g:", "h:",
+            "c:\\", "d:\\", "e:\\", "f:\\", "g:\\", "h:\\",
+            "c:/", "d:/", "e:/", "f:/", "g:/", "h:/",
+            "/", "\\",
+            "c:\\windows", "c:\\program files", "c:\\program files (x86)",
+            "c:\\users", "c:\\documents and settings",
+        ];
+        
+        let mut safe = true;
+        for dangerous in dangerous_paths.iter() {
+            let dangerous_trimmed = dangerous.trim_end_matches(|c| c == '/' || c == '\\');
+            if old_str_trimmed == dangerous_trimmed {
+                println!("[迁移] 警告: 原目录匹配危险路径: {}", dangerous);
+                safe = false;
+                break;
+            }
+        }
+        
+        if safe && old_str_trimmed.len() <= 3 {
+            println!("[迁移] 警告: 原目录路径过短，可能是根目录");
+            safe = false;
+        }
+        
+        println!("[迁移]   - is_safe_to_delete: {}", safe);
+        safe
+    };
+    
+    let mut old_dir_deleted = false;
+    let mut old_dir_pending_delete: Option<String> = None;
+    
+    if is_valid_data_dir && is_safe_to_delete {
+        println!("[迁移] 开始删除原数据目录: {:?}", old_data_dir);
+        match std::fs::remove_dir_all(&old_data_dir) {
+            Ok(_) => {
+                println!("[迁移] 原目录删除成功");
+                old_dir_deleted = true;
+            }
+            Err(e) => {
+                println!("[迁移] 删除原目录失败: {} (kind: {:?})", e, e.kind());
+                println!("[迁移] 将在下次启动时删除原目录");
+                let pending_delete_file = new_data_dir.join(".pending_delete");
+                if let Err(write_err) = std::fs::write(&pending_delete_file, old_data_dir.to_string_lossy().as_ref()) {
+                    println!("[迁移] 无法写入待删除标记文件: {}", write_err);
+                } else {
+                    old_dir_pending_delete = Some(old_data_dir.to_string_lossy().to_string());
+                }
+            }
+        }
+    } else {
+        println!("[迁移] 跳过删除原目录 (valid={}, safe={})", is_valid_data_dir, is_safe_to_delete);
+    }
+    
+    let _ = app.emit("migration-progress", MigrationProgress { current: stats.copied_files, total: stats.total_files, status: "迁移完成".to_string() });
     
     println!("[迁移] 迁移完成: {} 文件, {} 字节", stats.copied_files, stats.total_size);
     
@@ -181,6 +278,8 @@ async fn migrate_data(app: AppHandle, new_path: String, state: State<'_, AppStat
         success: true,
         error: None,
         stats: Some(stats),
+        old_dir_deleted,
+        old_dir_pending_delete,
     })
 }
 
@@ -928,12 +1027,13 @@ fn get_game_screenshot_count(game_id: String, state: State<AppState>) -> Result<
     db::get_game_screenshot_count(&conn, &game_id).map_err(|e| e.to_string())
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct ImportFileInfo {
     path: String,
     name: String,
     size: u64,
     created: i64,
+    modified: i64,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -952,6 +1052,55 @@ struct ImportProgress {
     total: u32,
     current_file: String,
     status: String,
+}
+
+fn parse_filename_timestamp(filename: &str) -> Option<i64> {
+    use chrono::{NaiveDateTime, NaiveDate, NaiveTime, TimeZone, Local};
+    
+    let patterns = [
+        r"^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})",
+        r"^(\d{4})-(\d{2})-(\d{2})[ _](\d{2})-(\d{2})-(\d{2})",
+        r"^(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})",
+        r"^(\d{4})\.(\d{2})\.(\d{2})[ _](\d{2})\.(\d{2})\.(\d{2})",
+        r"^Screenshot[_\s](\d{4})-(\d{2})-(\d{2})[ _](\d{2})-(\d{2})-(\d{2})",
+        r"^Screenshot[_\s](\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})",
+    ];
+    
+    for pattern in &patterns {
+        if let Some(timestamp) = try_parse_with_pattern(filename, pattern) {
+            return Some(timestamp);
+        }
+    }
+    
+    None
+}
+
+fn try_parse_with_pattern(filename: &str, pattern: &str) -> Option<i64> {
+    use chrono::{NaiveDateTime, NaiveDate, NaiveTime, TimeZone, Local};
+    
+    let re = regex::Regex::new(pattern).ok()?;
+    let caps = re.captures(filename)?;
+    
+    let year: i32 = caps.get(1)?.as_str().parse().ok()?;
+    let month: u32 = caps.get(2)?.as_str().parse().ok()?;
+    let day: u32 = caps.get(3)?.as_str().parse().ok()?;
+    let hour: u32 = caps.get(4)?.as_str().parse().ok()?;
+    let minute: u32 = caps.get(5)?.as_str().parse().ok()?;
+    let second: u32 = caps.get(6)?.as_str().parse().ok()?;
+    
+    if month < 1 || month > 12 || day < 1 || day > 31 
+       || hour > 23 || minute > 59 || second > 59 {
+        return None;
+    }
+    
+    let naive_dt = NaiveDateTime::new(
+        NaiveDate::from_ymd_opt(year, month, day)?,
+        NaiveTime::from_hms_opt(hour, minute, second)?
+    );
+    
+    let local_dt = Local.from_local_datetime(&naive_dt).single()?;
+    
+    Some(local_dt.timestamp())
 }
 
 fn calculate_file_hash(path: &std::path::PathBuf) -> Result<String, String> {
@@ -978,137 +1127,183 @@ fn calculate_file_hash(path: &std::path::PathBuf) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn import_screenshots(
+async fn import_screenshots(
     game_id: String,
     display_title: String,
     files: Vec<ImportFileInfo>,
     app: tauri::AppHandle,
-    state: State<AppState>,
+    state: State<'_, AppState>,
 ) -> Result<ImportResult, String> {
-    use std::time::Instant;
-    let start_time = Instant::now();
-    
     println!("[导入] 导入截图到游戏: {} ({} 个文件)", game_id, files.len());
     
     let total = files.len() as u32;
+    let app_handle = app.clone();
+    let db = state.db.clone();
+    let game_id_clone = game_id.clone();
+    let display_title_clone = display_title.clone();
+    let files_clone = files.clone();
     
-    let existing_filenames: std::collections::HashSet<String> = {
-        let conn = state.db.lock().unwrap();
-        let mut filenames = std::collections::HashSet::new();
-        if let Ok(existing) = db::get_screenshots(&conn, Some(&game_id), "desc") {
-            for ss in existing {
-                if let Some(filename) = std::path::PathBuf::from(&ss.file_path).file_name() {
-                    filenames.insert(filename.to_string_lossy().to_string());
+    let (tx, rx) = tokio::sync::oneshot::channel::<ImportResult>();
+    
+    std::thread::spawn(move || {
+        use std::time::Instant;
+        let start_time = Instant::now();
+        
+        let existing_filenames: std::collections::HashSet<String> = {
+            let conn = db.lock().unwrap();
+            let mut filenames = std::collections::HashSet::new();
+            if let Ok(existing) = db::get_screenshots(&conn, Some(&game_id_clone), "desc") {
+                for ss in existing {
+                    if let Some(filename) = std::path::PathBuf::from(&ss.file_path).file_name() {
+                        filenames.insert(filename.to_string_lossy().to_string());
+                    }
                 }
             }
-        }
-        filenames
-    };
-    println!("[导入] 已有 {} 个文件", existing_filenames.len());
-    
-    let game_dir = db::get_game_dir(&game_id);
-    let thumbnails_dir = game_dir.join("thumbnails");
-    if !thumbnails_dir.exists() {
-        let _ = std::fs::create_dir_all(&thumbnails_dir);
-    }
-    
-    let mut current = 0u32;
-    let mut imported_count = 0u32;
-    let mut skipped_count = 0u32;
-    let mut failed_count = 0u32;
-    
-    for file in &files {
-        current += 1;
+            filenames
+        };
+        println!("[导入] 已有 {} 个文件", existing_filenames.len());
         
-        let _ = app.emit("import-progress", ImportProgress {
-            current,
-            total,
-            current_file: file.name.clone(),
-            status: "处理中".to_string(),
-        });
-        
-        let src_path = std::path::PathBuf::from(&file.path);
-        
-        if !src_path.exists() {
-            failed_count += 1;
-            continue;
+        let game_dir = db::get_game_dir(&game_id_clone);
+        let thumbnails_dir = game_dir.join("thumbnails");
+        if !thumbnails_dir.exists() {
+            let _ = std::fs::create_dir_all(&thumbnails_dir);
         }
         
-        let timestamp = file.created;
-        let original_ext = src_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("png")
-            .to_lowercase();
-        let millis = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .subsec_millis();
-        let filename = format!("{}_{:03}.{}", timestamp, millis, original_ext);
-        let thumbnail_filename = format!("{}_{:03}_thumb.webp", timestamp, millis);
+        let mut current = 0u32;
+        let mut imported_count = 0u32;
+        let mut skipped_count = 0u32;
+        let mut failed_count = 0u32;
         
-        if existing_filenames.contains(&filename) {
-            println!("[导入] 跳过重复文件: {}", filename);
-            skipped_count += 1;
-            continue;
-        }
-        
-        let dest_path = game_dir.join(&filename);
-        let thumbnail_path = thumbnails_dir.join(&thumbnail_filename);
-        
-        match process_and_save_image(&src_path, &dest_path, &thumbnail_path) {
-            Ok(_) => {
-                if let (Some(file_path_str), Some(thumb_path_str)) = 
-                    (dest_path.to_str(), thumbnail_path.to_str()) {
-                    let conn = state.db.lock().unwrap();
-                    if db::insert_screenshot(&conn, file_path_str, thumb_path_str, &game_id, &display_title, timestamp, None).is_ok() {
-                        imported_count += 1;
+        for file in &files_clone {
+            current += 1;
+            
+            let _ = app_handle.emit("import-progress", ImportProgress {
+                current,
+                total,
+                current_file: file.name.clone(),
+                status: "处理中".to_string(),
+            });
+            
+            let file_start = std::time::Instant::now();
+            let src_path = std::path::PathBuf::from(&file.path);
+            
+            if !src_path.exists() {
+                failed_count += 1;
+                continue;
+            }
+            
+            let step1 = std::time::Instant::now();
+            let timestamp = parse_filename_timestamp(&file.name)
+                .unwrap_or(file.modified);
+            println!("[导入] 解析时间戳耗时: {}ms", step1.elapsed().as_millis());
+            
+            let original_ext = src_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("png")
+                .to_lowercase();
+            let millis = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .subsec_millis();
+            let filename = format!("{}_{:03}.{}", timestamp, millis, original_ext);
+            let thumbnail_filename = format!("{}_{:03}_thumb.jpg", timestamp, millis);
+            
+            if existing_filenames.contains(&filename) {
+                println!("[导入] 跳过重复文件: {}", filename);
+                skipped_count += 1;
+                continue;
+            }
+            
+            let dest_path = game_dir.join(&filename);
+            let thumbnail_path = thumbnails_dir.join(&thumbnail_filename);
+            
+            let step2 = std::time::Instant::now();
+            match process_and_save_image(&src_path, &dest_path, &thumbnail_path) {
+                Ok(process_time) => {
+                    println!("[导入] 处理图片耗时: {}ms (复制:{}ms, 打开:{}ms, 缩略图:{}ms, 保存:{}ms)", 
+                        step2.elapsed().as_millis(),
+                        process_time.copy_ms,
+                        process_time.open_ms,
+                        process_time.thumb_ms,
+                        process_time.save_ms
+                    );
+                    
+                    let step3 = std::time::Instant::now();
+                    if let (Some(file_path_str), Some(thumb_path_str)) = 
+                        (dest_path.to_str(), thumbnail_path.to_str()) {
+                        let conn = db.lock().unwrap();
+                        if db::insert_screenshot(&conn, file_path_str, thumb_path_str, &game_id_clone, &display_title_clone, timestamp, None).is_ok() {
+                            imported_count += 1;
+                        } else {
+                            failed_count += 1;
+                        }
                     } else {
                         failed_count += 1;
                     }
-                } else {
+                    println!("[导入] 数据库插入耗时: {}ms", step3.elapsed().as_millis());
+                }
+                Err(e) => {
+                    println!("[导入] 处理图片失败: {} - {}", file.name, e);
                     failed_count += 1;
                 }
             }
-            Err(e) => {
-                println!("[导入] 处理图片失败: {} - {}", file.name, e);
-                failed_count += 1;
-            }
+            println!("[导入] 文件 {} 总耗时: {}ms", file.name, file_start.elapsed().as_millis());
         }
-    }
-    
-    let duration_ms = start_time.elapsed().as_millis() as u64;
-    println!("[导入] 导入完成: {} 成功, {} 跳过, {} 失败, 耗时 {}ms", imported_count, skipped_count, failed_count, duration_ms);
-    
-    let _ = app.emit("import-progress", ImportProgress {
-        current: total,
-        total,
-        current_file: String::new(),
-        status: "完成".to_string(),
+        
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+        println!("[导入] 导入完成: {} 成功, {} 跳过, {} 失败, 耗时 {}ms", imported_count, skipped_count, failed_count, duration_ms);
+        
+        let _ = app_handle.emit("import-progress", ImportProgress {
+            current: total,
+            total,
+            current_file: String::new(),
+            status: "完成".to_string(),
+        });
+        
+        let result = ImportResult {
+            success: true,
+            imported_count,
+            skipped_count,
+            failed_count,
+            duration_ms,
+            error: None,
+        };
+        
+        let _ = tx.send(result);
     });
     
-    Ok(ImportResult {
-        success: true,
-        imported_count,
-        skipped_count,
-        failed_count,
-        duration_ms,
-        error: None,
-    })
+    rx.await.map_err(|_| "导入过程中发生错误".to_string())
 }
 
-fn process_and_save_image(src: &std::path::PathBuf, dest: &std::path::PathBuf, thumbnail_path: &std::path::PathBuf) -> Result<(), String> {
+struct ProcessTime {
+    copy_ms: u128,
+    open_ms: u128,
+    thumb_ms: u128,
+    save_ms: u128,
+}
+
+fn process_and_save_image(src: &std::path::PathBuf, dest: &std::path::PathBuf, thumbnail_path: &std::path::PathBuf) -> Result<ProcessTime, String> {
+    let t1 = std::time::Instant::now();
     std::fs::copy(src, dest)
         .map_err(|e| format!("复制图片失败: {}", e))?;
+    let copy_ms = t1.elapsed().as_millis();
     
+    let t2 = std::time::Instant::now();
     let img = image::open(src)
         .map_err(|e| format!("无法打开图片生成缩略图: {}", e))?;
+    let open_ms = t2.elapsed().as_millis();
     
+    let t3 = std::time::Instant::now();
     let thumbnail = create_thumbnail(&img, 320);
-    save_as_webp(&thumbnail, thumbnail_path, 50.0)
-        .map_err(|e| format!("保存缩略图失败: {}", e))?;
+    let thumb_ms = t3.elapsed().as_millis();
     
-    Ok(())
+    let t4 = std::time::Instant::now();
+    save_as_jpg(&thumbnail, thumbnail_path, 75)
+        .map_err(|e| format!("保存缩略图失败: {}", e))?;
+    let save_ms = t4.elapsed().as_millis();
+    
+    Ok(ProcessTime { copy_ms, open_ms, thumb_ms, save_ms })
 }
 
 #[tauri::command]
@@ -1286,6 +1481,23 @@ fn main() {
     println!("[启动] PuddingSnap 启动中...");
     if DEBUG_MODE {
         println!("[调试] 调试模式已开启 - 按 F12 进行测试截图");
+    }
+    
+    // 检查是否有待删除的旧数据目录
+    let data_dir = db::get_data_dir();
+    let pending_delete_file = data_dir.join(".pending_delete");
+    if pending_delete_file.exists() {
+        if let Ok(old_dir_path) = std::fs::read_to_string(&pending_delete_file) {
+            println!("[启动] 发现待删除的旧目录: {}", old_dir_path);
+            let old_dir = std::path::PathBuf::from(&old_dir_path);
+            if old_dir.exists() {
+                match std::fs::remove_dir_all(&old_dir) {
+                    Ok(_) => println!("[启动] 旧目录删除成功: {}", old_dir_path),
+                    Err(e) => println!("[启动] 删除旧目录失败: {}", e),
+                }
+            }
+            let _ = std::fs::remove_file(&pending_delete_file);
+        }
     }
     
     let db_conn = match db::init_db() {
@@ -1780,6 +1992,7 @@ fn main() {
             get_screenshots,
             get_screenshots_with_pagination,
             get_games,
+            get_games_with_pagination,
             delete_screenshot,
             delete_screenshots,
             update_note,

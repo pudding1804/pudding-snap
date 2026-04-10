@@ -53,6 +53,7 @@ export function ScreenshotModal({
           }
           break
         case 'Escape':
+        case 'Backspace':
           e.preventDefault()
           onClose()
           break
@@ -65,8 +66,19 @@ export function ScreenshotModal({
       }
     }
 
+    const handleMouseDown = (e) => {
+      if (e.button === 3 || e.button === 4) {
+        e.preventDefault()
+        onClose()
+      }
+    }
+
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('mousedown', handleMouseDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('mousedown', handleMouseDown)
+    }
   }, [selectedScreenshotIndex, screenshots.length, selectedScreenshot, onNavigate, onClose, onDelete])
 
   if (!selectedScreenshot) return null

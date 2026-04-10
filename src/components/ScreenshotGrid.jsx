@@ -25,9 +25,8 @@ export function ScreenshotGrid({
   selectedScreenshots,
   sortOrder,
   iconSize,
-  currentPage,
-  totalPages,
-  isLoadingMore,
+  currentPage = 1,
+  totalPages = 1,
   onSortChange,
   onIconSizeChange,
   onToggleMultiSelect,
@@ -35,6 +34,19 @@ export function ScreenshotGrid({
   onToggleSelect,
   onLoadPage,
 }) {
+  console.log('[DEBUG] ScreenshotGrid render:', { 
+    currentPage, 
+    totalPages, 
+    hasOnLoadPage: !!onLoadPage,
+    screenshotsCount: screenshots?.length 
+  })
+  
+  const handlePageChange = (page) => {
+    console.log('[DEBUG] ScreenshotGrid handlePageChange:', page)
+    if (onLoadPage) {
+      onLoadPage(page)
+    }
+  }
   return (
     <div>
       <div style={styles.header}>
@@ -169,47 +181,45 @@ export function ScreenshotGrid({
             ))}
           </div>
           
-          {isLoadingMore && (
-            <div style={styles.loading}>加载更多...</div>
+          {totalPages > 1 && (
+            <div style={styles.pagination}>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => handlePageChange(1)}
+                disabled={currentPage === 1}
+              >
+                首页
+              </button>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                上一页
+              </button>
+              <span style={styles.paginationInfo}>
+                第 {currentPage} 页，共 {totalPages} 页
+              </span>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                下一页
+              </button>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => handlePageChange(totalPages)}
+                disabled={currentPage === totalPages}
+              >
+                末页
+              </button>
+            </div>
           )}
-          
-          <div style={styles.pagination}>
-            <button 
-              style={styles.paginationBtn}
-              {...btnEvents}
-              onClick={() => onLoadPage(1)}
-              disabled={currentPage === 1}
-            >
-              首页
-            </button>
-            <button 
-              style={styles.paginationBtn}
-              {...btnEvents}
-              onClick={() => onLoadPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-            >
-              上一页
-            </button>
-            <span style={styles.paginationInfo}>
-              第 {currentPage} 页，共 {totalPages} 页
-            </span>
-            <button 
-              style={styles.paginationBtn}
-              {...btnEvents}
-              onClick={() => onLoadPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-            >
-              下一页
-            </button>
-            <button 
-              style={styles.paginationBtn}
-              {...btnEvents}
-              onClick={() => onLoadPage(totalPages)}
-              disabled={currentPage === totalPages}
-            >
-              末页
-            </button>
-          </div>
         </>
       )}
     </div>

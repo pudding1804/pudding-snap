@@ -1,5 +1,5 @@
 use rusqlite::{params, Connection, Result};
-use crate::models::{ScreenshotRecord, GameSummary, PaginationResult, MigrationResult, GameCache};
+use crate::models::{ScreenshotRecord, GameSummary, PaginationResult, PaginatedGames, MigrationResult, GameCache};
 use serde::{Serialize, Deserialize};
 use std::path::PathBuf;
 use std::collections::hash_map::DefaultHasher;
@@ -519,6 +519,9 @@ pub fn get_screenshots_with_pagination(
 
     Ok(PaginationResult {
         screenshots,
+        total: total_count,
+        page,
+        page_size,
         total_pages,
     })
 }
@@ -546,6 +549,78 @@ pub fn get_games(conn: &Connection) -> Result<Vec<GameSummary>> {
     })?;
 
     iter.collect()
+}
+
+pub fn get_games_with_pagination(conn: &Connection, page: i32, page_size: i32) -> Result<PaginatedGames> {
+    let offset = (page - 1) * page_size;
+    
+    let total: i32 = conn.query_row(
+        "SELECT COUNT(*) FROM (
+            SELECT game_id FROM screenshots GROUP BY game_id
+            UNION
+            SELECT game_id FROM game_cache
+        )",
+        [],
+        |row| row.get(0)
+    )?;
+    let total_pages = if total == 0 { 1 } else { (total + page_size - 1) / page_size };
+    
+    let mut stmt = conn.prepare(
+        "SELECT game_id, game_title, display_title, game_banner_url, screenshot_count, last_timestamp, icon_path, steam_logo_path
+         FROM (
+             SELECT 
+                 s.game_id, 
+                 s.game_title, 
+                 COALESCE(s.display_title, s.game_title) as display_title, 
+                 COALESCE(s.game_banner_url, '') as game_banner_url, 
+                 COUNT(*) as screenshot_count, 
+                 MAX(s.timestamp) as last_timestamp,
+                 gc.icon_path,
+                 gc.steam_logo_path
+             FROM screenshots s
+             LEFT JOIN game_cache gc ON s.game_id = gc.game_id
+             GROUP BY s.game_id
+             
+             UNION ALL
+             
+             SELECT 
+                 gc.game_id, 
+                 COALESCE(gc.steam_name, gc.display_title, gc.game_id) as game_title, 
+                 COALESCE(gc.display_title, '') as display_title, 
+                 '' as game_banner_url, 
+                 0 as screenshot_count, 
+                 0 as last_timestamp,
+                 gc.icon_path,
+                 gc.steam_logo_path
+             FROM game_cache gc
+             WHERE gc.game_id NOT IN (SELECT DISTINCT game_id FROM screenshots)
+         )
+         ORDER BY last_timestamp DESC
+         LIMIT ?1 OFFSET ?2",
+    )?;
+
+    let iter = stmt.query_map(params![page_size, offset], |row| {
+        Ok(GameSummary {
+            game_id: row.get(0)?,
+            game_title: row.get(1)?,
+            display_title: row.get(2)?,
+            game_banner_url: row.get(3)?,
+            count: row.get(4)?,
+            last_timestamp: row.get(5)?,
+            game_icon_path: row.get(6)?,
+            steam_logo_path: row.get(7)?,
+        })
+    })?;
+
+    let games: Vec<GameSummary> = iter.collect::<Result<Vec<_>>>()?;
+    
+    Ok(PaginatedGames {
+        games,
+        total,
+        page,
+        page_size,
+        total_pages,
+    })
 }
 
 pub fn delete_screenshot(conn: &Connection, id: i32) -> Result<()> {
@@ -597,6 +672,8 @@ pub fn migrate_data(new_path: &str) -> Result<MigrationResult> {
                 success: false,
                 error: Some(format!("无法创建新目录: {}", e)),
                 stats: None,
+                old_dir_deleted: false,
+                old_dir_pending_delete: None,
             });
         }
     }
@@ -614,6 +691,8 @@ pub fn migrate_data(new_path: &str) -> Result<MigrationResult> {
             success: false,
             error: Some(format!("复制文件失败: {}", e)),
             stats: Some(stats),
+            old_dir_deleted: false,
+            old_dir_pending_delete: None,
         });
     }
     
@@ -625,6 +704,8 @@ pub fn migrate_data(new_path: &str) -> Result<MigrationResult> {
         success: true,
         error: None,
         stats: Some(stats),
+        old_dir_deleted: false,
+        old_dir_pending_delete: None,
     })
 }
 
@@ -711,6 +792,8 @@ pub fn switch_data_directory(new_path: &str) -> Result<MigrationResult> {
             success: false,
             error: check_result.message,
             stats: None,
+            old_dir_deleted: false,
+            old_dir_pending_delete: None,
         });
     }
     
@@ -726,6 +809,8 @@ pub fn switch_data_directory(new_path: &str) -> Result<MigrationResult> {
         success: true,
         error: None,
         stats: None,
+        old_dir_deleted: false,
+        old_dir_pending_delete: None,
     })
 }
 

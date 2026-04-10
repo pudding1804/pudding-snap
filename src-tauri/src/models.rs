@@ -28,6 +28,18 @@ pub struct GameSummary {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PaginationResult {
     pub screenshots: Vec<ScreenshotRecord>,
+    pub total: i32,
+    pub page: i32,
+    pub page_size: i32,
+    pub total_pages: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PaginatedGames {
+    pub games: Vec<GameSummary>,
+    pub total: i32,
+    pub page: i32,
+    pub page_size: i32,
     pub total_pages: i32,
 }
 
@@ -44,6 +56,8 @@ pub struct MigrationResult {
     pub success: bool,
     pub error: Option<String>,
     pub stats: Option<MigrationStats>,
+    pub old_dir_deleted: bool,
+    pub old_dir_pending_delete: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

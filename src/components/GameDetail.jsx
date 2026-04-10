@@ -28,6 +28,8 @@ export function GameDetail({
   iconSize,
   showMenu,
   showSortMenu,
+  currentPage = 1,
+  totalPages = 1,
   onBack,
   onSortChange,
   onIconSizeChange,
@@ -38,6 +40,7 @@ export function GameDetail({
   onOpenImport,
   onToggleMenu,
   onToggleSortMenu,
+  onLoadPage,
 }) {
   console.log('[DEBUG] GameDetail render, showMenu:', showMenu, 'showSortMenu:', showSortMenu, 'screenshots count:', screenshots?.length)
   
@@ -329,70 +332,112 @@ export function GameDetail({
       {screenshots.length === 0 ? (
         <div style={styles.empty}>{t.empty.no_game_screenshots}</div>
       ) : (
-        <div style={styles.grid}>
-          {screenshots.map((ss, index) => (
-            <div 
-              key={ss.id} 
-              style={{ 
-                ...styles.card, 
-                ...(isMultiSelectMode ? styles.cardWithCheckbox : {}),
-                ...(isMultiSelectMode && selectedScreenshots.includes(ss.id) ? styles.cardSelected : {})
-              }}
-              onClick={() => onToggleSelect && onToggleSelect(ss.id, index)}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = 'scale(1.03)'
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = 'scale(1)'
-                e.currentTarget.style.boxShadow = 'none'
-              }}
-              onMouseDown={e => {
-                e.currentTarget.style.transform = 'scale(0.98)'
-              }}
-              onMouseUp={e => {
-                e.currentTarget.style.transform = 'scale(1.03)'
-              }}
-            >
-              {isMultiSelectMode && (
-                <div style={{
-                  ...styles.selectCheckbox,
-                  ...(selectedScreenshots.includes(ss.id) ? styles.selectCheckboxChecked : {})
+        <>
+          <div style={styles.grid}>
+            {screenshots.map((ss, index) => (
+              <div 
+                key={ss.id} 
+                style={{ 
+                  ...styles.card, 
+                  ...(isMultiSelectMode ? styles.cardWithCheckbox : {}),
+                  ...(isMultiSelectMode && selectedScreenshots.includes(ss.id) ? styles.cardSelected : {})
+                }}
+                onClick={() => onToggleSelect && onToggleSelect(ss.id, index)}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = 'scale(1.03)'
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = 'scale(1)'
+                  e.currentTarget.style.boxShadow = 'none'
+                }}
+                onMouseDown={e => {
+                  e.currentTarget.style.transform = 'scale(0.98)'
+                }}
+                onMouseUp={e => {
+                  e.currentTarget.style.transform = 'scale(1.03)'
+                }}
+              >
+                {isMultiSelectMode && (
+                  <div style={{
+                    ...styles.selectCheckbox,
+                    ...(selectedScreenshots.includes(ss.id) ? styles.selectCheckboxChecked : {})
+                  }}>
+                    {selectedScreenshots.includes(ss.id) && (
+                      <div style={styles.selectCheckboxInner} />
+                    )}
+                  </div>
+                )}
+                <div style={{ 
+                  width: '100%', 
+                  aspectRatio: '16 / 9', 
+                  background: theme.accent, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  overflow: 'hidden'
                 }}>
-                  {selectedScreenshots.includes(ss.id) && (
-                    <div style={styles.selectCheckboxInner} />
-                  )}
+                  <img 
+                    src={getImageSrc(ss.thumbnail_path)} 
+                    alt="截图缩略图" 
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover',
+                      objectPosition: 'center center'
+                    }}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                    loading="lazy"
+                  />
                 </div>
-              )}
-              <div style={{ 
-                width: '100%', 
-                aspectRatio: '16 / 9', 
-                background: theme.accent, 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                overflow: 'hidden'
-              }}>
-                <img 
-                  src={getImageSrc(ss.thumbnail_path)} 
-                  alt="截图缩略图" 
-                  style={{ 
-                    width: '100%', 
-                    height: '100%', 
-                    objectFit: 'cover',
-                    objectPosition: 'center center'
-                  }}
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                  loading="lazy"
-                />
+                <div style={styles.cardInfo}>
+                  <div style={styles.cardDate}>{formatDate(ss.timestamp)}</div>
+                  {ss.note && <div style={{ fontSize: 11, color: theme.text, marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.4' }}>{ss.note}</div>}
+                </div>
               </div>
-              <div style={styles.cardInfo}>
-                <div style={styles.cardDate}>{formatDate(ss.timestamp)}</div>
-                {ss.note && <div style={{ fontSize: 11, color: theme.text, marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.4' }}>{ss.note}</div>}
-              </div>
+            ))}
+          </div>
+          
+          {totalPages > 1 && onLoadPage && (
+            <div style={styles.pagination}>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => onLoadPage(1)}
+                disabled={currentPage === 1}
+              >
+                首页
+              </button>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => onLoadPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                上一页
+              </button>
+              <span style={styles.paginationInfo}>
+                第 {currentPage} 页，共 {totalPages} 页
+              </span>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => onLoadPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                下一页
+              </button>
+              <button 
+                style={styles.paginationBtn}
+                {...btnEvents}
+                onClick={() => onLoadPage(totalPages)}
+                disabled={currentPage === totalPages}
+              >
+                末页
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   )

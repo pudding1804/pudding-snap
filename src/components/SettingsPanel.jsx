@@ -29,7 +29,6 @@ export function SettingsPanel({
   onSteamLanguageChange,
   onThemeChange,
   onChangeStoragePath,
-  onImportDirectory,
   onAutostartChange,
   onShutterSoundChange,
   onPlaySoundPreview,
@@ -123,24 +122,14 @@ export function SettingsPanel({
           <p style={{ color: theme.textMuted, fontSize: 14, marginBottom: 12 }}>
             {t.settings.current_path} {storagePath}
           </p>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <button 
-              style={styles.btnPrimary} 
-              {...btnEvents}
-              onClick={onChangeStoragePath}
-              disabled={isMigrating}
-            >
-              {isMigrating ? t.settings.migrating : t.settings.change_path}
-            </button>
-            <button 
-              style={{ ...styles.btn, borderColor: theme.primary, color: theme.primary }} 
-              {...btnEvents}
-              onClick={onImportDirectory}
-              disabled={isMigrating}
-            >
-              {t.settings.import_directory || '导入已有目录'}
-            </button>
-          </div>
+          <button 
+            style={styles.btnPrimary} 
+            {...btnEvents}
+            onClick={onChangeStoragePath}
+            disabled={isMigrating}
+          >
+            {isMigrating ? t.settings.migrating : t.settings.change_path}
+          </button>
           {isMigrating && (
             <div style={{ marginTop: 12 }}>
               <div style={{ 
@@ -165,6 +154,9 @@ export function SettingsPanel({
           )}
           <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
             {t.settings.storage_hint}
+          </p>
+          <p style={{ color: theme.textMuted, fontSize: 11, marginTop: 4 }}>
+            提示：如果选择已有数据目录，将直接切换；否则将迁移当前数据到新目录。
           </p>
         </div>
         

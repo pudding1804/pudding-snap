@@ -272,7 +272,7 @@ pub fn create_thumbnail(image: &DynamicImage, max_size: u32) -> DynamicImage {
     let new_width = (width as f64 * ratio) as u32;
     let new_height = (height as f64 * ratio) as u32;
     
-    image.resize(new_width, new_height, image::imageops::FilterType::Triangle)
+    image.thumbnail(new_width, new_height)
 }
 
 pub fn save_as_webp(image: &DynamicImage, path: &PathBuf, quality: f32) -> Result<(), Box<dyn std::error::Error>> {
