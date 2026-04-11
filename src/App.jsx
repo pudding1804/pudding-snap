@@ -470,6 +470,7 @@ function App() {
   const selectGame = useCallback(async (game) => {
     console.log('[DEBUG] selectGame called, resetting menus')
     setSelectedGame(game)
+    setScreenshots([])
     setCurrentView('game-detail')
     setShowGameListMenu(false)
     setShowGameDetailMenu(false)
@@ -481,6 +482,7 @@ function App() {
     console.log('[DEBUG] backToGames called, resetting menus')
     setCurrentView('games')
     setSelectedGame(null)
+    setScreenshots([])
     setShowGameListMenu(false)
     setShowGameDetailMenu(false)
     setShowSortMenu(false)
