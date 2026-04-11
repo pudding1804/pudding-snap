@@ -7,12 +7,14 @@ const STYLE_TYPES = [
   { id: 'cyberpunk', name: '赛博', nameEn: 'Cyberpunk' },
   { id: 'polaroid', name: '拍立得', nameEn: 'Polaroid' },
   { id: 'vaporwave', name: '蒸汽波', nameEn: 'Vaporwave' },
-  { id: 'editorial', name: '杂志', nameEn: 'Editorial' }
+  { id: 'editorial', name: '杂志', nameEn: 'Editorial' },
+  { id: 'pink', name: '少女粉', nameEn: 'Pink' },
+  { id: 'gothic', name: '哥特', nameEn: 'Gothic' }
 ]
 
-const EXPORT_FORMATS = [
-  { id: 'png', name: 'PNG' },
-  { id: 'jpg', name: 'JPG' }
+  const EXPORT_FORMATS = [
+  { id: 'jpg', name: 'JPG' },
+  { id: 'png', name: 'PNG' }
 ]
 
 const MAX_CARD_WIDTH = 720
@@ -52,7 +54,13 @@ function ShareCard({
   username, 
   cardRef,
   cardWidth,
-  cardHeight
+  cardHeight,
+  imageScale = 1,
+  imagePosition = { x: 0, y: 0 },
+  imageRef,
+  isDragging = false,
+  handleImageMouseDown,
+  handleImageMouseLeave
 }) {
   const processName = screenshot?.game_id?.split('\\').pop().split('/').pop().replace('.exe', '') || '未知游戏'
   const gameTitle = screenshot?.display_title || screenshot?.game_title || gameInfo?.display_title || gameInfo?.game_title || processName
@@ -67,7 +75,8 @@ function ShareCard({
     flexDirection: 'column',
     position: 'relative',
     boxSizing: 'border-box',
-    overflow: 'hidden'
+    overflow: 'hidden',
+    margin: '0 auto'
   }
 
   const renderMinimalist = () => (
@@ -75,7 +84,7 @@ function ShareCard({
       ...baseStyle,
       background: '#ffffff',
       padding: 24,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      fontFamily: '"Segoe UI", Arial, sans-serif'
     }} ref={cardRef}>
       <div style={{ 
         width: '100%',
@@ -91,7 +100,17 @@ function ShareCard({
         <img 
           src={imageSrc} 
           alt="截图" 
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+          ref={imageRef}
+          style={{ 
+            width: '100%', 
+            height: '100%', 
+            objectFit: 'contain',
+            transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
+            transformOrigin: 'center center',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            userSelect: 'none'
+          }}
+          onMouseDown={handleImageMouseDown}
         />
       </div>
       <div style={{ textAlign: 'center', flexShrink: 0 }}>
@@ -149,7 +168,7 @@ function ShareCard({
       ...baseStyle,
       background: 'linear-gradient(180deg, #0a0a0a 0%, #1a0a2e 100%)',
       padding: 20,
-      fontFamily: '"Courier New", monospace',
+      fontFamily: 'Consolas, "Courier New", monospace',
       border: '2px solid #ff00ff',
       boxShadow: '0 0 30px rgba(255,0,255,0.3)'
     }} ref={cardRef}>
@@ -176,12 +195,18 @@ function ShareCard({
         <img 
           src={imageSrc} 
           alt="截图" 
+          ref={imageRef}
           style={{ 
             width: '100%', 
             height: '100%', 
             objectFit: 'contain',
-            filter: 'contrast(1.1) saturate(1.2)'
-          }} 
+            filter: 'contrast(1.1) saturate(1.2)',
+            transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
+            transformOrigin: 'center center',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            userSelect: 'none'
+          }}
+          onMouseDown={handleImageMouseDown}
         />
       </div>
       <div style={{ textAlign: 'center', flexShrink: 0 }}>
@@ -250,7 +275,7 @@ function ShareCard({
       ...baseStyle,
       background: '#f5f5f0',
       padding: 20,
-      fontFamily: '"SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontFamily: 'Georgia, "Times New Roman", serif',
       boxShadow: '0 10px 40px rgba(0,0,0,0.15)'
     }} ref={cardRef}>
       <div style={{ 
@@ -268,7 +293,17 @@ function ShareCard({
         <img 
           src={imageSrc} 
           alt="截图" 
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+          ref={imageRef}
+          style={{ 
+            width: '100%', 
+            height: '100%', 
+            objectFit: 'contain',
+            transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
+            transformOrigin: 'center center',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            userSelect: 'none'
+          }}
+          onMouseDown={handleImageMouseDown}
         />
       </div>
       <div style={{ textAlign: 'center', flexShrink: 0 }}>
@@ -358,7 +393,17 @@ function ShareCard({
           <img 
             src={imageSrc} 
             alt="截图" 
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+            ref={imageRef}
+          style={{ 
+            width: '100%', 
+            height: '100%', 
+            objectFit: 'contain',
+            transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
+            transformOrigin: 'center center',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            userSelect: 'none'
+          }}
+          onMouseDown={handleImageMouseDown}
           />
         </div>
       </div>
@@ -432,7 +477,7 @@ function ShareCard({
     <div style={{
       ...baseStyle,
       background: '#1a1a1a',
-      fontFamily: '"SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      fontFamily: 'Georgia, "Times New Roman", serif'
     }} ref={cardRef}>
       <div style={{ 
         width: '100%',
@@ -447,11 +492,17 @@ function ShareCard({
         <img 
           src={imageSrc} 
           alt="截图" 
+          ref={imageRef}
           style={{ 
             width: '100%', 
             height: '100%', 
-            objectFit: 'contain'
-          }} 
+            objectFit: 'contain',
+            transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
+            transformOrigin: 'center center',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            userSelect: 'none'
+          }}
+          onMouseDown={handleImageMouseDown}
         />
       </div>
       <div style={{ 
@@ -514,12 +565,258 @@ function ShareCard({
     </div>
   )
 
+  const renderPink = () => (
+    <div style={{
+      ...baseStyle,
+      background: 'linear-gradient(180deg, #ffc8dd 0%, #ffafcc 50%, #bde0fe 100%)',
+      padding: 24,
+      fontFamily: '"Comic Sans MS", Tahoma, sans-serif'
+    }} ref={cardRef}>
+      <div style={{ 
+        width: '100%',
+        flex: 1,
+        borderRadius: 12,
+        overflow: 'hidden',
+        background: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20,
+        boxShadow: '0 8px 25px rgba(255,175,204,0.3)'
+      }}>
+        <img 
+          src={imageSrc} 
+          alt="截图" 
+          ref={imageRef}
+          style={{ 
+            width: '100%', 
+            height: '100%', 
+            objectFit: 'contain',
+            transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
+            transformOrigin: 'center center',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            userSelect: 'none'
+          }}
+          onMouseDown={handleImageMouseDown}
+        />
+      </div>
+      <div style={{ 
+        background: 'rgba(255,255,255,0.8)',
+        borderRadius: 12,
+        padding: 20,
+        textAlign: 'center',
+        flexShrink: 0,
+        boxShadow: '0 4px 15px rgba(255,175,204,0.2)'
+      }}>
+        <div style={{ 
+          fontSize: 24, 
+          fontWeight: 600, 
+          color: '#e63946', 
+          marginBottom: 8,
+          textShadow: '1px 1px 0 rgba(255,175,204,0.5)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}>
+          {gameTitle}
+        </div>
+        <div style={{ 
+          fontSize: 14, 
+          color: '#8d99ae', 
+          marginBottom: 12,
+          fontVariantNumeric: 'tabular-nums'
+        }}>
+          {dateTime}
+        </div>
+        {note && (
+          <div style={{ 
+            fontSize: 15, 
+            color: '#457b9d', 
+            lineHeight: 1.6,
+            fontStyle: 'italic',
+            marginBottom: 12,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical'
+          }}>
+            "{note}"
+          </div>
+        )}
+        <div style={{ 
+          fontSize: 13, 
+          color: '#e63946',
+          fontWeight: 500
+        }}>
+          by {displayUsername}
+        </div>
+      </div>
+      <div style={{
+        position: 'absolute',
+        bottom: 10,
+        right: 14,
+        fontSize: 10,
+        color: 'rgba(0,0,0,0.3)',
+        fontWeight: 500,
+        letterSpacing: '0.3px'
+      }}>
+        PuddingSnap
+      </div>
+    </div>
+  )
+
+  const renderGothic = () => (
+    <div style={{
+      ...baseStyle,
+      background: 'linear-gradient(180deg, #0a0a0a 0%, #1a0a1a 30%, #2a1010 70%, #1a0a0a 100%)',
+      padding: 24,
+      fontFamily: '"Times New Roman", Georgia, serif',
+      border: '2px solid #6a040f',
+      boxShadow: '0 0 40px rgba(106, 4, 15, 0.3)'
+    }} ref={cardRef}>
+      {/* 尖顶装饰元素 */}
+      <div style={{
+        position: 'absolute',
+        top: -10,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: 0,
+        height: 0,
+        borderLeft: '20px solid transparent',
+        borderRight: '20px solid transparent',
+        borderBottom: '20px solid #6a040f'
+      }} />
+      
+      {/* 花纹装饰 */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 1,
+        background: 'linear-gradient(90deg, transparent, #c1121f, transparent)'
+      }} />
+      <div style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 1,
+        background: 'linear-gradient(90deg, transparent, #c1121f, transparent)'
+      }} />
+      
+      <div style={{ 
+        width: '100%',
+        flex: 1,
+        background: 'rgba(0,0,0,0.9)',
+        borderRadius: 4,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20,
+        border: '2px solid #c1121f',
+        boxShadow: 'inset 0 0 30px rgba(193, 18, 31, 0.3)'
+      }}>
+        <img 
+          src={imageSrc} 
+          alt="截图" 
+          ref={imageRef}
+          style={{ 
+            width: '100%', 
+            height: '100%', 
+            objectFit: 'contain',
+            filter: 'contrast(1.2) brightness(0.8) saturate(1.1) sepia(0.2)',
+            transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
+            transformOrigin: 'center center',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            userSelect: 'none'
+          }}
+          onMouseDown={handleImageMouseDown}
+        />
+      </div>
+      <div style={{ 
+        background: 'rgba(0,0,0,0.85)',
+        borderRadius: 4,
+        padding: 20,
+        textAlign: 'center',
+        flexShrink: 0,
+        border: '1px solid #c1121f',
+        boxShadow: '0 4px 15px rgba(193, 18, 31, 0.2)'
+      }}>
+        <div style={{ 
+          fontSize: 24, 
+          fontWeight: 'bold', 
+          color: '#f8edeb', 
+          marginBottom: 8,
+          textShadow: '0 0 15px rgba(193, 18, 31, 0.5)',
+          fontStyle: 'italic',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          letterSpacing: '1px'
+        }}>
+          {gameTitle}
+        </div>
+        <div style={{ 
+          fontSize: 14, 
+          color: '#e63946', 
+          marginBottom: 12,
+          fontVariantNumeric: 'tabular-nums',
+          letterSpacing: '1.5px',
+          textShadow: '0 0 5px rgba(230, 57, 70, 0.3)'
+        }}>
+          {dateTime}
+        </div>
+        {note && (
+          <div style={{ 
+            fontSize: 15, 
+            color: '#d1d5db', 
+            lineHeight: 1.6,
+            fontStyle: 'italic',
+            marginBottom: 12,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            textShadow: '0 0 5px rgba(209, 213, 219, 0.2)'
+          }}>
+            "{note}"
+          </div>
+        )}
+        <div style={{ 
+          fontSize: 13, 
+          color: '#f8edeb',
+          fontStyle: 'italic',
+          textShadow: '0 0 10px rgba(193, 18, 31, 0.3)'
+        }}>
+          by {displayUsername}
+        </div>
+      </div>
+      <div style={{
+        position: 'absolute',
+        bottom: 10,
+        right: 14,
+        fontSize: 10,
+        color: 'rgba(230, 57, 70, 0.3)',
+        letterSpacing: '0.8px',
+        fontStyle: 'italic'
+      }}>
+        PuddingSnap
+      </div>
+    </div>
+  )
+
   switch (styleType) {
     case 'minimalist': return renderMinimalist()
     case 'cyberpunk': return renderCyberpunk()
     case 'polaroid': return renderPolaroid()
     case 'vaporwave': return renderVaporwave()
     case 'editorial': return renderEditorial()
+    case 'pink': return renderPink()
+    case 'gothic': return renderGothic()
     default: return renderMinimalist()
   }
 }
@@ -536,7 +833,7 @@ export function ShareModal({
   onExport
 }) {
   const [styleType, setStyleType] = useState('minimalist')
-  const [exportFormat, setExportFormat] = useState('png')
+  const [exportFormat, setExportFormat] = useState('jpg')
   const [isExporting, setIsExporting] = useState(false)
   const [showUsernameInput, setShowUsernameInput] = useState(false)
   const [tempUsername, setTempUsername] = useState(username || '')
@@ -544,7 +841,20 @@ export function ShareModal({
   const [cardWidth, setCardWidth] = useState(MAX_CARD_WIDTH)
   const [cardHeight, setCardHeight] = useState(MAX_CARD_HEIGHT)
   const [previewScale, setPreviewScale] = useState(1)
+  const [widthRatio, setWidthRatio] = useState(1) // 1 = 100%, 0.5 = 50%
+  const [imageScale, setImageScale] = useState(1) // 1 = 100%, 1.5 = 150%
+  const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const [heightRatio, setHeightRatio] = useState(1) // 1 = 100%, 2 = 200%
+  const [originalCardWidth, setOriginalCardWidth] = useState(MAX_CARD_WIDTH)
+  const [originalCardHeight, setOriginalCardHeight] = useState(MAX_CARD_HEIGHT)
   const cardRef = useRef(null)
+  const imageRef = useRef(null)
+  const isDraggingRef = useRef(false)
+  const dragStartRef = useRef({ x: 0, y: 0 })
+  const previewRef = useRef(null)
+  const dragEndTimeRef = useRef(0)
 
   useEffect(() => {
     if (!username) {
@@ -560,45 +870,42 @@ export function ShareModal({
         const imgHeight = img.naturalHeight
         const aspectRatio = imgWidth / imgHeight
         
-        let calculatedWidth = MAX_CARD_WIDTH
-        let calculatedHeight = MAX_CARD_HEIGHT
-        let imageDisplayHeight = 0
-        
         const paddingH = 48
         const paddingV = 48
         const imageAreaPadding = 16
         
-        if (aspectRatio >= 1) {
-          calculatedWidth = MAX_CARD_WIDTH
-          const imageAreaWidth = calculatedWidth - paddingH - imageAreaPadding * 2
-          imageDisplayHeight = imageAreaWidth / aspectRatio
-          
-          if (imageDisplayHeight < MIN_IMAGE_HEIGHT) {
-            imageDisplayHeight = MIN_IMAGE_HEIGHT
-          }
-          
-          calculatedHeight = imageDisplayHeight + TEXT_AREA_HEIGHT + paddingV + imageAreaPadding * 2
-          
-          if (calculatedHeight > MAX_CARD_HEIGHT) {
-            calculatedHeight = MAX_CARD_HEIGHT
-            imageDisplayHeight = calculatedHeight - TEXT_AREA_HEIGHT - paddingV - imageAreaPadding * 2
-          }
+        let calculatedWidth = MAX_CARD_WIDTH
+        let calculatedHeight = MAX_CARD_HEIGHT
+        
+        const maxImageAreaWidth = MAX_CARD_WIDTH - paddingH - imageAreaPadding * 2
+        const maxImageAreaHeight = MAX_CARD_HEIGHT - TEXT_AREA_HEIGHT - paddingV - imageAreaPadding * 2
+        
+        const imageAreaAspectRatio = maxImageAreaWidth / maxImageAreaHeight
+        
+        let imageDisplayWidth, imageDisplayHeight
+        
+        if (aspectRatio > imageAreaAspectRatio) {
+          imageDisplayWidth = maxImageAreaWidth
+          imageDisplayHeight = maxImageAreaWidth / aspectRatio
         } else {
-          const maxImageAreaHeight = MAX_CARD_HEIGHT - TEXT_AREA_HEIGHT - paddingV - imageAreaPadding * 2
-          let imageAreaWidth = maxImageAreaHeight * aspectRatio
-          
-          if (imageAreaWidth < MIN_CARD_WIDTH - paddingH - imageAreaPadding * 2) {
-            imageAreaWidth = MIN_IMAGE_HEIGHT * aspectRatio
-            imageDisplayHeight = MIN_IMAGE_HEIGHT
-            calculatedWidth = Math.max(MIN_CARD_WIDTH, imageAreaWidth + paddingH + imageAreaPadding * 2)
-            calculatedHeight = imageDisplayHeight + TEXT_AREA_HEIGHT + paddingV + imageAreaPadding * 2
-          } else {
-            calculatedWidth = Math.min(MAX_CARD_WIDTH, imageAreaWidth + paddingH + imageAreaPadding * 2)
-            calculatedHeight = MAX_CARD_HEIGHT
-            imageDisplayHeight = maxImageAreaHeight
-          }
+          imageDisplayHeight = maxImageAreaHeight
+          imageDisplayWidth = maxImageAreaHeight * aspectRatio
         }
         
+        if (imageDisplayHeight < MIN_IMAGE_HEIGHT) {
+          imageDisplayHeight = MIN_IMAGE_HEIGHT
+          imageDisplayWidth = MIN_IMAGE_HEIGHT * aspectRatio
+        }
+        
+        calculatedWidth = Math.min(MAX_CARD_WIDTH, imageDisplayWidth + paddingH + imageAreaPadding * 2)
+        calculatedHeight = imageDisplayHeight + TEXT_AREA_HEIGHT + paddingV + imageAreaPadding * 2
+        
+        if (calculatedHeight > MAX_CARD_HEIGHT) {
+          calculatedHeight = MAX_CARD_HEIGHT
+        }
+        
+        setOriginalCardWidth(Math.round(calculatedWidth))
+        setOriginalCardHeight(Math.round(calculatedHeight))
         setCardWidth(Math.round(calculatedWidth))
         setCardHeight(Math.round(calculatedHeight))
         
@@ -608,6 +915,40 @@ export function ShareModal({
       img.src = getImageSrc(screenshot.file_path)
     }
   }, [screenshot?.file_path])
+
+  const handleImageMouseDown = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    isDraggingRef.current = true
+    dragStartRef.current = { x: e.clientX, y: e.clientY }
+    setIsDragging(true)
+    setDragStart({ x: e.clientX, y: e.clientY })
+    console.log('[DEBUG] handleImageMouseDown:', { x: e.clientX, y: e.clientY, isDragging: isDraggingRef.current })
+  }
+
+  const handleMouseMove = (e) => {
+    console.log('[DEBUG] handleMouseMove:', { isDragging: isDraggingRef.current, x: e.clientX, y: e.clientY })
+    if (isDraggingRef.current) {
+      const dx = e.clientX - dragStartRef.current.x
+      const dy = e.clientY - dragStartRef.current.y
+      console.log('[DEBUG] dragging:', { dx, dy, imagePosition: imagePosition })
+      
+      setImagePosition(prev => ({
+        x: prev.x + dx,
+        y: prev.y + dy
+      }))
+      dragStartRef.current = { x: e.clientX, y: e.clientY }
+    }
+  }
+
+  const handleMouseUp = () => {
+    console.log('[DEBUG] handleMouseUp')
+    if (isDraggingRef.current) {
+      dragEndTimeRef.current = Date.now()
+    }
+    isDraggingRef.current = false
+    setIsDragging(false)
+  }
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -622,7 +963,8 @@ export function ShareModal({
       }
     }
 
-    const handleMouseDown = (e) => {
+    const handleWindowMouseDown = (e) => {
+      console.log('[DEBUG] handleWindowMouseDown:', { button: e.button, target: e.target.tagName })
       if (e.button === 3 || e.button === 4) {
         e.preventDefault()
         e.stopPropagation()
@@ -630,13 +972,53 @@ export function ShareModal({
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown, true)
-    window.addEventListener('mousedown', handleMouseDown, true)
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('mousedown', handleWindowMouseDown)
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, true)
-      window.removeEventListener('mousedown', handleMouseDown, true)
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('mousedown', handleWindowMouseDown)
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [onClose])
+
+  const handleWidthChange = (e) => {
+    const value = parseFloat(e.target.value)
+    setWidthRatio(value)
+  }
+
+  const handleImageScaleChange = (e) => {
+    const value = parseFloat(e.target.value)
+    setImageScale(value)
+  }
+
+  const handleHeightChange = (e) => {
+    const value = parseFloat(e.target.value)
+    setHeightRatio(value)
+  }
+
+  const handleImageMouseLeave = () => {
+    isDraggingRef.current = false
+    setIsDragging(false)
+  }
+
+  const handleModalClick = (e) => {
+    if (Date.now() - dragEndTimeRef.current < 100) {
+      return
+    }
+    onClose()
+  }
+
+  const handlePreviewWheel = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    const delta = e.deltaY > 0 ? -0.05 : 0.05
+    const newScale = Math.max(1, Math.min(3, imageScale + delta))
+    setImageScale(newScale)
+  }
 
   const handleSaveUsername = () => {
     if (tempUsername.trim()) {
@@ -676,7 +1058,8 @@ export function ShareModal({
     try {
       const blob = await toBlob(cardRef.current, {
         quality: 1,
-        pixelRatio: 2
+        pixelRatio: 2,
+        backgroundColor: '#ffffff'
       })
       if (blob) {
         await navigator.clipboard.write([
@@ -691,19 +1074,22 @@ export function ShareModal({
 
   if (!screenshot) return null
 
-  const scaledWidth = cardWidth * previewScale
-  const scaledHeight = cardHeight * previewScale
+  const scaledWidth = cardWidth * widthRatio * previewScale
+  const scaledHeight = cardHeight * heightRatio * previewScale
   const previewPadding = 20
   const outerPadding = 16
   const headerHeight = 48
   const rightPanelWidth = 180
   const gap = 20
   
-  const modalWidth = scaledWidth + previewPadding * 2 + outerPadding * 2 + rightPanelWidth + gap + 20
-  const modalHeight = scaledHeight + previewPadding * 2 + outerPadding * 2 + headerHeight + 20
+  // 计算原始大小的弹窗宽高，确保弹窗大小维持不变
+  const originalScaledWidth = cardWidth * previewScale
+  const originalScaledHeight = cardHeight * previewScale
+  const modalWidth = originalScaledWidth + previewPadding * 2 + outerPadding * 2 + rightPanelWidth + gap + 20
+  const modalHeight = originalScaledHeight + previewPadding * 2 + outerPadding * 2 + headerHeight + 20
 
   return (
-    <div style={styles.modal} onClick={onClose}>
+    <div style={styles.modal} onClick={handleModalClick}>
       <div 
         style={{ 
           ...styles.modalContent, 
@@ -737,10 +1123,13 @@ export function ShareModal({
             background: theme.accent,
             borderRadius: 8,
             padding: previewPadding,
-            width: scaledWidth + previewPadding * 2,
-            height: scaledHeight + previewPadding * 2,
+            width: originalScaledWidth + previewPadding * 2,
+            height: originalScaledHeight + previewPadding * 2,
             flexShrink: 0
-          }}>
+          }}
+            ref={previewRef}
+            onWheel={handlePreviewWheel}
+          >
             <div style={{ 
               width: scaledWidth,
               height: scaledHeight,
@@ -748,13 +1137,13 @@ export function ShareModal({
               overflow: 'hidden'
             }}>
               <div style={{ 
-                transform: `scale(${previewScale})`,
-                transformOrigin: 'top left',
-                width: cardWidth,
-                height: cardHeight,
+                transformOrigin: 'center center',
+                width: cardWidth * widthRatio,
+                height: cardHeight * heightRatio,
                 position: 'absolute',
-                top: 0,
-                left: 0
+                top: '50%',
+                left: '50%',
+                transform: `translate(-50%, -50%) scale(${previewScale})`
               }}>
                 <ShareCard
                   styleType={styleType}
@@ -763,8 +1152,14 @@ export function ShareModal({
                   note={editNote}
                   username={username || 'Player'}
                   cardRef={cardRef}
-                  cardWidth={cardWidth}
-                  cardHeight={cardHeight}
+                  cardWidth={cardWidth * widthRatio}
+                  cardHeight={cardHeight * heightRatio}
+                  imageScale={imageScale}
+                  imagePosition={imagePosition}
+                  imageRef={imageRef}
+                  isDragging={isDragging}
+                  handleImageMouseDown={handleImageMouseDown}
+                  handleImageMouseLeave={handleImageMouseLeave}
                 />
               </div>
             </div>
@@ -787,26 +1182,28 @@ export function ShareModal({
               }}>
                 {t.share?.style || '样式'}
               </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              <select
+                value={styleType}
+                onChange={(e) => setStyleType(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  fontSize: 12,
+                  borderRadius: 4,
+                  border: `1px solid ${theme.border}`,
+                  background: theme.accent,
+                  color: theme.text,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  cursor: 'pointer'
+                }}
+              >
                 {STYLE_TYPES.map(style => (
-                  <button
-                    key={style.id}
-                    style={{
-                      padding: '5px 8px',
-                      fontSize: 11,
-                      borderRadius: 4,
-                      border: styleType === style.id ? `1px solid ${theme.primary}` : `1px solid ${theme.border}`,
-                      background: styleType === style.id ? theme.primary : theme.accent,
-                      color: styleType === style.id ? '#fff' : theme.text,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s'
-                    }}
-                    onClick={() => setStyleType(style.id)}
-                  >
+                  <option key={style.id} value={style.id}>
                     {style.name}
-                  </button>
+                  </option>
                 ))}
-              </div>
+              </select>
             </div>
 
             <div>
@@ -909,6 +1306,120 @@ export function ShareModal({
                 border: `1px solid ${theme.border}`
               }}>
                 @{username || 'Player'}
+              </div>
+            </div>
+
+            <div>
+              <label style={{ 
+                display: 'block', 
+                fontSize: 10, 
+                color: theme.textMuted, 
+                marginBottom: 4,
+                fontWeight: 500
+              }}>
+                高度调整
+              </label>
+              <input
+                type="range"
+                min="0.5"
+                max="1"
+                step="0.01"
+                value={heightRatio}
+                onChange={handleHeightChange}
+                style={{
+                  width: '100%',
+                  height: 4,
+                  background: theme.accent,
+                  borderRadius: 2,
+                  outline: 'none',
+                  appearance: 'none'
+                }}
+              />
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                fontSize: 9, 
+                color: theme.textMuted,
+                marginTop: 2
+              }}>
+                <span>50%</span>
+                <span>100%</span>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ 
+                display: 'block', 
+                fontSize: 10, 
+                color: theme.textMuted, 
+                marginBottom: 4,
+                fontWeight: 500
+              }}>
+                宽度调整
+              </label>
+              <input
+                type="range"
+                min="0.5"
+                max="1"
+                step="0.01"
+                value={widthRatio}
+                onChange={handleWidthChange}
+                style={{
+                  width: '100%',
+                  height: 4,
+                  background: theme.accent,
+                  borderRadius: 2,
+                  outline: 'none',
+                  appearance: 'none'
+                }}
+              />
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                fontSize: 9, 
+                color: theme.textMuted,
+                marginTop: 2
+              }}>
+                <span>50%</span>
+                <span>100%</span>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ 
+                display: 'block', 
+                fontSize: 10, 
+                color: theme.textMuted, 
+                marginBottom: 4,
+                fontWeight: 500
+              }}>
+                图片缩放
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="3"
+                step="0.01"
+                value={imageScale}
+                onChange={handleImageScaleChange}
+                style={{
+                  width: '100%',
+                  height: 4,
+                  background: theme.accent,
+                  borderRadius: 2,
+                  outline: 'none',
+                  appearance: 'none'
+                }}
+              />
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                fontSize: 9, 
+                color: theme.textMuted,
+                marginTop: 2
+              }}>
+                <span>100%</span>
+                <span>300%</span>
               </div>
             </div>
 

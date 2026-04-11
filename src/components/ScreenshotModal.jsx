@@ -112,11 +112,55 @@ export function ScreenshotModal({
       }
     }
 
+    const handleWheel = (e) => {
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
+        return
+      }
+      
+      let element = e.target
+      while (element) {
+        const style = window.getComputedStyle(element)
+        const overflow = style.overflow + style.overflowY + style.overflowX
+        if (/(auto|scroll)/.test(overflow)) {
+          const hasScrollableContent = element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth
+          if (hasScrollableContent) {
+            const atTop = element.scrollTop === 0
+            const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 1
+            const atLeft = element.scrollLeft === 0
+            const atRight = element.scrollLeft + element.clientWidth >= element.scrollWidth - 1
+            
+            const scrollingDown = e.deltaY > 0
+            const scrollingRight = e.deltaX > 0
+            
+            if ((scrollingDown && !atBottom) || (!scrollingDown && !atTop) ||
+                (scrollingRight && !atRight) || (!scrollingRight && !atLeft)) {
+              return
+            }
+          }
+        }
+        element = element.parentElement
+      }
+      
+      e.preventDefault()
+      
+      if (e.deltaY > 0) {
+        if (selectedScreenshotIndex < screenshots.length - 1) {
+          onNavigate('next')
+        }
+      } else if (e.deltaY < 0) {
+        if (selectedScreenshotIndex > 0) {
+          onNavigate('prev')
+        }
+      }
+    }
+
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('mousedown', handleMouseDown)
+    window.addEventListener('wheel', handleWheel, { passive: false })
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('mousedown', handleMouseDown)
+      window.removeEventListener('wheel', handleWheel)
     }
   }, [selectedScreenshotIndex, screenshots.length, selectedScreenshot, onNavigate, onClose, onDelete])
 

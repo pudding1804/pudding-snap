@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 
@@ -42,6 +43,14 @@ export function GameDetail({
   onToggleSortMenu,
   onLoadPage,
 }) {
+  const scrollContainerRef = useRef(null)
+  
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0
+    }
+  }, [currentPage])
+  
   console.log('[DEBUG] GameDetail render, showMenu:', showMenu, 'showSortMenu:', showSortMenu, 'screenshots count:', screenshots?.length)
   
   const handleMenuToggle = (show) => {
@@ -55,8 +64,16 @@ export function GameDetail({
   }
   
   return (
-    <div>
-      <div style={{ ...styles.header, position: 'relative' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ 
+        ...styles.header, 
+        position: 'relative',
+        flexShrink: 0,
+        position: 'sticky',
+        top: 0,
+        background: theme.bg,
+        zIndex: 10
+      }}>
         <button 
           style={{ ...styles.btn, padding: '8px 12px' }} 
           {...btnEvents}
@@ -329,6 +346,7 @@ export function GameDetail({
         </div>
       </div>
       
+      <div style={{ flex: 1, overflow: 'auto' }} ref={scrollContainerRef}>
       {screenshots.length === 0 ? (
         <div style={styles.empty}>{t.empty.no_game_screenshots}</div>
       ) : (
@@ -397,47 +415,56 @@ export function GameDetail({
               </div>
             ))}
           </div>
-          
-          {totalPages > 1 && onLoadPage && (
-            <div style={styles.pagination}>
-              <button 
-                style={styles.paginationBtn}
-                {...btnEvents}
-                onClick={() => onLoadPage(1)}
-                disabled={currentPage === 1}
-              >
-                首页
-              </button>
-              <button 
-                style={styles.paginationBtn}
-                {...btnEvents}
-                onClick={() => onLoadPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-              >
-                上一页
-              </button>
-              <span style={styles.paginationInfo}>
-                第 {currentPage} 页，共 {totalPages} 页
-              </span>
-              <button 
-                style={styles.paginationBtn}
-                {...btnEvents}
-                onClick={() => onLoadPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-              >
-                下一页
-              </button>
-              <button 
-                style={styles.paginationBtn}
-                {...btnEvents}
-                onClick={() => onLoadPage(totalPages)}
-                disabled={currentPage === totalPages}
-              >
-                末页
-              </button>
-            </div>
-          )}
         </>
+      )}
+      </div>
+      
+      {totalPages > 1 && onLoadPage && (
+        <div style={{ 
+          ...styles.pagination, 
+          flexShrink: 0,
+          position: 'sticky',
+          bottom: 0,
+          background: theme.bg,
+          zIndex: 10,
+          marginTop: 0
+        }}>
+          <button 
+            style={styles.paginationBtn}
+            {...btnEvents}
+            onClick={() => onLoadPage(1)}
+            disabled={currentPage === 1}
+          >
+            首页
+          </button>
+          <button 
+            style={styles.paginationBtn}
+            {...btnEvents}
+            onClick={() => onLoadPage(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+          >
+            上一页
+          </button>
+          <span style={styles.paginationInfo}>
+            第 {currentPage} 页，共 {totalPages} 页
+          </span>
+          <button 
+            style={styles.paginationBtn}
+            {...btnEvents}
+            onClick={() => onLoadPage(Math.min(totalPages, currentPage + 1))}
+            disabled={currentPage === totalPages}
+          >
+            下一页
+          </button>
+          <button 
+            style={styles.paginationBtn}
+            {...btnEvents}
+            onClick={() => onLoadPage(totalPages)}
+            disabled={currentPage === totalPages}
+          >
+            末页
+          </button>
+        </div>
       )}
     </div>
   )

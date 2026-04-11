@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 
@@ -34,6 +35,14 @@ export function ScreenshotGrid({
   onToggleSelect,
   onLoadPage,
 }) {
+  const scrollContainerRef = useRef(null)
+  
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0
+    }
+  }, [currentPage])
+  
   console.log('[DEBUG] ScreenshotGrid render:', { 
     currentPage, 
     totalPages, 
@@ -48,8 +57,15 @@ export function ScreenshotGrid({
     }
   }
   return (
-    <div>
-      <div style={styles.header}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ 
+        ...styles.header, 
+        flexShrink: 0,
+        position: 'sticky',
+        top: 0,
+        background: theme.bg,
+        zIndex: 10
+      }}>
         <h1 style={styles.title}>{t.nav.time}</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {isMultiSelectMode ? (
@@ -108,6 +124,7 @@ export function ScreenshotGrid({
         </div>
       </div>
       
+      <div style={{ flex: 1, overflow: 'auto' }} ref={scrollContainerRef}>
       {screenshots.length === 0 ? (
         <div style={styles.empty}>
           <p>{t.empty.no_screenshots}</p>
@@ -180,47 +197,56 @@ export function ScreenshotGrid({
               </div>
             ))}
           </div>
-          
-          {totalPages > 1 && (
-            <div style={styles.pagination}>
-              <button 
-                style={styles.paginationBtn}
-                {...btnEvents}
-                onClick={() => handlePageChange(1)}
-                disabled={currentPage === 1}
-              >
-                首页
-              </button>
-              <button 
-                style={styles.paginationBtn}
-                {...btnEvents}
-                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-              >
-                上一页
-              </button>
-              <span style={styles.paginationInfo}>
-                第 {currentPage} 页，共 {totalPages} 页
-              </span>
-              <button 
-                style={styles.paginationBtn}
-                {...btnEvents}
-                onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-              >
-                下一页
-              </button>
-              <button 
-                style={styles.paginationBtn}
-                {...btnEvents}
-                onClick={() => handlePageChange(totalPages)}
-                disabled={currentPage === totalPages}
-              >
-                末页
-              </button>
-            </div>
-          )}
         </>
+      )}
+      </div>
+      
+      {totalPages > 1 && (
+        <div style={{ 
+          ...styles.pagination, 
+          flexShrink: 0,
+          position: 'sticky',
+          bottom: 0,
+          background: theme.bg,
+          zIndex: 10,
+          marginTop: 0
+        }}>
+          <button 
+            style={styles.paginationBtn}
+            {...btnEvents}
+            onClick={() => handlePageChange(1)}
+            disabled={currentPage === 1}
+          >
+            首页
+          </button>
+          <button 
+            style={styles.paginationBtn}
+            {...btnEvents}
+            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+          >
+            上一页
+          </button>
+          <span style={styles.paginationInfo}>
+            第 {currentPage} 页，共 {totalPages} 页
+          </span>
+          <button 
+            style={styles.paginationBtn}
+            {...btnEvents}
+            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+            disabled={currentPage === totalPages}
+          >
+            下一页
+          </button>
+          <button 
+            style={styles.paginationBtn}
+            {...btnEvents}
+            onClick={() => handlePageChange(totalPages)}
+            disabled={currentPage === totalPages}
+          >
+            末页
+          </button>
+        </div>
       )}
     </div>
   )

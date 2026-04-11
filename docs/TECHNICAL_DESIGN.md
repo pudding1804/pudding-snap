@@ -1,8 +1,8 @@
-# 极简游戏截图管理器 - 技术设计文档
+# PuddingSnap - 技术设计文档
 
 ## 文档版本
-- 版本: 2.1.0
-- 更新日期: 2026-04-10
+- 版本: 2.2.0
+- 更新日期: 2026-04-11
 - 作者: AI Assistant
 
 ---
@@ -22,7 +22,7 @@
 ## 1. 项目概述
 
 ### 1.1 项目简介
-极简游戏截图管理器是一个基于 Tauri v2 + React 的桌面应用程序，用于自动捕获、管理和组织游戏截图。
+PuddingSnap 是一个基于 Tauri v2 + React 的桌面应用程序，用于自动捕获、管理和组织游戏截图。
 
 ### 1.2 技术栈
 | 层级 | 技术 | 版本 |
@@ -35,7 +35,7 @@
 | 热键监听 | rdev | - |
 
 ### 1.3 核心功能
-- 全局热键截图 (PrintScreen)
+- 全局热键截图 (PrintScreen / F12)
 - 自动识别游戏进程
 - Steam 信息自动匹配
 - Bangumi 游戏信息拉取
@@ -45,6 +45,9 @@
 - 批量导入截图
 - 多选删除功能
 - 系统托盘未读徽章
+- 截图分享模板 (5种样式)
+- 窗口大小和位置记忆
+- 多语言支持 (中文/英文/日文)
 
 ---
 
@@ -64,9 +67,13 @@ ScreenshotProject/
 │   │   ├── GameDetail.jsx       # 游戏详情
 │   │   ├── SettingsPanel.jsx    # 设置面板
 │   │   ├── AddGameModal.jsx     # 添加游戏弹窗
-│   │   └── ImportModal.jsx      # 导入截图弹窗
+│   │   ├── ImportModal.jsx      # 导入截图弹窗
+│   │   ├── ShareModal.jsx       # 分享弹窗
+│   │   ├── TitleBar.jsx         # 自定义标题栏
+│   │   └── ErrorBoundary.jsx    # 错误边界
 │   ├── hooks/                    # 自定义 Hooks
-│   │   └── useAppState.js       # 全局状态管理
+│   │   ├── useAppState.js       # 全局状态管理
+│   │   └── useWindowSize.js     # 窗口大小记忆
 │   ├── i18n/                     # 国际化
 │   │   └── translations.js      # 多语言翻译
 │   ├── styles/                   # 样式
@@ -88,12 +95,12 @@ ScreenshotProject/
 │       ├── database.rs           # 数据库操作
 │       ├── models.rs             # 数据模型
 │       ├── screenshot.rs         # 截图处理
-│       ├── steam.rs              # Steam API
-│       ├── bangumi.rs            # Bangumi API
-│       ├── windows_utils.rs      # Windows 工具
-│       ├── audio.rs              # 音频播放
-│       ├── lib.rs                # 库入口
-│       └── main.rs               # 应用入口
+│       ├── steam.rs             # Steam API
+│       ├── bangumi.rs           # Bangumi API
+│       ├── windows_utils.rs     # Windows 工具
+│       ├── audio.rs             # 音频播放
+│       ├── lib.rs               # 库入口
+│       └── main.rs              # 应用入口
 │
 └── docs/                         # 文档
     └── TECHNICAL_DESIGN.md       # 本文档
@@ -112,6 +119,9 @@ ScreenshotProject/
 │       │            │            │            │              │
 │  ┌────┴────────────┴────────────┴────────────┴────┐        │
 │  │              useAppState (状态管理)              │        │
+│  └────────────────────────┬───────────────────────┘        │
+│  ┌────────────────────────┴───────────────────────┐        │
+│  │              useWindowSize (窗口记忆)           │        │
 │  └────────────────────────┬───────────────────────┘        │
 └───────────────────────────┼─────────────────────────────────┘
                             │ Tauri invoke
@@ -171,15 +181,25 @@ ScreenshotProject/
 - 添加/编辑附注
 - 打开文件夹
 - 删除截图
+- 分享截图
+
+#### ShareModal.jsx
+分享弹窗组件，负责：
+- 5种分享模板样式切换（极简/赛博/拍立得/蒸汽波/杂志）
+- 用户名设置
+- 附注编辑
+- 导出为PNG/JPG格式
+- 复制到剪贴板
+- 支持 Backspace 和鼠标后退键关闭
 
 #### SettingsPanel.jsx
 设置面板组件，负责：
 - 语言设置
 - Steam搜索语言设置
-- 主题切换
+- 主题切换（夜晚/白天/浅粉/深蓝/森林）
 - 存储位置管理
 - 开机自启动设置
-- 鼠标捕捉设置
+- 截图音效设置
 - 删除所有数据
 
 #### AddGameModal.jsx
@@ -195,7 +215,16 @@ ScreenshotProject/
 - 文件列表显示
 - 执行导入
 
-### 3.2 后端模块
+### 3.2 自定义 Hooks
+
+#### useWindowSize.js
+窗口大小记忆 Hook，负责：
+- 加载保存的窗口大小和位置
+- 监听窗口变化并自动保存
+- 验证窗口状态有效性
+- 防止保存无效的窗口状态（如超出屏幕范围）
+
+### 3.3 后端模块
 
 #### commands/screenshot.rs
 截图相关命令：
@@ -268,9 +297,9 @@ pub fn command_name(
 ### 4.2 前端调用规范
 
 ```javascript
-const result = await invoke('command_name', { 
-    param1: value1, 
-    param2: value2 
+const result = await invoke('command_name', {
+    param1: value1,
+    param2: value2
 })
 ```
 
@@ -348,6 +377,7 @@ CREATE TABLE IF NOT EXISTS game_cache (
 - 图片懒加载 (loading="lazy")
 - 使用 React.memo 优化组件渲染
 - 状态提升减少不必要的重渲染
+- 分享模板预览动态计算尺寸
 
 ### 6.2 后端优化
 - 数据库连接池管理
@@ -405,14 +435,30 @@ CREATE TABLE IF NOT EXISTS game_cache (
 - 导入时保留原始创建时间
 - 错误处理要完善
 
-### 8.4 状态管理
-- 使用 useState 管理组件状态
-- 复杂状态考虑使用 useReducer
-- 全局状态通过 props 传递
+### 8.5 窗口状态管理
+- 窗口大小和位置会在变更后自动保存
+- 最小窗口尺寸限制：400x300
+- 无效窗口位置（超出 -10000 范围）不会被保存
+- 窗口状态通过 Settings 表持久化存储
+
+### 8.6 分享模板
+- 支持 5 种样式：极简、赛博、拍立得、蒸汽波、杂志
+- 导出格式支持 PNG 和 JPG
+- 分享图片尺寸动态计算，确保截图完整显示
+- 用户名和附注可选显示
 
 ---
 
 ## 9. 更新日志
+
+### v2.2.0 (2026-04-11)
+- 添加 5 种分享模板样式
+- 实现窗口大小和位置记忆功能
+- 添加截图复制到剪贴板功能
+- 优化分享弹窗布局和预览显示
+- 支持 Backspace 和鼠标后退键关闭弹窗
+- 修复游戏切换时截图闪烁问题
+- 修复赛博风格边框显示问题
 
 ### v2.1.0 (2026-04-10)
 - 添加 Bangumi (番组计划) 游戏信息拉取功能
