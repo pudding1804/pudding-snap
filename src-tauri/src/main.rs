@@ -1653,8 +1653,9 @@ fn main() {
                 
                 let callback = move |event: Event| {
                     if let EventType::KeyPress(key) = event.event_type {
-                        if key == Key::PrintScreen {
-                            println!("[热键] 检测到PrintScreen按键!");
+                        if key == Key::PrintScreen || key == Key::F12 {
+                            let key_name = if key == Key::PrintScreen { "PrintScreen" } else { "F12" };
+                            println!("[热键] 检测到{}按键!", key_name);
                             
                             let shutter_sound = {
                                 let conn = db_for_hotkey.lock().unwrap();
@@ -1969,12 +1970,6 @@ fn main() {
                                 Err(e) => {
                                     println!("[截图] 屏幕捕获失败: {}", e);
                                 }
-                            }
-                        }
-                        
-                        if DEBUG_MODE {
-                            if key == Key::F12 {
-                                println!("[调试] 检测到F12测试按键!");
                             }
                         }
                     }

@@ -17,7 +17,11 @@ const EXPORT_FORMATS = [
 
 const MAX_CARD_WIDTH = 720
 const MIN_CARD_WIDTH = 480
-const CARD_HEIGHT = 540
+const MIN_CARD_HEIGHT = 400
+const MAX_CARD_HEIGHT = 720
+const TEXT_AREA_HEIGHT = 140
+const PREVIEW_MAX_HEIGHT = 500
+const MIN_IMAGE_HEIGHT = 180
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -47,7 +51,8 @@ function ShareCard({
   note, 
   username, 
   cardRef,
-  cardWidth
+  cardWidth,
+  cardHeight
 }) {
   const processName = screenshot?.game_id?.split('\\').pop().split('/').pop().replace('.exe', '') || '未知游戏'
   const gameTitle = screenshot?.display_title || screenshot?.game_title || gameInfo?.display_title || gameInfo?.game_title || processName
@@ -57,7 +62,7 @@ function ShareCard({
 
   const baseStyle = {
     width: cardWidth,
-    height: CARD_HEIGHT,
+    height: cardHeight,
     display: 'flex',
     flexDirection: 'column',
     position: 'relative',
@@ -73,6 +78,7 @@ function ShareCard({
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }} ref={cardRef}>
       <div style={{ 
+        width: '100%',
         flex: 1,
         borderRadius: 8,
         overflow: 'hidden',
@@ -85,7 +91,7 @@ function ShareCard({
         <img 
           src={imageSrc} 
           alt="截图" 
-          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
         />
       </div>
       <div style={{ textAlign: 'center', flexShrink: 0 }}>
@@ -101,7 +107,7 @@ function ShareCard({
         }}>
           {gameTitle}
         </div>
-        <div style={{ fontSize: 14, color: '#888', marginBottom: 12 }}>
+        <div style={{ fontSize: 14, color: '#888', marginBottom: 12, fontVariantNumeric: 'tabular-nums' }}>
           {dateTime}
         </div>
         {note && (
@@ -156,6 +162,7 @@ function ShareCard({
         background: 'linear-gradient(90deg, transparent, #ff00ff, #00ffff, transparent)'
       }} />
       <div style={{ 
+        width: '100%',
         flex: 1,
         overflow: 'hidden',
         border: '1px solid #00ffff',
@@ -170,9 +177,9 @@ function ShareCard({
           src={imageSrc} 
           alt="截图" 
           style={{ 
-            maxWidth: '100%', 
-            maxHeight: '100%', 
-            objectFit: 'contain',
+            width: '100%', 
+            height: '100%', 
+            objectFit: 'cover',
             filter: 'contrast(1.1) saturate(1.2)'
           }} 
         />
@@ -196,7 +203,8 @@ function ShareCard({
           fontSize: 13, 
           color: '#ff00ff', 
           marginBottom: 10,
-          textShadow: '0 0 5px rgba(255,0,255,0.5)'
+          textShadow: '0 0 5px rgba(255,0,255,0.5)',
+          fontVariantNumeric: 'tabular-nums'
         }}>
           {dateTime}
         </div>
@@ -242,7 +250,7 @@ function ShareCard({
       ...baseStyle,
       background: '#f5f5f0',
       padding: 20,
-      fontFamily: '"Georgia", serif',
+      fontFamily: '"SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       boxShadow: '0 10px 40px rgba(0,0,0,0.15)'
     }} ref={cardRef}>
       <div style={{ 
@@ -260,16 +268,15 @@ function ShareCard({
         <img 
           src={imageSrc} 
           alt="截图" 
-          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
         />
       </div>
       <div style={{ textAlign: 'center', flexShrink: 0 }}>
         <div style={{ 
           fontSize: 22, 
-          fontWeight: 'normal', 
+          fontWeight: 500, 
           color: '#333', 
           marginBottom: 6,
-          fontFamily: '"Georgia", serif',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap'
@@ -280,7 +287,8 @@ function ShareCard({
           fontSize: 14, 
           color: '#666', 
           marginBottom: 10,
-          fontFamily: '"Courier New", monospace'
+          fontVariantNumeric: 'tabular-nums',
+          letterSpacing: '0.5px'
         }}>
           {dateTime}
         </div>
@@ -325,6 +333,7 @@ function ShareCard({
       fontFamily: '"Courier New", monospace'
     }} ref={cardRef}>
       <div style={{ 
+        width: '100%',
         flex: 1,
         background: 'rgba(0,0,0,0.85)',
         borderRadius: 8,
@@ -349,7 +358,7 @@ function ShareCard({
           <img 
             src={imageSrc} 
             alt="截图" 
-            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
           />
         </div>
       </div>
@@ -378,7 +387,8 @@ function ShareCard({
           fontSize: 13, 
           color: '#05ffa1', 
           marginBottom: 10,
-          fontWeight: 'bold'
+          fontWeight: 'bold',
+          fontVariantNumeric: 'tabular-nums'
         }}>
           {dateTime}
         </div>
@@ -406,10 +416,11 @@ function ShareCard({
       </div>
       <div style={{
         position: 'absolute',
-        bottom: 8,
-        right: 12,
-        fontSize: 9,
-        color: 'rgba(255,255,255,0.2)',
+        bottom: 10,
+        right: 14,
+        fontSize: 10,
+        color: 'rgba(255,255,255,0.3)',
+        fontWeight: 500,
         letterSpacing: '0.5px'
       }}>
         PuddingSnap
@@ -421,9 +432,10 @@ function ShareCard({
     <div style={{
       ...baseStyle,
       background: '#1a1a1a',
-      fontFamily: '"Georgia", serif'
+      fontFamily: '"SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }} ref={cardRef}>
       <div style={{ 
+        width: '100%',
         flex: 1,
         position: 'relative',
         overflow: 'hidden',
@@ -436,9 +448,9 @@ function ShareCard({
           src={imageSrc} 
           alt="截图" 
           style={{ 
-            maxWidth: '100%', 
-            maxHeight: '100%', 
-            objectFit: 'contain'
+            width: '100%', 
+            height: '100%', 
+            objectFit: 'cover'
           }} 
         />
       </div>
@@ -450,7 +462,7 @@ function ShareCard({
       }}>
         <div style={{ 
           fontSize: 24, 
-          fontWeight: 'bold', 
+          fontWeight: 600, 
           color: '#fff', 
           marginBottom: 8,
           overflow: 'hidden',
@@ -464,7 +476,8 @@ function ShareCard({
           color: 'rgba(255,255,255,0.5)', 
           marginBottom: 12,
           textTransform: 'uppercase',
-          letterSpacing: '1px'
+          letterSpacing: '1px',
+          fontVariantNumeric: 'tabular-nums'
         }}>
           {dateTime}
         </div>
@@ -529,6 +542,8 @@ export function ShareModal({
   const [tempUsername, setTempUsername] = useState(username || '')
   const [editNote, setEditNote] = useState(screenshot?.note || '')
   const [cardWidth, setCardWidth] = useState(MAX_CARD_WIDTH)
+  const [cardHeight, setCardHeight] = useState(MAX_CARD_HEIGHT)
+  const [previewScale, setPreviewScale] = useState(1)
   const cardRef = useRef(null)
 
   useEffect(() => {
@@ -545,16 +560,50 @@ export function ShareModal({
         const imgHeight = img.naturalHeight
         const aspectRatio = imgWidth / imgHeight
         
-        const targetHeight = CARD_HEIGHT - 120
-        let calculatedWidth = targetHeight * aspectRatio
+        let calculatedWidth = MAX_CARD_WIDTH
+        let calculatedHeight = MAX_CARD_HEIGHT
+        let imageDisplayHeight = 0
         
-        if (calculatedWidth > MAX_CARD_WIDTH) {
+        const paddingH = 48
+        const paddingV = 48
+        const imageAreaPadding = 16
+        
+        if (aspectRatio >= 1) {
           calculatedWidth = MAX_CARD_WIDTH
-        } else if (calculatedWidth < MIN_CARD_WIDTH) {
-          calculatedWidth = MIN_CARD_WIDTH
+          const imageAreaWidth = calculatedWidth - paddingH - imageAreaPadding * 2
+          imageDisplayHeight = imageAreaWidth / aspectRatio
+          
+          if (imageDisplayHeight < MIN_IMAGE_HEIGHT) {
+            imageDisplayHeight = MIN_IMAGE_HEIGHT
+          }
+          
+          calculatedHeight = imageDisplayHeight + TEXT_AREA_HEIGHT + paddingV + imageAreaPadding * 2
+          
+          if (calculatedHeight > MAX_CARD_HEIGHT) {
+            calculatedHeight = MAX_CARD_HEIGHT
+            imageDisplayHeight = calculatedHeight - TEXT_AREA_HEIGHT - paddingV - imageAreaPadding * 2
+          }
+        } else {
+          const maxImageAreaHeight = MAX_CARD_HEIGHT - TEXT_AREA_HEIGHT - paddingV - imageAreaPadding * 2
+          let imageAreaWidth = maxImageAreaHeight * aspectRatio
+          
+          if (imageAreaWidth < MIN_CARD_WIDTH - paddingH - imageAreaPadding * 2) {
+            imageAreaWidth = MIN_IMAGE_HEIGHT * aspectRatio
+            imageDisplayHeight = MIN_IMAGE_HEIGHT
+            calculatedWidth = Math.max(MIN_CARD_WIDTH, imageAreaWidth + paddingH + imageAreaPadding * 2)
+            calculatedHeight = imageDisplayHeight + TEXT_AREA_HEIGHT + paddingV + imageAreaPadding * 2
+          } else {
+            calculatedWidth = Math.min(MAX_CARD_WIDTH, imageAreaWidth + paddingH + imageAreaPadding * 2)
+            calculatedHeight = MAX_CARD_HEIGHT
+            imageDisplayHeight = maxImageAreaHeight
+          }
         }
         
         setCardWidth(Math.round(calculatedWidth))
+        setCardHeight(Math.round(calculatedHeight))
+        
+        const scale = Math.min(1, PREVIEW_MAX_HEIGHT / calculatedHeight)
+        setPreviewScale(scale)
       }
       img.src = getImageSrc(screenshot.file_path)
     }
@@ -613,13 +662,17 @@ export function ShareModal({
 
   if (!screenshot) return null
 
+  const scaledWidth = cardWidth * previewScale
+  const scaledHeight = cardHeight * previewScale
+  const modalWidth = Math.min(1000, Math.max(600, scaledWidth + 220))
+
   return (
     <div style={styles.modal} onClick={onClose}>
       <div 
         style={{ 
           ...styles.modalContent, 
           width: '95vw', 
-          maxWidth: 1000,
+          maxWidth: modalWidth,
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column'
@@ -640,7 +693,6 @@ export function ShareModal({
           display: 'flex', 
           gap: 20, 
           padding: 16,
-          overflow: 'auto',
           minHeight: 0
         }}>
           <div style={{ 
@@ -651,17 +703,26 @@ export function ShareModal({
             background: theme.accent,
             borderRadius: 8,
             padding: 20,
-            overflow: 'auto'
+            overflow: 'hidden'
           }}>
-            <ShareCard
-              styleType={styleType}
-              screenshot={screenshot}
-              gameInfo={gameInfo}
-              note={editNote}
-              username={username || 'Player'}
-              cardRef={cardRef}
-              cardWidth={cardWidth}
-            />
+            <div style={{ 
+              transform: `scale(${previewScale})`,
+              transformOrigin: 'center center',
+              width: cardWidth,
+              height: cardHeight,
+              flexShrink: 0
+            }}>
+              <ShareCard
+                styleType={styleType}
+                screenshot={screenshot}
+                gameInfo={gameInfo}
+                note={editNote}
+                username={username || 'Player'}
+                cardRef={cardRef}
+                cardWidth={cardWidth}
+                cardHeight={cardHeight}
+              />
+            </div>
           </div>
 
           <div style={{ 
