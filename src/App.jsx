@@ -7,6 +7,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { themes } from './styles/themes'
 import { getTranslation } from './i18n/translations'
 import { createStyles, btnEvents, modalKeyframes } from './styles/sharedStyles'
+import { useWindowSize } from './hooks/useWindowSize'
 import { 
   Sidebar, 
   ScreenshotGrid, 
@@ -86,6 +87,15 @@ function App() {
     setNotification({ title, body })
     setTimeout(() => setNotification(null), duration)
   }, [])
+  
+  const addLog = useCallback((msg) => {
+    const time = new Date().toLocaleTimeString()
+    console.log(`[${time}] ${msg}`)
+    setLogs(prev => [...prev.slice(-20), `[${time}] ${msg}`])
+    invoke('log_debug', { msg: `[${time}] ${msg}` }).catch(() => {})
+  }, [])
+  
+  const { loadWindowState } = useWindowSize(addLog)
   
   const [storagePath, setStoragePath] = useState('')
   const [isMigrating, setIsMigrating] = useState(false)
@@ -173,12 +183,6 @@ function App() {
   const theme = themes[currentTheme].colors
   const t = getTranslation(language)
   const styles = createStyles(theme, iconSize)
-
-  const addLog = useCallback((msg) => {
-    const time = new Date().toLocaleTimeString()
-    console.log(`[${time}] ${msg}`)
-    setLogs(prev => [...prev.slice(-20), `[${time}] ${msg}`])
-  }, [])
 
   useEffect(() => {
     selectedGameRef.current = selectedGame
@@ -566,6 +570,7 @@ function App() {
       setSelectedScreenshot(prev => prev ? { ...prev, note } : prev)
       
       showNotification(t.header.note_saved)
+      closeModal()
     } catch (e) {
       addLog(`附注保存失败: ${e}`)
       setError('保存附注失败: ' + String(e))
@@ -643,6 +648,20 @@ function App() {
         return [...prev, id]
       }
     })
+  }, [])
+
+  const handleToggleMultiSelectMode = useCallback((enabled) => {
+    if (enabled) {
+      setSelectedScreenshots([])
+    }
+    setIsMultiSelectMode(enabled)
+  }, [])
+
+  const handleToggleGameMultiSelectMode = useCallback((enabled) => {
+    if (enabled) {
+      setSelectedGames([])
+    }
+    setIsGameMultiSelectMode(enabled)
   }, [])
 
   const changeStoragePath = useCallback(async () => {
@@ -881,8 +900,26 @@ function App() {
       const hideGuide = localStorage.getItem('hideGuide')
       if (!hideGuide) {
         try {
+          addLog('[窗口大小] 首次启动，准备显示窗口并设置大小...')
+          const savedWidth = await invoke('get_setting', { key: 'window_width' })
+          const savedHeight = await invoke('get_setting', { key: 'window_height' })
+          addLog(`[窗口大小] 读取到的值: width=${savedWidth}, height=${savedHeight}`)
+          
           await invoke('show_main_window')
           addLog('主窗口已显示（向导）')
+          
+          if (savedWidth && savedHeight) {
+            setTimeout(async () => {
+              try {
+                const { getCurrentWindow, PhysicalSize } = await import('@tauri-apps/api/window')
+                const appWindow = getCurrentWindow()
+                await appWindow.setSize(new PhysicalSize(parseInt(savedWidth), parseInt(savedHeight)))
+                addLog(`[窗口大小] 延迟设置窗口大小成功: ${savedWidth}x${savedHeight}`)
+              } catch (e) {
+                addLog(`[窗口大小] 延迟设置窗口大小失败: ${e}`)
+              }
+            }, 100)
+          }
         } catch (e) {
           addLog(`显示主窗口失败: ${e}`)
         }
@@ -980,7 +1017,8 @@ function App() {
       })
       
       const unlistenFocused = await listen('window-focused', async () => {
-        addLog('窗口获得焦点，刷新数据')
+        addLog('=== window-focused 事件触发 ===')
+        await loadWindowState()
         loadGames()
         if (selectedGameRef.current) {
           loadScreenshotsWithPagination(1, selectedGameRef.current.game_id)
@@ -996,7 +1034,14 @@ function App() {
       })
       
       const unlistenShown = await listen('window-shown', async () => {
-        addLog('窗口显示，刷新数据')
+        addLog('=== window-shown 事件触发 ===')
+        addLog('[窗口] 准备调用 loadWindowState...')
+        try {
+          await loadWindowState()
+          addLog('[窗口] loadWindowState 调用完成')
+        } catch (e) {
+          addLog(`[窗口] loadWindowState 调用失败: ${e}`)
+        }
         loadGames()
         if (selectedGameRef.current) {
           loadScreenshotsWithPagination(1, selectedGameRef.current.game_id)
@@ -1022,7 +1067,7 @@ function App() {
     return () => {
       cleanup.then(fn => fn())
     }
-  }, [closeAction, addLog, loadGames, loadScreenshotsWithPagination])
+  }, [closeAction, addLog, loadGames, loadScreenshotsWithPagination, loadWindowState])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1072,7 +1117,7 @@ function App() {
           <main style={styles.main} ref={gridRef}>
           {notification && (
             <div style={styles.notification}>
-              {notification.title}: {notification.body}
+              {notification.title}{notification.body ? `: ${notification.body}` : ''}
             </div>
           )}
 
@@ -1092,7 +1137,7 @@ function App() {
               totalPages={totalPages}
               onSortChange={handleSortChange}
               onIconSizeChange={handleIconSizeChange}
-              onToggleMultiSelect={setIsMultiSelectMode}
+              onToggleMultiSelect={handleToggleMultiSelectMode}
               onSelectScreenshot={(action) => {
                 if (action === 'delete') deleteSelectedScreenshots()
               }}
@@ -1123,7 +1168,7 @@ function App() {
               isLoading={isGamesLoading}
               onSortChange={handleGameSortChange}
               onIconSizeChange={handleIconSizeChange}
-              onToggleMultiSelect={setIsGameMultiSelectMode}
+              onToggleMultiSelect={handleToggleGameMultiSelectMode}
               onSelectGame={(action) => {
                 if (action === 'delete' && selectedGames.length > 0) {
                   setDeleteConfirmMode('delete_game')
@@ -1190,7 +1235,7 @@ function App() {
               onBack={backToGames}
               onSortChange={handleSortChange}
               onIconSizeChange={handleIconSizeChange}
-              onToggleMultiSelect={setIsMultiSelectMode}
+              onToggleMultiSelect={handleToggleMultiSelectMode}
               onSelectScreenshot={(action) => {
                 if (action === 'delete') deleteSelectedScreenshots()
               }}

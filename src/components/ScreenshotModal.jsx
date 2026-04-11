@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 
 function getImageSrc(path) {
@@ -33,6 +33,45 @@ export function ScreenshotModal({
   onDelete,
   onShare,
 }) {
+  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 })
+  const imgRef = useRef(null)
+
+  useEffect(() => {
+    if (selectedScreenshot?.file_path) {
+      const img = new window.Image()
+      img.onload = () => {
+        setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight })
+      }
+      img.src = getImageSrc(selectedScreenshot.file_path)
+    }
+  }, [selectedScreenshot?.file_path])
+
+  const calculateModalWidth = () => {
+    const { width, height } = imageDimensions
+    if (width === 0 || height === 0) return 1200
+    
+    const maxHeight = window.innerHeight * 0.75
+    const maxWidth = window.innerWidth * 0.95
+    
+    const aspectRatio = width / height
+    
+    let displayWidth = width
+    let displayHeight = height
+    
+    if (displayHeight > maxHeight) {
+      displayHeight = maxHeight
+      displayWidth = displayHeight * aspectRatio
+    }
+    
+    if (displayWidth > maxWidth) {
+      displayWidth = maxWidth
+      displayHeight = displayWidth / aspectRatio
+    }
+    
+    return Math.min(Math.max(displayWidth + 40, 600), maxWidth)
+  }
+
+  const modalWidth = calculateModalWidth()
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
@@ -94,8 +133,8 @@ export function ScreenshotModal({
       <div 
         style={{
           ...styles.modalContent,
-          width: '95vw',
-          maxWidth: 1200,
+          width: modalWidth,
+          maxWidth: '95vw',
           maxHeight: '95vh',
           display: 'flex',
           flexDirection: 'column',
@@ -130,7 +169,9 @@ export function ScreenshotModal({
               onMouseLeave={e => e.currentTarget.style.color = theme.textMuted}
               onClick={onClose}
             >
-              ‹ 返回
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
             </button>
             <span style={{ fontSize: 12, color: theme.textMuted }}>|</span>
             <span style={{ fontSize: 13, color: theme.text, fontWeight: 500 }}>

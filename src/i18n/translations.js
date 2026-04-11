@@ -120,7 +120,7 @@ export const translations = {
       quality_hint: '设置导入截图时的格式和质量。质量越高文件越大，但图片越清晰。'
     },
     game: {
-      last_updated: '最后更新于:',
+      last_updated: '最后更新于',
       screenshots: '张截图'
     },
     add_game: {
@@ -177,7 +177,7 @@ export const translations = {
       cancel: '取消'
     },
     detail: {
-      note: '附注:',
+      note: '附注',
       save_note: '保存附注',
       delete: '删除',
       open_folder: '打开文件夹',
@@ -351,7 +351,7 @@ export const translations = {
       quality_hint: 'Set the format and quality for importing screenshots. Higher quality means larger files but clearer images.'
     },
     game: {
-      last_updated: 'Last updated:',
+      last_updated: 'Last updated',
       screenshots: 'screenshots'
     },
     add_game: {
@@ -408,7 +408,7 @@ export const translations = {
       cancel: 'Cancel'
     },
     detail: {
-      note: 'Note:',
+      note: 'Note',
       save_note: 'Save Note',
       delete: 'Delete',
       open_folder: 'Open Folder',
@@ -582,7 +582,7 @@ export const translations = {
       quality_hint: 'スクリーンショットのインポート時のフォーマットと品質を設定します。品質が高いほどファイルサイズが大きくなりますが、画像がより鮮明になります。'
     },
     game: {
-      last_updated: '最終更新:',
+      last_updated: '最終更新',
       screenshots: '枚のスクリーンショット'
     },
     add_game: {
@@ -639,7 +639,7 @@ export const translations = {
       cancel: 'キャンセル'
     },
     detail: {
-      note: 'メモ:',
+      note: 'メモ',
       save_note: 'メモを保存',
       delete: '削除',
       open_folder: 'フォルダを開く',

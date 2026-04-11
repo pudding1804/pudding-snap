@@ -91,7 +91,7 @@ function ShareCard({
         <img 
           src={imageSrc} 
           alt="截图" 
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
         />
       </div>
       <div style={{ textAlign: 'center', flexShrink: 0 }}>
@@ -179,7 +179,7 @@ function ShareCard({
           style={{ 
             width: '100%', 
             height: '100%', 
-            objectFit: 'cover',
+            objectFit: 'contain',
             filter: 'contrast(1.1) saturate(1.2)'
           }} 
         />
@@ -268,7 +268,7 @@ function ShareCard({
         <img 
           src={imageSrc} 
           alt="截图" 
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
         />
       </div>
       <div style={{ textAlign: 'center', flexShrink: 0 }}>
@@ -358,7 +358,7 @@ function ShareCard({
           <img 
             src={imageSrc} 
             alt="截图" 
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
           />
         </div>
       </div>
@@ -450,7 +450,7 @@ function ShareCard({
           style={{ 
             width: '100%', 
             height: '100%', 
-            objectFit: 'cover'
+            objectFit: 'contain'
           }} 
         />
       </div>
@@ -609,6 +609,35 @@ export function ShareModal({
     }
   }, [screenshot?.file_path])
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
+        return
+      }
+      
+      if (e.key === 'Escape' || e.key === 'Backspace') {
+        e.preventDefault()
+        e.stopPropagation()
+        onClose()
+      }
+    }
+
+    const handleMouseDown = (e) => {
+      if (e.button === 3 || e.button === 4) {
+        e.preventDefault()
+        e.stopPropagation()
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('mousedown', handleMouseDown, true)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true)
+      window.removeEventListener('mousedown', handleMouseDown, true)
+    }
+  }, [onClose])
+
   const handleSaveUsername = () => {
     if (tempUsername.trim()) {
       onUsernameChange(tempUsername.trim())
@@ -664,16 +693,22 @@ export function ShareModal({
 
   const scaledWidth = cardWidth * previewScale
   const scaledHeight = cardHeight * previewScale
-  const modalWidth = Math.min(1000, Math.max(600, scaledWidth + 220))
+  const previewPadding = 20
+  const outerPadding = 16
+  const headerHeight = 48
+  const rightPanelWidth = 180
+  const gap = 20
+  
+  const modalWidth = scaledWidth + previewPadding * 2 + outerPadding * 2 + rightPanelWidth + gap + 20
+  const modalHeight = scaledHeight + previewPadding * 2 + outerPadding * 2 + headerHeight + 20
 
   return (
     <div style={styles.modal} onClick={onClose}>
       <div 
         style={{ 
           ...styles.modalContent, 
-          width: '95vw', 
-          maxWidth: modalWidth,
-          maxHeight: '90vh',
+          width: Math.min(95 * window.innerWidth / 100, modalWidth),
+          height: Math.min(90 * window.innerHeight / 100, modalHeight),
           display: 'flex',
           flexDirection: 'column'
         }} 
@@ -689,44 +724,54 @@ export function ShareModal({
         </div>
 
         <div style={{ 
-          flex: 1, 
           display: 'flex', 
-          gap: 20, 
-          padding: 16,
+          gap: gap, 
+          padding: outerPadding,
+          flex: 1,
           minHeight: 0
         }}>
           <div style={{ 
-            flex: 1, 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
             background: theme.accent,
             borderRadius: 8,
-            padding: 20,
-            overflow: 'hidden'
+            padding: previewPadding,
+            width: scaledWidth + previewPadding * 2,
+            height: scaledHeight + previewPadding * 2,
+            flexShrink: 0
           }}>
             <div style={{ 
-              transform: `scale(${previewScale})`,
-              transformOrigin: 'center center',
-              width: cardWidth,
-              height: cardHeight,
-              flexShrink: 0
+              width: scaledWidth,
+              height: scaledHeight,
+              position: 'relative',
+              overflow: 'hidden'
             }}>
-              <ShareCard
-                styleType={styleType}
-                screenshot={screenshot}
-                gameInfo={gameInfo}
-                note={editNote}
-                username={username || 'Player'}
-                cardRef={cardRef}
-                cardWidth={cardWidth}
-                cardHeight={cardHeight}
-              />
+              <div style={{ 
+                transform: `scale(${previewScale})`,
+                transformOrigin: 'top left',
+                width: cardWidth,
+                height: cardHeight,
+                position: 'absolute',
+                top: 0,
+                left: 0
+              }}>
+                <ShareCard
+                  styleType={styleType}
+                  screenshot={screenshot}
+                  gameInfo={gameInfo}
+                  note={editNote}
+                  username={username || 'Player'}
+                  cardRef={cardRef}
+                  cardWidth={cardWidth}
+                  cardHeight={cardHeight}
+                />
+              </div>
             </div>
           </div>
 
           <div style={{ 
-            width: 180, 
+            width: rightPanelWidth, 
             display: 'flex', 
             flexDirection: 'column', 
             gap: 12,

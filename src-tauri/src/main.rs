@@ -366,8 +366,14 @@ fn get_setting(key: String, state: State<AppState>) -> Result<Option<String>, St
 
 #[tauri::command]
 fn set_setting(key: String, value: String, state: State<AppState>) -> Result<(), String> {
+    println!("[设置] 保存设置: {} = {}", key, value);
     let conn = state.db.lock().unwrap();
     db::set_setting(&conn, &key, &value).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn log_debug(msg: String) {
+    println!("[前端] {}", msg);
 }
 
 #[tauri::command]
@@ -402,9 +408,38 @@ fn show_main_window(app: AppHandle, state: State<AppState>) -> Result<(), String
     drop(window_shown);
     
     if let Some(window) = app.get_webview_window("main") {
+        println!("[窗口] 准备显示主窗口...");
+        
+        let conn = state.db.lock().unwrap();
+        let saved_width = db::get_setting(&conn, "window_width");
+        let saved_height = db::get_setting(&conn, "window_height");
+        let saved_x = db::get_setting(&conn, "window_x");
+        let saved_y = db::get_setting(&conn, "window_y");
+        drop(conn);
+        
+        println!("[窗口] 读取到的窗口状态: size={:?}x{:?}, pos={:?},{:?}", 
+            saved_width, saved_height, saved_x, saved_y);
+        
+        if let (Some(w), Some(h)) = (&saved_width, &saved_height) {
+            if let (Ok(width), Ok(height)) = (w.parse::<u32>(), h.parse::<u32>()) {
+                use tauri::Size::Physical;
+                println!("[窗口] 设置窗口大小为: {}x{}", width, height);
+                let _ = window.set_size(Physical(tauri::PhysicalSize { width, height }));
+            }
+        }
+        
+        if let (Some(x), Some(y)) = (&saved_x, &saved_y) {
+            if let (Ok(pos_x), Ok(pos_y)) = (x.parse::<i32>(), y.parse::<i32>()) {
+                use tauri::Position::Physical;
+                println!("[窗口] 设置窗口位置为: {},{}", pos_x, pos_y);
+                let _ = window.set_position(Physical(tauri::PhysicalPosition { x: pos_x, y: pos_y }));
+            }
+        }
+        
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
         let _ = window.emit("window-shown", ());
+        println!("[窗口] 主窗口已显示");
     }
     Ok(())
 }
@@ -2000,6 +2035,7 @@ fn main() {
             play_sound_preview,
             get_setting,
             set_setting,
+            log_debug,
             show_window,
             hide_window,
             show_main_window,
