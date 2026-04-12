@@ -195,29 +195,6 @@ export function ScreenshotModal({
           flexShrink: 0
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button 
-              style={{ 
-                background: 'transparent', 
-                border: 'none', 
-                color: theme.textMuted, 
-                cursor: 'pointer', 
-                fontSize: 16, 
-                padding: '2px 6px',
-                lineHeight: 1,
-                transition: 'color 0.15s',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2
-              }}
-              onMouseEnter={e => e.currentTarget.style.color = theme.text}
-              onMouseLeave={e => e.currentTarget.style.color = theme.textMuted}
-              onClick={onClose}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 12H5M12 19l-7-7 7-7"/>
-              </svg>
-            </button>
-            <span style={{ fontSize: 12, color: theme.textMuted }}>|</span>
             <span style={{ fontSize: 13, color: theme.text, fontWeight: 500 }}>
               {formatDate(selectedScreenshot.timestamp)}
             </span>
@@ -226,6 +203,7 @@ export function ScreenshotModal({
               {selectedScreenshot.display_title || selectedScreenshot.game_title}
             </span>
           </div>
+          <button style={styles.closeBtn} onClick={onClose}>×</button>
         </div>
         
         <div style={{ 

@@ -60,7 +60,9 @@ function ShareCard({
   imageRef,
   isDragging = false,
   handleImageMouseDown,
-  handleImageMouseLeave
+  handleImageMouseLeave,
+  originalImageWidth,
+  originalImageHeight
 }) {
   const processName = screenshot?.game_id?.split('\\').pop().split('/').pop().replace('.exe', '') || '未知游戏'
   const gameTitle = screenshot?.display_title || screenshot?.game_title || gameInfo?.display_title || gameInfo?.game_title || processName
@@ -88,27 +90,34 @@ function ShareCard({
     }} ref={cardRef}>
       <div style={{ 
         width: '100%',
-        flex: 1,
+        height: originalImageHeight || 'auto',
         borderRadius: 8,
         overflow: 'hidden',
         background: '#f5f5f5',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 20
+        marginBottom: 20,
+        position: 'relative',
+        flexShrink: 0
       }}>
         <img 
           src={imageSrc} 
           alt="截图" 
           ref={imageRef}
           style={{ 
-            width: '100%', 
-            height: '100%', 
+            width: originalImageWidth || '100%', 
+            height: originalImageHeight || '100%', 
             objectFit: 'contain',
             transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
             transformOrigin: 'center center',
             cursor: isDragging ? 'grabbing' : 'grab',
-            userSelect: 'none'
+            userSelect: 'none',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            marginLeft: -((originalImageWidth || 0) / 2),
+            marginTop: -((originalImageHeight || 0) / 2)
           }}
           onMouseDown={handleImageMouseDown}
         />
@@ -182,7 +191,7 @@ function ShareCard({
       }} />
       <div style={{ 
         width: '100%',
-        flex: 1,
+        height: originalImageHeight || 'auto',
         overflow: 'hidden',
         border: '1px solid #00ffff',
         boxShadow: '0 0 20px rgba(0,255,255,0.4)',
@@ -190,21 +199,28 @@ function ShareCard({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 16
+        marginBottom: 16,
+        position: 'relative',
+        flexShrink: 0
       }}>
         <img 
           src={imageSrc} 
           alt="截图" 
           ref={imageRef}
           style={{ 
-            width: '100%', 
-            height: '100%', 
+            width: originalImageWidth || '100%', 
+            height: originalImageHeight || '100%', 
             objectFit: 'contain',
             filter: 'contrast(1.1) saturate(1.2)',
             transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
             transformOrigin: 'center center',
             cursor: isDragging ? 'grabbing' : 'grab',
-            userSelect: 'none'
+            userSelect: 'none',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            marginLeft: -((originalImageWidth || 0) / 2),
+            marginTop: -((originalImageHeight || 0) / 2)
           }}
           onMouseDown={handleImageMouseDown}
         />
@@ -287,21 +303,28 @@ function ShareCard({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 16,
-        flex: 1,
-        overflow: 'hidden'
+        height: originalImageHeight || 'auto',
+        overflow: 'hidden',
+        position: 'relative',
+        flexShrink: 0
       }}>
         <img 
           src={imageSrc} 
           alt="截图" 
           ref={imageRef}
           style={{ 
-            width: '100%', 
-            height: '100%', 
+            width: originalImageWidth || '100%', 
+            height: originalImageHeight || '100%', 
             objectFit: 'contain',
             transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
             transformOrigin: 'center center',
             cursor: isDragging ? 'grabbing' : 'grab',
-            userSelect: 'none'
+            userSelect: 'none',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            marginLeft: -((originalImageWidth || 0) / 2),
+            marginTop: -((originalImageHeight || 0) / 2)
           }}
           onMouseDown={handleImageMouseDown}
         />
@@ -369,14 +392,15 @@ function ShareCard({
     }} ref={cardRef}>
       <div style={{ 
         width: '100%',
-        flex: 1,
+        height: originalImageHeight ? originalImageHeight + 24 : 'auto',
         background: 'rgba(0,0,0,0.85)',
         borderRadius: 8,
         overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 16
+        marginBottom: 16,
+        flexShrink: 0
       }}>
         <div style={{ 
           width: 'calc(100% - 24px)',
@@ -388,20 +412,26 @@ function ShareCard({
           boxShadow: '0 0 25px rgba(255,113,206,0.5)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          position: 'relative'
         }}>
           <img 
             src={imageSrc} 
             alt="截图" 
             ref={imageRef}
           style={{ 
-            width: '100%', 
-            height: '100%', 
+            width: originalImageWidth || '100%', 
+            height: originalImageHeight || '100%', 
             objectFit: 'contain',
             transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
             transformOrigin: 'center center',
             cursor: isDragging ? 'grabbing' : 'grab',
-            userSelect: 'none'
+            userSelect: 'none',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            marginLeft: -((originalImageWidth || 0) / 2),
+            marginTop: -((originalImageHeight || 0) / 2)
           }}
           onMouseDown={handleImageMouseDown}
           />
@@ -481,26 +511,32 @@ function ShareCard({
     }} ref={cardRef}>
       <div style={{ 
         width: '100%',
-        flex: 1,
+        height: originalImageHeight || 'auto',
         position: 'relative',
         overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#111'
+        background: '#111',
+        flexShrink: 0
       }}>
         <img 
           src={imageSrc} 
           alt="截图" 
           ref={imageRef}
           style={{ 
-            width: '100%', 
-            height: '100%', 
+            width: originalImageWidth || '100%', 
+            height: originalImageHeight || '100%', 
             objectFit: 'contain',
             transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
             transformOrigin: 'center center',
             cursor: isDragging ? 'grabbing' : 'grab',
-            userSelect: 'none'
+            userSelect: 'none',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            marginLeft: -((originalImageWidth || 0) / 2),
+            marginTop: -((originalImageHeight || 0) / 2)
           }}
           onMouseDown={handleImageMouseDown}
         />
@@ -574,7 +610,7 @@ function ShareCard({
     }} ref={cardRef}>
       <div style={{ 
         width: '100%',
-        flex: 1,
+        height: originalImageHeight || 'auto',
         borderRadius: 12,
         overflow: 'hidden',
         background: '#fff',
@@ -582,20 +618,27 @@ function ShareCard({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 20,
-        boxShadow: '0 8px 25px rgba(255,175,204,0.3)'
+        boxShadow: '0 8px 25px rgba(255,175,204,0.3)',
+        position: 'relative',
+        flexShrink: 0
       }}>
         <img 
           src={imageSrc} 
           alt="截图" 
           ref={imageRef}
           style={{ 
-            width: '100%', 
-            height: '100%', 
+            width: originalImageWidth || '100%', 
+            height: originalImageHeight || '100%', 
             objectFit: 'contain',
             transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
             transformOrigin: 'center center',
             cursor: isDragging ? 'grabbing' : 'grab',
-            userSelect: 'none'
+            userSelect: 'none',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            marginLeft: -((originalImageWidth || 0) / 2),
+            marginTop: -((originalImageHeight || 0) / 2)
           }}
           onMouseDown={handleImageMouseDown}
         />
@@ -708,7 +751,7 @@ function ShareCard({
       
       <div style={{ 
         width: '100%',
-        flex: 1,
+        height: originalImageHeight || 'auto',
         background: 'rgba(0,0,0,0.9)',
         borderRadius: 4,
         overflow: 'hidden',
@@ -717,21 +760,28 @@ function ShareCard({
         justifyContent: 'center',
         marginBottom: 20,
         border: '2px solid #c1121f',
-        boxShadow: 'inset 0 0 30px rgba(193, 18, 31, 0.3)'
+        boxShadow: 'inset 0 0 30px rgba(193, 18, 31, 0.3)',
+        position: 'relative',
+        flexShrink: 0
       }}>
         <img 
           src={imageSrc} 
           alt="截图" 
           ref={imageRef}
           style={{ 
-            width: '100%', 
-            height: '100%', 
+            width: originalImageWidth || '100%', 
+            height: originalImageHeight || '100%', 
             objectFit: 'contain',
             filter: 'contrast(1.2) brightness(0.8) saturate(1.1) sepia(0.2)',
             transform: `scale(${imageScale}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
             transformOrigin: 'center center',
             cursor: isDragging ? 'grabbing' : 'grab',
-            userSelect: 'none'
+            userSelect: 'none',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            marginLeft: -((originalImageWidth || 0) / 2),
+            marginTop: -((originalImageHeight || 0) / 2)
           }}
           onMouseDown={handleImageMouseDown}
         />
@@ -849,6 +899,8 @@ export function ShareModal({
   const [heightRatio, setHeightRatio] = useState(1) // 1 = 100%, 2 = 200%
   const [originalCardWidth, setOriginalCardWidth] = useState(MAX_CARD_WIDTH)
   const [originalCardHeight, setOriginalCardHeight] = useState(MAX_CARD_HEIGHT)
+  const [originalImageWidth, setOriginalImageWidth] = useState(0)
+  const [originalImageHeight, setOriginalImageHeight] = useState(0)
   const cardRef = useRef(null)
   const imageRef = useRef(null)
   const isDraggingRef = useRef(false)
@@ -872,13 +924,10 @@ export function ShareModal({
         
         const paddingH = 48
         const paddingV = 48
-        const imageAreaPadding = 16
+        const imageMarginBottom = 20
         
-        let calculatedWidth = MAX_CARD_WIDTH
-        let calculatedHeight = MAX_CARD_HEIGHT
-        
-        const maxImageAreaWidth = MAX_CARD_WIDTH - paddingH - imageAreaPadding * 2
-        const maxImageAreaHeight = MAX_CARD_HEIGHT - TEXT_AREA_HEIGHT - paddingV - imageAreaPadding * 2
+        const maxImageAreaWidth = MAX_CARD_WIDTH - paddingH
+        const maxImageAreaHeight = MAX_CARD_HEIGHT - TEXT_AREA_HEIGHT - paddingV - imageMarginBottom
         
         const imageAreaAspectRatio = maxImageAreaWidth / maxImageAreaHeight
         
@@ -897,15 +946,13 @@ export function ShareModal({
           imageDisplayWidth = MIN_IMAGE_HEIGHT * aspectRatio
         }
         
-        calculatedWidth = Math.min(MAX_CARD_WIDTH, imageDisplayWidth + paddingH + imageAreaPadding * 2)
-        calculatedHeight = imageDisplayHeight + TEXT_AREA_HEIGHT + paddingV + imageAreaPadding * 2
-        
-        if (calculatedHeight > MAX_CARD_HEIGHT) {
-          calculatedHeight = MAX_CARD_HEIGHT
-        }
+        const calculatedWidth = Math.min(MAX_CARD_WIDTH, imageDisplayWidth + paddingH)
+        const calculatedHeight = imageDisplayHeight + TEXT_AREA_HEIGHT + paddingV + imageMarginBottom
         
         setOriginalCardWidth(Math.round(calculatedWidth))
         setOriginalCardHeight(Math.round(calculatedHeight))
+        setOriginalImageWidth(Math.round(imageDisplayWidth))
+        setOriginalImageHeight(Math.round(imageDisplayHeight))
         setCardWidth(Math.round(calculatedWidth))
         setCardHeight(Math.round(calculatedHeight))
         
@@ -1016,7 +1063,7 @@ export function ShareModal({
     e.stopPropagation()
     
     const delta = e.deltaY > 0 ? -0.05 : 0.05
-    const newScale = Math.max(1, Math.min(3, imageScale + delta))
+    const newScale = Math.max(0.5, Math.min(3, imageScale + delta))
     setImageScale(newScale)
   }
 
@@ -1099,6 +1146,8 @@ export function ShareModal({
           flexDirection: 'column'
         }} 
         onClick={e => e.stopPropagation()}
+        onKeyDown={e => e.stopPropagation()}
+        onWheel={e => e.stopPropagation()}
       >
         <div style={{ 
           ...styles.modalHeader, 
@@ -1160,6 +1209,8 @@ export function ShareModal({
                   isDragging={isDragging}
                   handleImageMouseDown={handleImageMouseDown}
                   handleImageMouseLeave={handleImageMouseLeave}
+                  originalImageWidth={originalImageWidth}
+                  originalImageHeight={originalImageHeight}
                 />
               </div>
             </div>
@@ -1397,7 +1448,7 @@ export function ShareModal({
               </label>
               <input
                 type="range"
-                min="1"
+                min="0.5"
                 max="3"
                 step="0.01"
                 value={imageScale}
@@ -1418,7 +1469,7 @@ export function ShareModal({
                 color: theme.textMuted,
                 marginTop: 2
               }}>
-                <span>100%</span>
+                <span>50%</span>
                 <span>300%</span>
               </div>
             </div>
