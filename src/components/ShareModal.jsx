@@ -6,6 +6,7 @@ import {
   STYLE_TYPES,
   EXPORT_FORMATS,
   LAYOUT_OPTIONS,
+  SHARE_CARD_STYLES,
   MAX_CARD_WIDTH,
   MAX_CARD_HEIGHT,
   TEXT_AREA_HEIGHT,
@@ -65,12 +66,15 @@ export function ShareModal({
         const imgHeight = img.naturalHeight
         const aspectRatio = imgWidth / imgHeight
         
+        const currentStyleConfig = SHARE_CARD_STYLES[styleType] || SHARE_CARD_STYLES.minimalist
+        const textAreaH = currentStyleConfig.textAreaHeight || TEXT_AREA_HEIGHT
+        
         const paddingH = 48
-        const paddingV = 48
-        const imageMarginBottom = 20
+        const paddingV = 40
+        const imageMarginBottom = 16
         
         const maxImageAreaWidth = MAX_CARD_WIDTH - paddingH
-        const maxImageAreaHeight = MAX_CARD_HEIGHT - TEXT_AREA_HEIGHT - paddingV - imageMarginBottom
+        const maxImageAreaHeight = MAX_CARD_HEIGHT - textAreaH - paddingV - imageMarginBottom
         
         const imageAreaAspectRatio = maxImageAreaWidth / maxImageAreaHeight
         
@@ -89,15 +93,26 @@ export function ShareModal({
           imageDisplayWidth = MIN_IMAGE_HEIGHT * aspectRatio
         }
         
-        const calculatedWidth = Math.min(MAX_CARD_WIDTH, imageDisplayWidth + paddingH)
-        const calculatedHeight = imageDisplayHeight + TEXT_AREA_HEIGHT + paddingV + imageMarginBottom
+        const calculatedHeight = imageDisplayHeight + textAreaH + paddingV + imageMarginBottom
         
-        setOriginalCardWidth(Math.round(calculatedWidth))
         setOriginalCardHeight(Math.round(calculatedHeight))
         setOriginalImageWidth(Math.round(imageDisplayWidth))
         setOriginalImageHeight(Math.round(imageDisplayHeight))
-        setCardWidth(Math.round(calculatedWidth))
         setCardHeight(Math.round(calculatedHeight))
+        
+        if (!useAdvancedMode) {
+          const layoutOption = LAYOUT_OPTIONS.find(opt => opt.id === layoutMode)
+          if (layoutOption) {
+            const ratio = layoutOption.ratio
+            const newCardWidth = Math.round(imageDisplayHeight * ratio) + paddingH
+            setCardWidth(newCardWidth)
+            setOriginalCardWidth(newCardWidth)
+          }
+        } else {
+          const calculatedWidth = Math.min(MAX_CARD_WIDTH, imageDisplayWidth + paddingH)
+          setCardWidth(Math.round(calculatedWidth))
+          setOriginalCardWidth(Math.round(calculatedWidth))
+        }
         
         const scale = Math.min(1, PREVIEW_MAX_HEIGHT / calculatedHeight)
         setPreviewScale(scale)
@@ -105,6 +120,32 @@ export function ShareModal({
       img.src = getImageSrc(screenshot.file_path)
     }
   }, [screenshot?.file_path])
+
+  useEffect(() => {
+    if (!originalImageHeight) return
+    
+    const currentStyleConfig = SHARE_CARD_STYLES[styleType] || SHARE_CARD_STYLES.minimalist
+    const textAreaH = currentStyleConfig.textAreaHeight || TEXT_AREA_HEIGHT
+    const paddingV = 40
+    const imageMarginBottom = 16
+    
+    const newCardHeight = originalImageHeight + textAreaH + paddingV + imageMarginBottom
+    setCardHeight(Math.round(newCardHeight))
+    
+    if (!useAdvancedMode) {
+      const layoutOption = LAYOUT_OPTIONS.find(opt => opt.id === layoutMode)
+      if (layoutOption) {
+        const ratio = layoutOption.ratio
+        const paddingH = 48
+        const newImageWidth = Math.round(originalImageHeight * ratio)
+        const newCardWidth = newImageWidth + paddingH
+        setCardWidth(newCardWidth)
+      }
+    }
+    
+    const scale = Math.min(1, PREVIEW_MAX_HEIGHT / newCardHeight)
+    setPreviewScale(scale)
+  }, [styleType, originalImageHeight, layoutMode, useAdvancedMode])
 
   useEffect(() => {
     if (useAdvancedMode || !originalImageHeight) return
@@ -365,6 +406,7 @@ export function ShareModal({
                   handleImageMouseDown={handleImageMouseDown}
                   originalImageWidth={originalImageWidth}
                   originalImageHeight={originalImageHeight}
+                  layoutMode={layoutMode}
                 />
               </div>
             </div>

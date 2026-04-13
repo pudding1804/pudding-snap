@@ -127,20 +127,60 @@ function ImageContainer({
   )
 }
 
-function TextSection({ styleConfig, gameTitle, dateTime, note, displayUsername }) {
+function TextSection({ styleConfig, gameTitle, dateTime, note, displayUsername, layoutMode }) {
   const sectionStyle = styleConfig.textSection || {}
-  const titleStyle = styleConfig.title || {}
-  const dateTimeStyle = styleConfig.dateTime || {}
-  const noteStyle = styleConfig.note || {}
-  const usernameStyle = styleConfig.username || {}
+  const textAreaHeight = styleConfig.textAreaHeight || 120
+  
+  let titleStyle = styleConfig.title || {}
+  let dateTimeStyle = styleConfig.dateTime || {}
+  let noteStyle = styleConfig.note || {}
+  let usernameStyle = styleConfig.username || {}
+  
+  if (styleConfig.responsive && layoutMode) {
+    const responsiveConfig = styleConfig.responsive[layoutMode]
+    if (responsiveConfig) {
+      titleStyle = { ...titleStyle, ...responsiveConfig.title }
+      noteStyle = { ...noteStyle, ...responsiveConfig.note }
+    }
+  }
+
+  const getTitleStyle = () => {
+    const baseStyle = { ...titleStyle }
+    
+    if (gameTitle.length > 20) {
+      baseStyle.fontSize = Math.max(16, titleStyle.fontSize * 0.8)
+    } else if (gameTitle.length > 30) {
+      baseStyle.fontSize = Math.max(14, titleStyle.fontSize * 0.6)
+    }
+    
+    return baseStyle
+  }
+
+  const getNoteStyle = () => {
+    const baseStyle = { ...noteStyle }
+    
+    if (note && note.length > 50) {
+      baseStyle.fontSize = Math.max(12, noteStyle.fontSize * 0.8)
+    } else if (note && note.length > 80) {
+      baseStyle.fontSize = Math.max(10, noteStyle.fontSize * 0.6)
+    }
+    
+    return baseStyle
+  }
 
   return (
-    <div style={{ textAlign: 'center', flexShrink: 0, ...sectionStyle }}>
+    <div style={{ 
+      textAlign: 'center', 
+      flexShrink: 0,
+      height: textAreaHeight,
+      ...sectionStyle,
+      wordBreak: 'break-word',
+      overflowWrap: 'break-word'
+    }}>
       <div style={{
+        ...getTitleStyle(),
         overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        ...titleStyle
+        lineHeight: titleStyle.lineHeight || 1.2
       }}>
         {gameTitle}
       </div>
@@ -153,11 +193,10 @@ function TextSection({ styleConfig, gameTitle, dateTime, note, displayUsername }
       {note && (
         <div style={{
           overflow: 'hidden',
-          textOverflow: 'ellipsis',
           display: '-webkit-box',
           WebkitLineClamp: 2,
           WebkitBoxOrient: 'vertical',
-          ...noteStyle
+          ...getNoteStyle()
         }}>
           "{note}"
         </div>
@@ -196,7 +235,8 @@ export function ShareCard({
   isDragging = false,
   handleImageMouseDown,
   originalImageWidth,
-  originalImageHeight
+  originalImageHeight,
+  layoutMode = 'landscape16x9'
 }) {
   const processName = screenshot?.game_id?.split('\\').pop().split('/').pop().replace('.exe', '') || '未知游戏'
   const gameTitle = screenshot?.display_title || screenshot?.game_title || gameInfo?.display_title || gameInfo?.game_title || processName
@@ -241,6 +281,7 @@ export function ShareCard({
         dateTime={dateTime}
         note={note}
         displayUsername={displayUsername}
+        layoutMode={layoutMode}
       />
       
       <Watermark styleConfig={styleConfig} />

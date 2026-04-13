@@ -4,12 +4,20 @@ export const STYLE_TYPES = [
   { id: 'polaroid', name: '拍立得', nameEn: 'Polaroid' },
   { id: 'vaporwave', name: '蒸汽波', nameEn: 'Vaporwave' },
   { id: 'editorial', name: '杂志', nameEn: 'Editorial' },
-  { id: 'pink', name: '少女粉', nameEn: 'Pink' },
+  { id: 'pink', name: '粉色', nameEn: 'Pink' },
   { id: 'gothic', name: '哥特', nameEn: 'Gothic' }
+]
+
+export const LAYOUT_OPTIONS = [
+  { id: 'landscape16x9', name: '横屏 16:9', ratio: 16 / 9 },
+  { id: 'square', name: '正方形', ratio: 1 },
+  { id: 'landscape4x3', name: '横屏 4:3', ratio: 4 / 3 },
+  { id: 'portrait4x3', name: '竖屏 4:3', ratio: 3 / 4 }
 ]
 
 export const SHARE_CARD_STYLES = {
   minimalist: {
+    textAreaHeight: 120,
     container: {
       background: '#ffffff',
       padding: 24,
@@ -18,34 +26,40 @@ export const SHARE_CARD_STYLES = {
     imageContainer: {
       borderRadius: 8,
       background: '#f5f5f5',
-      marginBottom: 20
+      marginBottom: 16
     },
     image: {},
     textSection: {
-      textAlign: 'center'
+      textAlign: 'center',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center'
     },
     title: {
       fontSize: 28,
       fontWeight: 300,
       color: '#1a1a1a',
       marginBottom: 8,
-      letterSpacing: '-0.5px'
+      letterSpacing: '-0.5px',
+      lineHeight: 1.2
     },
     dateTime: {
       fontSize: 14,
       color: '#888',
-      marginBottom: 12
+      marginBottom: 10,
+      lineHeight: 1.3
     },
     note: {
       fontSize: 15,
       color: '#555',
       lineHeight: 1.6,
       fontStyle: 'italic',
-      marginBottom: 12
+      marginBottom: 10
     },
     username: {
       fontSize: 12,
-      color: '#999'
+      color: '#999',
+      lineHeight: 1.3
     },
     watermark: {
       bottom: 10,
@@ -54,10 +68,29 @@ export const SHARE_CARD_STYLES = {
       color: 'rgba(0,0,0,0.2)',
       fontWeight: 500,
       letterSpacing: '0.3px'
+    },
+    responsive: {
+      'landscape16x9': {
+        title: { fontSize: 32, lineHeight: 1.1 },
+        note: { fontSize: 16, lineHeight: 1.5 }
+      },
+      'square': {
+        title: { fontSize: 26, lineHeight: 1.2 },
+        note: { fontSize: 14, lineHeight: 1.6 }
+      },
+      'landscape4x3': {
+        title: { fontSize: 28, lineHeight: 1.2 },
+        note: { fontSize: 15, lineHeight: 1.5 }
+      },
+      'portrait4x3': {
+        title: { fontSize: 22, lineHeight: 1.3 },
+        note: { fontSize: 13, lineHeight: 1.5 }
+      }
     }
   },
 
   cyberpunk: {
+    textAreaHeight: 110,
     container: {
       background: 'linear-gradient(180deg, #0a0a0a 0%, #1a0a2e 100%)',
       padding: 20,
@@ -69,13 +102,16 @@ export const SHARE_CARD_STYLES = {
       border: '1px solid #00ffff',
       boxShadow: '0 0 20px rgba(0,255,255,0.4)',
       background: '#000',
-      marginBottom: 16
+      marginBottom: 12
     },
     image: {
       filter: 'contrast(1.1) saturate(1.2)'
     },
     textSection: {
-      textAlign: 'center'
+      textAlign: 'center',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center'
     },
     title: {
       fontSize: 22,
@@ -84,24 +120,27 @@ export const SHARE_CARD_STYLES = {
       marginBottom: 6,
       textShadow: '0 0 10px rgba(0,255,255,0.8)',
       textTransform: 'uppercase',
-      letterSpacing: '2px'
+      letterSpacing: '2px',
+      lineHeight: 1.2
     },
     dateTime: {
       fontSize: 13,
       color: '#ff00ff',
-      marginBottom: 10,
-      textShadow: '0 0 5px rgba(255,0,255,0.5)'
+      marginBottom: 8,
+      textShadow: '0 0 5px rgba(255,0,255,0.5)',
+      lineHeight: 1.3
     },
     note: {
       fontSize: 14,
       color: '#ddd',
       lineHeight: 1.5,
-      marginBottom: 10
+      marginBottom: 8
     },
     username: {
       fontSize: 12,
       color: '#ff00ff',
-      letterSpacing: '1px'
+      letterSpacing: '1px',
+      lineHeight: 1.3
     },
     watermark: {
       bottom: 8,
@@ -123,10 +162,29 @@ export const SHARE_CARD_STYLES = {
           background: 'linear-gradient(90deg, transparent, #ff00ff, #00ffff, transparent)'
         }
       }
-    ]
+    ],
+    responsive: {
+      'landscape16x9': {
+        title: { fontSize: 26, letterSpacing: '3px' },
+        note: { fontSize: 15 }
+      },
+      'square': {
+        title: { fontSize: 20, letterSpacing: '2px' },
+        note: { fontSize: 13 }
+      },
+      'landscape4x3': {
+        title: { fontSize: 22, letterSpacing: '2px' },
+        note: { fontSize: 14 }
+      },
+      'portrait4x3': {
+        title: { fontSize: 18, letterSpacing: '1px' },
+        note: { fontSize: 12 }
+      }
+    }
   },
 
   polaroid: {
+    textAreaHeight: 100,
     container: {
       background: '#f5f5f0',
       padding: 20,
@@ -135,36 +193,42 @@ export const SHARE_CARD_STYLES = {
     },
     imageContainer: {
       background: '#fff',
-      padding: 16,
+      padding: 12,
       boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-      marginBottom: 16
+      marginBottom: 12
     },
     image: {},
     textSection: {
-      textAlign: 'center'
+      textAlign: 'center',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center'
     },
     title: {
       fontSize: 22,
       fontWeight: 500,
       color: '#333',
-      marginBottom: 6
+      marginBottom: 6,
+      lineHeight: 1.2
     },
     dateTime: {
       fontSize: 14,
       color: '#666',
-      marginBottom: 10,
-      letterSpacing: '0.5px'
+      marginBottom: 8,
+      letterSpacing: '0.5px',
+      lineHeight: 1.3
     },
     note: {
       fontSize: 15,
       color: '#555',
       lineHeight: 1.5,
       fontStyle: 'italic',
-      marginBottom: 10
+      marginBottom: 8
     },
     username: {
       fontSize: 12,
-      color: '#777'
+      color: '#777',
+      lineHeight: 1.3
     },
     watermark: {
       bottom: 8,
@@ -172,106 +236,153 @@ export const SHARE_CARD_STYLES = {
       fontSize: 9,
       color: 'rgba(0,0,0,0.18)',
       fontWeight: 500
+    },
+    responsive: {
+      'landscape16x9': {
+        title: { fontSize: 26, lineHeight: 1.1 },
+        note: { fontSize: 16, lineHeight: 1.5 }
+      },
+      'square': {
+        title: { fontSize: 20, lineHeight: 1.2 },
+        note: { fontSize: 14, lineHeight: 1.5 }
+      },
+      'landscape4x3': {
+        title: { fontSize: 22, lineHeight: 1.2 },
+        note: { fontSize: 15, lineHeight: 1.5 }
+      },
+      'portrait4x3': {
+        title: { fontSize: 18, lineHeight: 1.3 },
+        note: { fontSize: 13, lineHeight: 1.5 }
+      }
     }
   },
 
   vaporwave: {
+    textAreaHeight: 130,
     container: {
       background: 'linear-gradient(180deg, #ff71ce 0%, #01cdfe 50%, #05ffa1 100%)',
-      padding: 20,
+      padding: 24,
       fontFamily: '"Courier New", monospace'
     },
     imageContainer: {
-      background: 'rgba(0,0,0,0.85)',
-      borderRadius: 8,
+      borderRadius: 16,
+      background: '#fff',
       marginBottom: 16,
-      innerWrapper: {
-        margin: 12,
-        borderRadius: 4,
-        border: '3px solid #ff71ce',
-        boxShadow: '0 0 25px rgba(255,113,206,0.5)'
-      }
+      boxShadow: '0 8px 25px rgba(255,113,206,0.4)'
     },
     image: {},
     textSection: {
-      background: 'rgba(0,0,0,0.75)',
-      borderRadius: 8,
-      padding: 16,
-      textAlign: 'center'
+      background: 'rgba(255,255,255,0.85)',
+      borderRadius: 12,
+      padding: 12,
+      textAlign: 'center',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      boxShadow: '0 4px 15px rgba(1,205,254,0.3)'
     },
     title: {
       fontSize: 20,
       fontWeight: 'bold',
-      color: '#fff',
+      color: '#ff71ce',
       marginBottom: 6,
-      textShadow: '2px 2px 0 #ff71ce',
+      textShadow: '1px 1px 0 rgba(1,205,254,0.3)',
       textTransform: 'uppercase',
-      letterSpacing: '2px'
+      letterSpacing: '1px',
+      lineHeight: 1.2
     },
     dateTime: {
-      fontSize: 13,
-      color: '#05ffa1',
-      marginBottom: 10,
-      fontWeight: 'bold'
+      fontSize: 12,
+      color: '#01cdfe',
+      marginBottom: 6,
+      fontWeight: 'bold',
+      lineHeight: 1.3
     },
     note: {
-      fontSize: 14,
-      color: '#fff',
-      lineHeight: 1.5,
-      marginBottom: 10
+      fontSize: 13,
+      color: '#ff71ce',
+      lineHeight: 1.4,
+      fontStyle: 'italic',
+      marginBottom: 6
     },
     username: {
-      fontSize: 12,
-      color: '#01cdfe'
+      fontSize: 11,
+      color: '#05ffa1',
+      fontWeight: 'bold',
+      lineHeight: 1.3
     },
     watermark: {
       bottom: 10,
       right: 14,
       fontSize: 10,
-      color: 'rgba(255,255,255,0.3)',
+      color: 'rgba(255,113,206,0.4)',
       fontWeight: 500,
       letterSpacing: '0.5px'
+    },
+    responsive: {
+      'landscape16x9': {
+        title: { fontSize: 22, lineHeight: 1.1 },
+        note: { fontSize: 14, lineHeight: 1.4 }
+      },
+      'square': {
+        title: { fontSize: 18, lineHeight: 1.2 },
+        note: { fontSize: 12, lineHeight: 1.4 }
+      },
+      'landscape4x3': {
+        title: { fontSize: 20, lineHeight: 1.2 },
+        note: { fontSize: 13, lineHeight: 1.4 }
+      },
+      'portrait4x3': {
+        title: { fontSize: 16, lineHeight: 1.3 },
+        note: { fontSize: 11, lineHeight: 1.4 }
+      }
     }
   },
 
   editorial: {
+    textAreaHeight: 120,
     container: {
       background: '#1a1a1a',
+      padding: 24,
       fontFamily: 'Georgia, "Times New Roman", serif'
     },
     imageContainer: {
       background: '#111',
-      marginBottom: 0
+      marginBottom: 16
     },
     image: {},
     textSection: {
-      background: 'linear-gradient(180deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98))',
-      padding: 24,
-      textAlign: 'center'
+      textAlign: 'center',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center'
     },
     title: {
       fontSize: 24,
       fontWeight: 600,
       color: '#fff',
-      marginBottom: 8
+      marginBottom: 8,
+      lineHeight: 1.2
     },
     dateTime: {
       fontSize: 13,
       color: 'rgba(255,255,255,0.5)',
-      marginBottom: 12,
+      marginBottom: 10,
       textTransform: 'uppercase',
-      letterSpacing: '1px'
+      letterSpacing: '1px',
+      lineHeight: 1.3
     },
     note: {
       fontSize: 15,
       color: 'rgba(255,255,255,0.7)',
       lineHeight: 1.6,
       fontStyle: 'italic',
-      marginBottom: 12
+      marginBottom: 10
     },
     username: {
       fontSize: 12,
-      color: 'rgba(255,255,255,0.4)'
+      color: 'rgba(255,255,255,0.4)',
+      lineHeight: 1.3
     },
     watermark: {
       bottom: 8,
@@ -279,64 +390,108 @@ export const SHARE_CARD_STYLES = {
       fontSize: 9,
       color: 'rgba(255,255,255,0.18)',
       letterSpacing: '0.3px'
+    },
+    responsive: {
+      'landscape16x9': {
+        title: { fontSize: 28, lineHeight: 1.1 },
+        note: { fontSize: 16, lineHeight: 1.5 }
+      },
+      'square': {
+        title: { fontSize: 22, lineHeight: 1.2 },
+        note: { fontSize: 14, lineHeight: 1.6 }
+      },
+      'landscape4x3': {
+        title: { fontSize: 24, lineHeight: 1.2 },
+        note: { fontSize: 15, lineHeight: 1.5 }
+      },
+      'portrait4x3': {
+        title: { fontSize: 20, lineHeight: 1.3 },
+        note: { fontSize: 13, lineHeight: 1.5 }
+      }
     }
   },
 
   pink: {
+    textAreaHeight: 130,
     container: {
-      background: 'linear-gradient(180deg, #ffc8dd 0%, #ffafcc 50%, #bde0fe 100%)',
+      background: 'linear-gradient(180deg, #ffeef2 0%, #ffd6e0 40%, #ffb8d0 100%)',
       padding: 24,
       fontFamily: '"Comic Sans MS", Tahoma, sans-serif'
     },
     imageContainer: {
-      borderRadius: 12,
+      borderRadius: 16,
       background: '#fff',
-      marginBottom: 20,
-      boxShadow: '0 8px 25px rgba(255,175,204,0.3)'
+      marginBottom: 16,
+      boxShadow: '0 8px 25px rgba(255,182,193,0.4)'
     },
     image: {},
     textSection: {
-      background: 'rgba(255,255,255,0.8)',
+      background: 'rgba(255,255,255,0.85)',
       borderRadius: 12,
-      padding: 20,
+      padding: 12,
       textAlign: 'center',
-      boxShadow: '0 4px 15px rgba(255,175,204,0.2)'
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      boxShadow: '0 4px 15px rgba(255,182,193,0.3)'
     },
     title: {
-      fontSize: 24,
+      fontSize: 20,
       fontWeight: 600,
-      color: '#e63946',
-      marginBottom: 8,
-      textShadow: '1px 1px 0 rgba(255,175,204,0.5)'
+      color: '#ff6b9d',
+      marginBottom: 6,
+      textShadow: '1px 1px 0 rgba(255,182,193,0.5)',
+      lineHeight: 1.2
     },
     dateTime: {
-      fontSize: 14,
-      color: '#8d99ae',
-      marginBottom: 12
+      fontSize: 12,
+      color: '#ff8fab',
+      marginBottom: 6,
+      lineHeight: 1.3
     },
     note: {
-      fontSize: 15,
-      color: '#457b9d',
-      lineHeight: 1.6,
+      fontSize: 13,
+      color: '#ff6b9d',
+      lineHeight: 1.4,
       fontStyle: 'italic',
-      marginBottom: 12
+      marginBottom: 6
     },
     username: {
-      fontSize: 13,
-      color: '#e63946',
-      fontWeight: 500
+      fontSize: 11,
+      color: '#ff6b9d',
+      fontWeight: 500,
+      lineHeight: 1.3
     },
     watermark: {
       bottom: 10,
       right: 14,
       fontSize: 10,
-      color: 'rgba(0,0,0,0.3)',
+      color: 'rgba(255,107,157,0.4)',
       fontWeight: 500,
       letterSpacing: '0.3px'
+    },
+    responsive: {
+      'landscape16x9': {
+        title: { fontSize: 22, lineHeight: 1.1 },
+        note: { fontSize: 14, lineHeight: 1.4 }
+      },
+      'square': {
+        title: { fontSize: 18, lineHeight: 1.2 },
+        note: { fontSize: 12, lineHeight: 1.4 }
+      },
+      'landscape4x3': {
+        title: { fontSize: 20, lineHeight: 1.2 },
+        note: { fontSize: 13, lineHeight: 1.4 }
+      },
+      'portrait4x3': {
+        title: { fontSize: 16, lineHeight: 1.3 },
+        note: { fontSize: 11, lineHeight: 1.4 }
+      }
     }
   },
 
   gothic: {
+    textAreaHeight: 110,
     container: {
       background: 'linear-gradient(180deg, #0a0a0a 0%, #1a0a1a 30%, #2a1010 70%, #1a0a0a 100%)',
       padding: 24,
@@ -347,7 +502,7 @@ export const SHARE_CARD_STYLES = {
     imageContainer: {
       background: 'rgba(0,0,0,0.9)',
       borderRadius: 4,
-      marginBottom: 20,
+      marginBottom: 16,
       border: '2px solid #c1121f',
       boxShadow: 'inset 0 0 30px rgba(193, 18, 31, 0.3)'
     },
@@ -355,12 +510,10 @@ export const SHARE_CARD_STYLES = {
       filter: 'contrast(1.2) brightness(0.8) saturate(1.1) sepia(0.2)'
     },
     textSection: {
-      background: 'rgba(0,0,0,0.85)',
-      borderRadius: 4,
-      padding: 20,
       textAlign: 'center',
-      border: '1px solid #c1121f',
-      boxShadow: '0 4px 15px rgba(193, 18, 31, 0.2)'
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center'
     },
     title: {
       fontSize: 24,
@@ -369,28 +522,31 @@ export const SHARE_CARD_STYLES = {
       marginBottom: 8,
       textShadow: '0 0 15px rgba(193, 18, 31, 0.5)',
       fontStyle: 'italic',
-      letterSpacing: '1px'
+      letterSpacing: '1px',
+      lineHeight: 1.2
     },
     dateTime: {
       fontSize: 14,
       color: '#e63946',
-      marginBottom: 12,
+      marginBottom: 10,
       letterSpacing: '1.5px',
-      textShadow: '0 0 5px rgba(230, 57, 70, 0.3)'
+      textShadow: '0 0 5px rgba(230, 57, 70, 0.3)',
+      lineHeight: 1.3
     },
     note: {
       fontSize: 15,
       color: '#d1d5db',
       lineHeight: 1.6,
       fontStyle: 'italic',
-      marginBottom: 12,
+      marginBottom: 10,
       textShadow: '0 0 5px rgba(209, 213, 219, 0.2)'
     },
     username: {
       fontSize: 13,
       color: '#f8edeb',
       fontStyle: 'italic',
-      textShadow: '0 0 10px rgba(193, 18, 31, 0.3)'
+      textShadow: '0 0 10px rgba(193, 18, 31, 0.3)',
+      lineHeight: 1.3
     },
     watermark: {
       bottom: 10,
@@ -437,16 +593,27 @@ export const SHARE_CARD_STYLES = {
           background: 'linear-gradient(90deg, transparent, #c1121f, transparent)'
         }
       }
-    ]
+    ],
+    responsive: {
+      'landscape16x9': {
+        title: { fontSize: 28, letterSpacing: '1.5px' },
+        note: { fontSize: 16, lineHeight: 1.5 }
+      },
+      'square': {
+        title: { fontSize: 22, letterSpacing: '1px' },
+        note: { fontSize: 14, lineHeight: 1.6 }
+      },
+      'landscape4x3': {
+        title: { fontSize: 24, letterSpacing: '1.2px' },
+        note: { fontSize: 15, lineHeight: 1.5 }
+      },
+      'portrait4x3': {
+        title: { fontSize: 20, letterSpacing: '0.8px' },
+        note: { fontSize: 13, lineHeight: 1.5 }
+      }
+    }
   }
 }
-
-export const LAYOUT_OPTIONS = [
-  { id: 'landscape16x9', name: '横屏 16:9', ratio: 16 / 9 },
-  { id: 'square', name: '正方形', ratio: 1 },
-  { id: 'landscape4x3', name: '横屏 4:3', ratio: 4 / 3 },
-  { id: 'portrait4x3', name: '竖屏 4:3', ratio: 3 / 4 }
-]
 
 export const EXPORT_FORMATS = [
   { id: 'jpg', name: 'JPG' },
