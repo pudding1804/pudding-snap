@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
+import { Pagination } from './Pagination'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -326,51 +327,13 @@ export function GameList({
       </div>
       
       {totalPages > 1 && onLoadPage && (
-        <div style={{ 
-          ...styles.pagination, 
-          flexShrink: 0,
-          position: 'sticky',
-          bottom: 0,
-          background: theme.bg,
-          zIndex: 10,
-          marginTop: 0
-        }}>
-          <button 
-            style={styles.paginationBtn}
-            {...btnEvents}
-            onClick={() => onLoadPage(1)}
-            disabled={currentPage === 1}
-          >
-            首页
-          </button>
-          <button 
-            style={styles.paginationBtn}
-            {...btnEvents}
-            onClick={() => onLoadPage(Math.max(1, currentPage - 1))}
-            disabled={currentPage === 1}
-          >
-            上一页
-          </button>
-          <span style={styles.paginationInfo}>
-            第 {currentPage} 页，共 {totalPages} 页
-          </span>
-          <button 
-            style={styles.paginationBtn}
-            {...btnEvents}
-            onClick={() => onLoadPage(Math.min(totalPages, currentPage + 1))}
-            disabled={currentPage === totalPages}
-          >
-            下一页
-          </button>
-          <button 
-            style={styles.paginationBtn}
-            {...btnEvents}
-            onClick={() => onLoadPage(totalPages)}
-            disabled={currentPage === totalPages}
-          >
-            末页
-          </button>
-        </div>
+        <Pagination
+          theme={theme}
+          styles={styles}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={onLoadPage}
+        />
       )}
     </div>
   )

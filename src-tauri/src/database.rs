@@ -277,6 +277,7 @@ pub fn init_db() -> Result<Connection> {
     println!("[数据库] 数据库初始化成功");
     
     fix_paths_on_startup(&conn)?;
+    verify_and_fix_paths(&conn)?;
     
     Ok(conn)
 }
@@ -297,51 +298,140 @@ pub fn fix_paths_on_startup(conn: &Connection) -> Result<()> {
             println!("[路径修复] 样本路径: {}", path);
             println!("[路径修复] 当前数据目录: {}", current_dir_str);
             
-            let path_obj = std::path::Path::new(&path);
-            if let Some(parent) = path_obj.parent() {
-                let mut old_dir = parent.to_string_lossy().to_string();
+            let old_dir = extract_data_dir_from_path(&path);
+            
+            if old_dir != current_dir_str {
+                println!("[路径修复] 旧目录: {}", old_dir);
+                println!("[路径修复] 新目录: {}", current_dir_str);
                 
-                if let Some(game_dir_name) = parent.file_name() {
-                    let game_dir_str = game_dir_name.to_string_lossy();
-                    if game_dir_str.len() == 16 && game_dir_str.chars().all(|c| c.is_ascii_hexdigit()) {
-                        if let Some(data_dir) = parent.parent() {
-                            old_dir = data_dir.to_string_lossy().to_string();
-                            println!("[路径修复] 检测到game_id子目录，使用数据目录: {}", old_dir);
-                        }
-                    }
-                }
+                conn.execute(
+                    "UPDATE screenshots SET file_path = REPLACE(file_path, ?1, ?2)",
+                    params![&old_dir, &current_dir_str],
+                )?;
                 
-                if old_dir != current_dir_str {
-                    println!("[路径修复] 旧目录: {}", old_dir);
-                    println!("[路径修复] 新目录: {}", current_dir_str);
-                    
-                    conn.execute(
-                        "UPDATE screenshots SET file_path = REPLACE(file_path, ?1, ?2)",
-                        params![&old_dir, &current_dir_str],
-                    )?;
-                    
-                    conn.execute(
-                        "UPDATE screenshots SET thumbnail_path = REPLACE(thumbnail_path, ?1, ?2)",
-                        params![&old_dir, &current_dir_str],
-                    )?;
-                    
-                    conn.execute(
-                        "UPDATE game_cache SET icon_path = REPLACE(icon_path, ?1, ?2) WHERE icon_path IS NOT NULL",
-                        params![&old_dir, &current_dir_str],
-                    )?;
-                    
-                    conn.execute(
-                        "UPDATE game_cache SET steam_logo_path = REPLACE(steam_logo_path, ?1, ?2) WHERE steam_logo_path IS NOT NULL",
-                        params![&old_dir, &current_dir_str],
-                    )?;
-                    
-                    println!("[路径修复] 路径修复完成");
-                }
+                conn.execute(
+                    "UPDATE screenshots SET thumbnail_path = REPLACE(thumbnail_path, ?1, ?2)",
+                    params![&old_dir, &current_dir_str],
+                )?;
+                
+                conn.execute(
+                    "UPDATE game_cache SET icon_path = REPLACE(icon_path, ?1, ?2) WHERE icon_path IS NOT NULL",
+                    params![&old_dir, &current_dir_str],
+                )?;
+                
+                conn.execute(
+                    "UPDATE game_cache SET steam_logo_path = REPLACE(steam_logo_path, ?1, ?2) WHERE steam_logo_path IS NOT NULL",
+                    params![&old_dir, &current_dir_str],
+                )?;
+                
+                println!("[路径修复] 路径修复完成");
             }
         }
     }
     
     Ok(())
+}
+
+pub fn verify_and_fix_paths(conn: &Connection) -> Result<()> {
+    let data_dir = get_data_dir();
+    let data_dir_str = data_dir.to_string_lossy().to_string();
+    
+    let mut broken_paths: Vec<(i64, String, String, String)> = Vec::new();
+    
+    {
+        let mut stmt = conn.prepare(
+            "SELECT id, file_path, thumbnail_path, game_id FROM screenshots"
+        )?;
+        
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?;
+        
+        for row in rows {
+            if let Ok((id, file_path, thumb_path, game_id)) = row {
+                let file_exists = std::path::Path::new(&file_path).exists();
+                let thumb_exists = std::path::Path::new(&thumb_path).exists();
+                
+                if !file_exists || !thumb_exists {
+                    broken_paths.push((id, file_path, thumb_path, game_id));
+                }
+            }
+        }
+    }
+    
+    if broken_paths.is_empty() {
+        println!("[路径验证] 所有路径正常");
+        return Ok(());
+    }
+    
+    println!("[路径验证] 发现 {} 条损坏路径，尝试修复...", broken_paths.len());
+    
+    for (id, file_path, thumb_path, game_id) in broken_paths {
+        let mut new_file_path = file_path.clone();
+        let mut new_thumb_path = thumb_path.clone();
+        
+        let game_dir = data_dir.join(&game_id);
+        
+        if !std::path::Path::new(&file_path).exists() {
+            if let Some(filename) = std::path::Path::new(&file_path).file_name() {
+                let correct_path = game_dir.join(filename);
+                if correct_path.exists() {
+                    new_file_path = correct_path.to_string_lossy().to_string();
+                    println!("[路径修复] 截图: {} -> {}", file_path, new_file_path);
+                }
+            }
+        }
+        
+        if !std::path::Path::new(&thumb_path).exists() {
+            if let Some(filename) = std::path::Path::new(&thumb_path).file_name() {
+                let thumb_dir = game_dir.join("thumbnails");
+                let correct_path = thumb_dir.join(filename);
+                if correct_path.exists() {
+                    new_thumb_path = correct_path.to_string_lossy().to_string();
+                    println!("[路径修复] 缩略图: {} -> {}", thumb_path, new_thumb_path);
+                }
+            }
+        }
+        
+        if new_file_path != file_path || new_thumb_path != thumb_path {
+            conn.execute(
+                "UPDATE screenshots SET file_path = ?1, thumbnail_path = ?2 WHERE id = ?3",
+                params![&new_file_path, &new_thumb_path, id],
+            )?;
+        }
+    }
+    
+    println!("[路径验证] 修复完成");
+    Ok(())
+}
+
+fn extract_data_dir_from_path(path: &str) -> String {
+    let path_obj = std::path::Path::new(path);
+    let mut current = path_obj;
+    
+    while let Some(parent) = current.parent() {
+        if let Some(dir_name) = parent.file_name() {
+            let dir_str = dir_name.to_string_lossy();
+            if dir_str.len() == 16 && dir_str.chars().all(|c| c.is_ascii_hexdigit()) {
+                if let Some(data_dir) = parent.parent() {
+                    println!("[路径提取] 找到game_id目录: {}, 数据目录: {:?}", dir_str, data_dir);
+                    return data_dir.to_string_lossy().to_string();
+                }
+            }
+        }
+        current = parent;
+    }
+    
+    if let Some(parent) = path_obj.parent() {
+        return parent.to_string_lossy().to_string();
+    }
+    
+    path.to_string()
 }
 
 pub fn get_game_dir(game_id: &str) -> PathBuf {
@@ -797,8 +887,56 @@ pub fn switch_data_directory(new_path: &str) -> Result<MigrationResult> {
         });
     }
     
-    let old_dir_str = old_data_dir.to_string_lossy().to_string();
     let new_dir_str = new_data_dir.to_string_lossy().to_string();
+    
+    let db_path = new_data_dir.join("screenshots_v2.db");
+    match Connection::open(&db_path) {
+        Ok(conn) => {
+            let sample_path: Option<String> = conn.query_row(
+                "SELECT file_path FROM screenshots LIMIT 1",
+                [],
+                |row| row.get(0)
+            ).ok();
+            
+            if let Some(path) = sample_path {
+                if !path.starts_with(&new_dir_str) {
+                    println!("[切换] 检测到路径不匹配，更新数据库路径...");
+                    
+                    let old_dir = extract_data_dir_from_path(&path);
+                    
+                    if old_dir != new_dir_str {
+                        println!("[切换] 旧目录: {}", old_dir);
+                        println!("[切换] 新目录: {}", new_dir_str);
+                        
+                        let _ = conn.execute(
+                            "UPDATE screenshots SET file_path = REPLACE(file_path, ?1, ?2)",
+                            params![&old_dir, &new_dir_str],
+                        );
+                        
+                        let _ = conn.execute(
+                            "UPDATE screenshots SET thumbnail_path = REPLACE(thumbnail_path, ?1, ?2)",
+                            params![&old_dir, &new_dir_str],
+                        );
+                        
+                        let _ = conn.execute(
+                            "UPDATE game_cache SET icon_path = REPLACE(icon_path, ?1, ?2) WHERE icon_path IS NOT NULL",
+                            params![&old_dir, &new_dir_str],
+                        );
+                        
+                        let _ = conn.execute(
+                            "UPDATE game_cache SET steam_logo_path = REPLACE(steam_logo_path, ?1, ?2) WHERE steam_logo_path IS NOT NULL",
+                            params![&old_dir, &new_dir_str],
+                        );
+                        
+                        println!("[切换] 路径更新完成");
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            println!("[切换] 无法打开数据库: {}", e);
+        }
+    }
     
     save_custom_data_dir(&new_data_dir);
     
@@ -810,7 +948,7 @@ pub fn switch_data_directory(new_path: &str) -> Result<MigrationResult> {
         error: None,
         stats: None,
         old_dir_deleted: false,
-        old_dir_pending_delete: None,
+        old_dir_pending_delete: Some(old_data_dir.to_string_lossy().to_string()),
     })
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 
 function getImageSrc(path) {
@@ -34,17 +34,59 @@ export function ScreenshotModal({
   onShare,
 }) {
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 })
+  const [isImageLoading, setIsImageLoading] = useState(false)
+  const [showFullImage, setShowFullImage] = useState(false)
   const imgRef = useRef(null)
+  const preloadedImages = useRef(new Set())
+
+  const thumbnailSrc = useMemo(() => {
+    return selectedScreenshot?.thumbnail_path ? getImageSrc(selectedScreenshot.thumbnail_path) : null
+  }, [selectedScreenshot?.thumbnail_path])
+
+  const fullImageSrc = useMemo(() => {
+    return selectedScreenshot?.file_path ? getImageSrc(selectedScreenshot.file_path) : null
+  }, [selectedScreenshot?.file_path])
 
   useEffect(() => {
     if (selectedScreenshot?.file_path) {
+      setIsImageLoading(true)
+      setShowFullImage(false)
+      setImageDimensions({ width: 0, height: 0 })
+      
       const img = new window.Image()
       img.onload = () => {
         setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight })
+        setIsImageLoading(false)
+        setShowFullImage(true)
+      }
+      img.onerror = () => {
+        setIsImageLoading(false)
       }
       img.src = getImageSrc(selectedScreenshot.file_path)
     }
   }, [selectedScreenshot?.file_path])
+
+  useEffect(() => {
+    if (selectedScreenshotIndex > 0 && screenshots[selectedScreenshotIndex - 1]) {
+      const prevImg = screenshots[selectedScreenshotIndex - 1]
+      const src = getImageSrc(prevImg.file_path)
+      if (!preloadedImages.current.has(src)) {
+        const img = new window.Image()
+        img.src = src
+        preloadedImages.current.add(src)
+      }
+    }
+    
+    if (selectedScreenshotIndex < screenshots.length - 1 && screenshots[selectedScreenshotIndex + 1]) {
+      const nextImg = screenshots[selectedScreenshotIndex + 1]
+      const src = getImageSrc(nextImg.file_path)
+      if (!preloadedImages.current.has(src)) {
+        const img = new window.Image()
+        img.src = src
+        preloadedImages.current.add(src)
+      }
+    }
+  }, [selectedScreenshotIndex, screenshots])
 
   const calculateModalWidth = () => {
     const { width, height } = imageDimensions
@@ -212,15 +254,54 @@ export function ScreenshotModal({
           alignItems: 'center', 
           justifyContent: 'center',
           padding: 8,
-          minHeight: 0
+          minHeight: 0,
+          position: 'relative'
         }}>
+          {thumbnailSrc && !showFullImage && (
+            <img 
+              src={thumbnailSrc} 
+              alt="截图预览" 
+              style={{ 
+                maxWidth: '100%', 
+                maxHeight: 'calc(95vh - 145px)',
+                objectFit: 'contain',
+                filter: isImageLoading ? 'blur(10px)' : 'blur(5px)',
+                transition: 'filter 0.3s ease-out',
+                position: 'absolute',
+                opacity: isImageLoading ? 0.8 : 1
+              }} 
+            />
+          )}
+          
+          {isImageLoading && (
+            <div style={{
+              position: 'absolute',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10
+            }}>
+              <div style={{
+                width: 40,
+                height: 40,
+                border: `3px solid ${theme.border}`,
+                borderTopColor: theme.primary,
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+            </div>
+          )}
+          
           <img 
-            src={getImageSrc(selectedScreenshot.file_path)} 
+            ref={imgRef}
+            src={fullImageSrc} 
             alt="截图" 
             style={{ 
               maxWidth: '100%', 
               maxHeight: 'calc(95vh - 145px)',
-              objectFit: 'contain'
+              objectFit: 'contain',
+              opacity: showFullImage ? 1 : 0,
+              transition: 'opacity 0.3s ease-out'
             }} 
           />
         </div>
@@ -432,6 +513,13 @@ export function ScreenshotModal({
           </div>
         </div>
       </div>
+      
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }

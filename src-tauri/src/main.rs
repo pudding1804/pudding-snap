@@ -1605,10 +1605,10 @@ fn main() {
             let _ = TrayIconBuilder::with_id("main")
                 .icon(icon)
                 .menu(&menu)
+                .menu_on_left_click(false)
                 .on_menu_event(move |app, event| {
                     match event.id.as_ref() {
                         "show" => {
-                            // 更新窗口显示状态
                             {
                                 let mut shown = window_shown_for_menu.lock().unwrap();
                                 *shown = true;
@@ -1619,7 +1619,6 @@ fn main() {
                             }
                         }
                         "settings" => {
-                            // 更新窗口显示状态
                             {
                                 let mut shown = window_shown_for_menu.lock().unwrap();
                                 *shown = true;

@@ -447,6 +447,74 @@ function App() {
     }
   }, [addLog])
 
+  const loadTheme = useCallback(async () => {
+    try {
+      const savedTheme = await invoke('get_setting', { key: 'theme' })
+      if (savedTheme) {
+        setCurrentTheme(savedTheme)
+        addLog(`主题设置已加载: ${savedTheme}`)
+      }
+    } catch (e) {
+      addLog(`加载主题设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const saveTheme = useCallback(async (themeName) => {
+    try {
+      await invoke('set_setting', { key: 'theme', value: themeName })
+      setCurrentTheme(themeName)
+      addLog(`主题设置已保存: ${themeName}`)
+    } catch (e) {
+      addLog(`保存主题设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const loadSortOrder = useCallback(async () => {
+    try {
+      const savedSortOrder = await invoke('get_setting', { key: 'sort_order' })
+      if (savedSortOrder) {
+        setSortOrder(savedSortOrder)
+        sortOrderRef.current = savedSortOrder
+        addLog(`截图排序设置已加载: ${savedSortOrder}`)
+      }
+    } catch (e) {
+      addLog(`加载截图排序设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const saveSortOrder = useCallback(async (order) => {
+    try {
+      await invoke('set_setting', { key: 'sort_order', value: order })
+      setSortOrder(order)
+      sortOrderRef.current = order
+      addLog(`截图排序设置已保存: ${order}`)
+    } catch (e) {
+      addLog(`保存截图排序设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const loadGameSortOrder = useCallback(async () => {
+    try {
+      const savedGameSortOrder = await invoke('get_setting', { key: 'game_sort_order' })
+      if (savedGameSortOrder) {
+        setGameSortOrder(savedGameSortOrder)
+        addLog(`游戏排序设置已加载: ${savedGameSortOrder}`)
+      }
+    } catch (e) {
+      addLog(`加载游戏排序设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const saveGameSortOrder = useCallback(async (order) => {
+    try {
+      await invoke('set_setting', { key: 'game_sort_order', value: order })
+      setGameSortOrder(order)
+      addLog(`游戏排序设置已保存: ${order}`)
+    } catch (e) {
+      addLog(`保存游戏排序设置失败: ${e}`)
+    }
+  }, [addLog])
+
   const switchToTimeView = useCallback(() => {
     console.log('[DEBUG] switchToTimeView called, resetting menus')
     setCurrentView('time')
@@ -522,15 +590,14 @@ function App() {
   }, [currentView, backToGames])
 
   const handleSortChange = useCallback(async (newOrder) => {
-    setSortOrder(newOrder)
-    sortOrderRef.current = newOrder
+    await saveSortOrder(newOrder)
     await loadScreenshotsWithPagination(1, selectedGameRef.current?.game_id || null)
-  }, [loadScreenshotsWithPagination])
+  }, [saveSortOrder, loadScreenshotsWithPagination])
 
   const handleGameSortChange = useCallback(async (newOrder) => {
-    setGameSortOrder(newOrder)
+    await saveGameSortOrder(newOrder)
     await loadGames(newOrder)
-  }, [loadGames])
+  }, [saveGameSortOrder, loadGames])
 
   const closeModal = useCallback(() => {
     setIsModalClosing(true)
@@ -888,6 +955,9 @@ function App() {
         await loadAutostart()
         await loadBangumiAuth()
         await loadScreenshotQuality()
+        await loadTheme()
+        await loadSortOrder()
+        await loadGameSortOrder()
         await loadScreenshotsWithPagination(1, null)
       } catch (e) {
         addLog(`数据加载失败: ${e}`)
@@ -1058,10 +1128,16 @@ function App() {
         }
       })
       
+      const unlistenNavigateSettings = await listen('navigate-to-settings', () => {
+        addLog('[导航] 切换到设置页面')
+        setCurrentView('settings')
+      })
+      
       return () => {
         unlistenClose()
         unlistenFocused()
         unlistenShown()
+        unlistenNavigateSettings()
       }
     }
     
@@ -1289,7 +1365,7 @@ function App() {
               bangumiCookie={bangumiCookie}
               onLanguageChange={setLanguage}
               onSteamLanguageChange={setSteamLanguage}
-              onThemeChange={setCurrentTheme}
+              onThemeChange={saveTheme}
               onChangeStoragePath={changeStoragePath}
               onAutostartChange={saveAutostart}
               onShutterSoundChange={saveShutterSound}

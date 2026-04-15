@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
+import { Pagination } from './Pagination'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -50,12 +51,6 @@ export function ScreenshotGrid({
     screenshotsCount: screenshots?.length 
   })
   
-  const handlePageChange = (page) => {
-    console.log('[DEBUG] ScreenshotGrid handlePageChange:', page)
-    if (onLoadPage) {
-      onLoadPage(page)
-    }
-  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ 
@@ -201,52 +196,14 @@ export function ScreenshotGrid({
       )}
       </div>
       
-      {totalPages > 1 && (
-        <div style={{ 
-          ...styles.pagination, 
-          flexShrink: 0,
-          position: 'sticky',
-          bottom: 0,
-          background: theme.bg,
-          zIndex: 10,
-          marginTop: 0
-        }}>
-          <button 
-            style={styles.paginationBtn}
-            {...btnEvents}
-            onClick={() => handlePageChange(1)}
-            disabled={currentPage === 1}
-          >
-            首页
-          </button>
-          <button 
-            style={styles.paginationBtn}
-            {...btnEvents}
-            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-            disabled={currentPage === 1}
-          >
-            上一页
-          </button>
-          <span style={styles.paginationInfo}>
-            第 {currentPage} 页，共 {totalPages} 页
-          </span>
-          <button 
-            style={styles.paginationBtn}
-            {...btnEvents}
-            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-            disabled={currentPage === totalPages}
-          >
-            下一页
-          </button>
-          <button 
-            style={styles.paginationBtn}
-            {...btnEvents}
-            onClick={() => handlePageChange(totalPages)}
-            disabled={currentPage === totalPages}
-          >
-            末页
-          </button>
-        </div>
+      {totalPages > 1 && onLoadPage && (
+        <Pagination
+          theme={theme}
+          styles={styles}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={onLoadPage}
+        />
       )}
     </div>
   )
