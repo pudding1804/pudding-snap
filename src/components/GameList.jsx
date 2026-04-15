@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState, useMemo } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 import { Pagination } from './Pagination'
@@ -41,14 +41,22 @@ export function GameList({
   onLoadPage,
 }) {
   const scrollContainerRef = useRef(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  
+  const filteredGames = useMemo(() => {
+    if (!searchTerm.trim()) return games
+    const term = searchTerm.toLowerCase()
+    return games.filter(game => {
+      const title = (game.display_title || game.game_title || '').toLowerCase()
+      return title.includes(term)
+    })
+  }, [games, searchTerm])
   
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0
     }
   }, [currentPage])
-  
-  console.log('[DEBUG] GameList render, showMenu:', showMenu, 'games count:', games?.length)
   
   const handleMenuToggle = (show) => {
     console.log('[DEBUG] GameList handleMenuToggle:', show)
@@ -83,6 +91,61 @@ export function GameList({
             </>
           ) : (
             <>
+              <div style={{ 
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center'
+              }}>
+                <svg 
+                  width="16" 
+                  height="16" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke={theme.textMuted}
+                  strokeWidth="2"
+                  style={{ position: 'absolute', left: 10 }}
+                >
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input
+                  type="text"
+                  placeholder={t.header.search_game}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    padding: '8px 12px 8px 32px',
+                    background: theme.accent,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 6,
+                    color: theme.text,
+                    fontSize: 14,
+                    width: 180,
+                    outline: 'none'
+                  }}
+                />
+                {searchTerm && (
+                  <button
+                    style={{
+                      position: 'absolute',
+                      right: 6,
+                      background: 'transparent',
+                      border: 'none',
+                      color: theme.textMuted,
+                      cursor: 'pointer',
+                      padding: 4,
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    onClick={() => setSearchTerm('')}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                )}
+              </div>
               <select 
                 value={gameSortOrder}
                 onChange={(e) => onSortChange(e.target.value)}
@@ -216,15 +279,35 @@ export function GameList({
       </div>
       
       <div style={{ flex: 1, overflow: 'auto' }} ref={scrollContainerRef}>
-      {games.length === 0 ? (
+      {filteredGames.length === 0 ? (
         <div style={styles.empty}>
-          <p>{t.empty.no_games}</p>
-          <p style={{ fontSize: 12, marginTop: 8 }}>{t.empty.game_hint}</p>
+          {searchTerm ? (
+            <>
+              <p>{t.header.no_search_results}</p>
+              <p style={{ fontSize: 12, marginTop: 8 }}>{t.header.try_other_keywords}</p>
+            </>
+          ) : (
+            <>
+              <p>{t.empty.no_games}</p>
+              <p style={{ fontSize: 12, marginTop: 8 }}>{t.empty.game_hint}</p>
+            </>
+          )}
         </div>
       ) : (
         <>
+          {searchTerm && (
+            <div style={{
+              padding: '8px 16px',
+              background: theme.accent,
+              borderBottom: `1px solid ${theme.border}`,
+              fontSize: 13,
+              color: theme.textMuted
+            }}>
+              {t.header.search_result_for} "{searchTerm}" ({filteredGames.length})
+            </div>
+          )}
           <div style={styles.grid}>
-            {games.map((game, index) => {
+            {filteredGames.map((game, index) => {
               const hasSteamLogo = !!game.steam_logo_path;
               const iconSrc = game.steam_logo_path || game.game_icon_path;
               return (

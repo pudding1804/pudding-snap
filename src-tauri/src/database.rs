@@ -2,8 +2,6 @@ use rusqlite::{params, Connection, Result};
 use crate::models::{ScreenshotRecord, GameSummary, PaginationResult, PaginatedGames, MigrationResult, GameCache};
 use serde::{Serialize, Deserialize};
 use std::path::PathBuf;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::fs;
 use std::io;
 use std::sync::{Arc, Mutex};
@@ -539,19 +537,55 @@ pub fn get_screenshots_with_pagination(
     sort_order: &str,
     page: i32,
     page_size: i32,
+    date_start: Option<i64>,
+    date_end: Option<i64>,
 ) -> Result<PaginationResult> {
     let offset = (page - 1) * page_size;
     
-    let count_sql = if game_id.is_some() {
-        "SELECT COUNT(*) FROM screenshots WHERE game_id = ?1"
+    let mut where_clauses: Vec<String> = Vec::new();
+    let mut param_index = 1;
+    
+    if game_id.is_some() {
+        where_clauses.push(format!("game_id = ?{}", param_index));
+        param_index += 1;
+    }
+    
+    if date_start.is_some() {
+        where_clauses.push(format!("timestamp >= ?{}", param_index));
+        param_index += 1;
+    }
+    
+    if date_end.is_some() {
+        where_clauses.push(format!("timestamp <= ?{}", param_index));
+        param_index += 1;
+    }
+    
+    let where_sql = if where_clauses.is_empty() {
+        String::new()
     } else {
-        "SELECT COUNT(*) FROM screenshots"
+        format!(" WHERE {}", where_clauses.join(" AND "))
     };
     
-    let total_count: i32 = if let Some(gid) = game_id {
-        conn.query_row(count_sql, params![gid], |row| row.get(0))?
+    let count_sql = format!("SELECT COUNT(*) FROM screenshots{}", where_sql);
+    
+    let total_count: i32 = if game_id.is_some() || date_start.is_some() || date_end.is_some() {
+        let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        
+        if let Some(gid) = game_id {
+            params_vec.push(Box::new(gid.to_string()));
+        }
+        if let Some(start) = date_start {
+            params_vec.push(Box::new(start));
+        }
+        if let Some(end) = date_end {
+            params_vec.push(Box::new(end));
+        }
+        
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        
+        conn.query_row(&count_sql, params_refs.as_slice(), |row| row.get(0))?
     } else {
-        conn.query_row(count_sql, [], |row| row.get(0))?
+        conn.query_row(&count_sql, [], |row| row.get(0))?
     };
     
     let total_pages = if total_count == 0 {
@@ -561,24 +595,32 @@ pub fn get_screenshots_with_pagination(
     };
     
     let order = if sort_order.to_lowercase() == "asc" { "ASC" } else { "DESC" };
-    let sql = if game_id.is_some() {
-        format!(
-            "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url
-             FROM screenshots WHERE game_id = ?1 ORDER BY timestamp {} LIMIT ?2 OFFSET ?3",
-            order
-        )
-    } else {
-        format!(
-            "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url
-             FROM screenshots ORDER BY timestamp {} LIMIT ?1 OFFSET ?2",
-            order
-        )
-    };
+    let sql = format!(
+        "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url
+         FROM screenshots{} ORDER BY timestamp {} LIMIT ?{} OFFSET ?{}",
+        where_sql, order, param_index, param_index + 1
+    );
 
     let mut stmt = conn.prepare(&sql)?;
-
-    let screenshots: Vec<ScreenshotRecord> = if let Some(gid) = game_id {
-        stmt.query_map(params![gid, page_size, offset], |row| {
+    
+    let screenshots: Vec<ScreenshotRecord> = if game_id.is_some() || date_start.is_some() || date_end.is_some() {
+        let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        
+        if let Some(gid) = game_id {
+            params_vec.push(Box::new(gid.to_string()));
+        }
+        if let Some(start) = date_start {
+            params_vec.push(Box::new(start));
+        }
+        if let Some(end) = date_end {
+            params_vec.push(Box::new(end));
+        }
+        params_vec.push(Box::new(page_size));
+        params_vec.push(Box::new(offset));
+        
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        
+        stmt.query_map(params_refs.as_slice(), |row| {
             Ok(ScreenshotRecord {
                 id: row.get(0)?,
                 file_path: row.get(1)?,

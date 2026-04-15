@@ -98,11 +98,13 @@ fn get_screenshots_with_pagination(
     sort_order: String,
     page: i32,
     page_size: i32,
+    date_start: Option<i64>,
+    date_end: Option<i64>,
     state: State<AppState>,
 ) -> Result<PaginationResult, String> {
     let conn = state.db.lock().unwrap();
     let gid_ref = game_id.as_deref();
-    db::get_screenshots_with_pagination(&conn, gid_ref, &sort_order, page, page_size).map_err(|e| e.to_string())
+    db::get_screenshots_with_pagination(&conn, gid_ref, &sort_order, page, page_size, date_start, date_end).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

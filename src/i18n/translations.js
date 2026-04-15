@@ -26,7 +26,19 @@ export const translations = {
       note_shortcut: '按Ctrl+Enter保存',
       note_saved: '附注已保存',
       icon_large: '大图标',
-      icon_small: '小图标'
+      icon_small: '小图标',
+      date_filter: '筛选时间',
+      start_date: '开始日期',
+      end_date: '结束日期',
+      clear_filter: '清除筛选',
+      apply_filter: '确定',
+      to: '至',
+      from: '从',
+      until: '至',
+      search_game: '搜索游戏',
+      no_search_results: '未找到匹配的游戏',
+      try_other_keywords: '请尝试其他关键词',
+      search_result_for: '搜索结果'
     },
     search: {
       title: '检索游戏信息',
@@ -257,7 +269,19 @@ export const translations = {
       note_shortcut: 'Press Ctrl+Enter to save',
       note_saved: 'Note saved',
       icon_large: 'Large Icons',
-      icon_small: 'Small Icons'
+      icon_small: 'Small Icons',
+      date_filter: 'Filter by Date',
+      start_date: 'Start Date',
+      end_date: 'End Date',
+      clear_filter: 'Clear Filter',
+      apply_filter: 'Apply',
+      to: 'to',
+      from: 'From',
+      until: 'Until',
+      search_game: 'Search games',
+      no_search_results: 'No matching games found',
+      try_other_keywords: 'Try different keywords',
+      search_result_for: 'Search results for'
     },
     search: {
       title: 'Search Game Info',

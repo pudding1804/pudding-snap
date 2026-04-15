@@ -83,6 +83,12 @@ function App() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedScreenshots, setSelectedScreenshots] = useState([])
   
+  const [dateFilterStart, setDateFilterStart] = useState(null)
+  const [dateFilterEnd, setDateFilterEnd] = useState(null)
+  const [showDateFilterModal, setShowDateFilterModal] = useState(false)
+  
+  const [gameSearchTerm, setGameSearchTerm] = useState('')
+  
   const showNotification = useCallback((title, body = '', duration = 3000) => {
     setNotification({ title, body })
     setTimeout(() => setNotification(null), duration)
@@ -294,11 +300,24 @@ function App() {
     const validPage = (typeof page === 'number' && !isNaN(page) && page > 0) ? page : 1
     try {
       addLog(`加载截图: 页码=${validPage}, 游戏ID=${gameId || '全部'}`)
+      
+      let dateStart = null
+      let dateEnd = null
+      
+      if (dateFilterStart) {
+        dateStart = Math.floor(new Date(dateFilterStart).setHours(0, 0, 0, 0) / 1000)
+      }
+      if (dateFilterEnd) {
+        dateEnd = Math.floor(new Date(dateFilterEnd).setHours(23, 59, 59, 999) / 1000)
+      }
+      
       const result = await invoke('get_screenshots_with_pagination', {
         gameId: gameId,
         sortOrder: sortOrderRef.current,
         page: validPage,
-        pageSize: pageSize
+        pageSize: pageSize,
+        dateStart: dateStart,
+        dateEnd: dateEnd
       })
       
       console.log(`[DEBUG] loadScreenshotsWithPagination 返回:`, {
@@ -320,7 +339,7 @@ function App() {
       addLog(`截图加载失败: ${e}`)
       setError('加载截图失败: ' + String(e))
     }
-  }, [addLog, pageSize])
+  }, [addLog, pageSize, dateFilterStart, dateFilterEnd])
 
   const loadStoragePath = useCallback(async () => {
     try {
@@ -522,6 +541,7 @@ function App() {
     setShowGameListMenu(false)
     setShowGameDetailMenu(false)
     setShowSortMenu(false)
+    setGameSearchTerm('')
     loadScreenshotsWithPagination(1, null)
   }, [loadScreenshotsWithPagination])
 
@@ -532,6 +552,8 @@ function App() {
     setShowGameListMenu(false)
     setShowGameDetailMenu(false)
     setShowSortMenu(false)
+    setDateFilterStart(null)
+    setDateFilterEnd(null)
     loadGames()
   }, [loadGames])
 
@@ -543,6 +565,8 @@ function App() {
     setShowGameListMenu(false)
     setShowGameDetailMenu(false)
     setShowSortMenu(false)
+    setDateFilterStart(null)
+    setDateFilterEnd(null)
     await loadScreenshotsWithPagination(1, game.game_id)
   }, [loadScreenshotsWithPagination])
 
@@ -556,6 +580,12 @@ function App() {
     setShowSortMenu(false)
     loadGames()
   }, [loadGames])
+
+  useEffect(() => {
+    if (currentView === 'time') {
+      loadScreenshotsWithPagination(1, null)
+    }
+  }, [dateFilterStart, dateFilterEnd, currentView, loadScreenshotsWithPagination])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1213,6 +1243,8 @@ function App() {
               iconSize={iconSize}
               currentPage={currentPage}
               totalPages={totalPages}
+              dateFilterStart={dateFilterStart}
+              dateFilterEnd={dateFilterEnd}
               onSortChange={handleSortChange}
               onIconSizeChange={handleIconSizeChange}
               onToggleMultiSelect={handleToggleMultiSelectMode}
@@ -1229,6 +1261,10 @@ function App() {
                 }
               }}
               onLoadPage={(page) => loadScreenshotsWithPagination(page, null)}
+              onDateFilterChange={(start, end) => {
+                setDateFilterStart(start)
+                setDateFilterEnd(end)
+              }}
             />
           ) : currentView === 'games' ? (
             <GameList
