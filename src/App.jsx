@@ -17,6 +17,7 @@ import {
   SettingsPanel,
   AddGameModal,
   ImportModal,
+  RecycleBin,
   ErrorBoundary,
   ShareModal,
   TitleBar 
@@ -88,6 +89,12 @@ function App() {
   const [showDateFilterModal, setShowDateFilterModal] = useState(false)
   
   const [gameSearchTerm, setGameSearchTerm] = useState('')
+  const [backupEnabled, setBackupEnabled] = useState(false)
+  const [recycleBinCount, setRecycleBinCount] = useState(0)
+  const [deletedScreenshots, setDeletedScreenshots] = useState([])
+  const [recycleBinPage, setRecycleBinPage] = useState(1)
+  const [recycleBinTotalPages, setRecycleBinTotalPages] = useState(1)
+  const [recycleBinSortOrder, setRecycleBinSortOrder] = useState('desc')
   
   const showNotification = useCallback((title, body = '', duration = 3000) => {
     setNotification({ title, body })
@@ -374,6 +381,142 @@ function App() {
     }
   }, [addLog])
 
+  const handleBackupEnabledChange = useCallback(async (enabled) => {
+    try {
+      await invoke('set_backup_enabled', { enabled })
+      setBackupEnabled(enabled)
+      addLog(`备份设置已${enabled ? '启用' : '禁用'}`)
+    } catch (e) {
+      addLog(`保存备份设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const handleManualBackup = useCallback(async () => {
+    try {
+      const result = await invoke('perform_backup')
+      addLog(`手动备份成功: ${result}`)
+      showNotification('备份成功', '数据库已备份到程序目录')
+    } catch (e) {
+      addLog(`手动备份失败: ${e}`)
+      throw e
+    }
+  }, [addLog, showNotification])
+
+  const checkAndPerformBackup = useCallback(async () => {
+    if (!backupEnabled) return
+    try {
+      const lastTime = await invoke('get_last_backup_time')
+      const now = Math.floor(Date.now() / 1000)
+      const twentyFourHours = 24 * 60 * 60
+      if (!lastTime || (now - lastTime) >= twentyFourHours) {
+        addLog('定时备份：距上次备份超过24小时，开始备份...')
+        await invoke('perform_backup')
+        addLog('定时备份完成')
+      }
+    } catch (e) {
+      addLog(`定时备份检查失败: ${e}`)
+    }
+  }, [backupEnabled, addLog])
+
+  useEffect(() => {
+    if (!backupEnabled) return
+    checkAndPerformBackup()
+    const interval = setInterval(checkAndPerformBackup, 60 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [backupEnabled, checkAndPerformBackup])
+
+  const refreshRecycleBinCount = useCallback(async () => {
+    try {
+      const count = await invoke('get_deleted_screenshots_count')
+      setRecycleBinCount(count)
+    } catch (e) {
+      addLog(`获取回收站数量失败: ${e}`)
+    }
+  }, [addLog])
+
+  const loadRecycleBin = useCallback(async (page, sortOrder) => {
+    const validPage = (typeof page === 'number' && !isNaN(page) && page > 0) ? page : 1
+    const sort = sortOrder || recycleBinSortOrder
+    try {
+      const result = await invoke('get_deleted_screenshots', {
+        sortOrder: sort,
+        page: validPage,
+        pageSize: 50
+      })
+      setDeletedScreenshots(result.screenshots)
+      setRecycleBinPage(result.page)
+      setRecycleBinTotalPages(result.total_pages)
+      refreshRecycleBinCount()
+    } catch (e) {
+      addLog(`加载回收站失败: ${e}`)
+    }
+  }, [recycleBinSortOrder, refreshRecycleBinCount, addLog])
+
+  const handleRestoreScreenshot = useCallback(async (id) => {
+    try {
+      await invoke('restore_screenshot', { id })
+      addLog('截图已恢复')
+      showNotification('恢复成功', '截图已恢复到原位置')
+      loadRecycleBin(recycleBinPage, recycleBinSortOrder)
+      if (currentView === 'time') {
+        loadScreenshotsWithPagination(1, null)
+      } else if (currentView === 'game-detail' && selectedGame) {
+        loadScreenshotsWithPagination(1, selectedGame.game_id)
+      }
+    } catch (e) {
+      addLog(`恢复截图失败: ${e}`)
+    }
+  }, [addLog, showNotification, loadRecycleBin, recycleBinPage, recycleBinSortOrder, currentView, loadScreenshotsWithPagination, selectedGame])
+
+  const handleRestoreScreenshots = useCallback(async (ids) => {
+    try {
+      await invoke('restore_screenshots', { ids })
+      addLog(`已恢复 ${ids.length} 张截图`)
+      showNotification('恢复成功', `已恢复 ${ids.length} 张截图`)
+      loadRecycleBin(1, recycleBinSortOrder)
+      if (currentView === 'time') {
+        loadScreenshotsWithPagination(1, null)
+      } else if (currentView === 'game-detail' && selectedGame) {
+        loadScreenshotsWithPagination(1, selectedGame.game_id)
+      }
+    } catch (e) {
+      addLog(`批量恢复失败: ${e}`)
+    }
+  }, [addLog, showNotification, loadRecycleBin, recycleBinSortOrder, currentView, loadScreenshotsWithPagination, selectedGame])
+
+  const handlePermanentDelete = useCallback(async (id) => {
+    try {
+      await invoke('permanent_delete_screenshot', { id })
+      addLog('截图已永久删除')
+      loadRecycleBin(recycleBinPage, recycleBinSortOrder)
+    } catch (e) {
+      addLog(`永久删除失败: ${e}`)
+    }
+  }, [addLog, loadRecycleBin, recycleBinPage, recycleBinSortOrder])
+
+  const handlePermanentDeleteScreenshots = useCallback(async (ids) => {
+    try {
+      await invoke('permanent_delete_screenshots', { ids })
+      addLog(`已永久删除 ${ids.length} 张截图`)
+      loadRecycleBin(1, recycleBinSortOrder)
+    } catch (e) {
+      addLog(`批量永久删除失败: ${e}`)
+    }
+  }, [addLog, loadRecycleBin, recycleBinSortOrder])
+
+  const handleEmptyRecycleBin = useCallback(async () => {
+    try {
+      const allIds = deletedScreenshots.map(ss => ss.id)
+      if (allIds.length === 0) return
+      await invoke('permanent_delete_screenshots', { ids: allIds })
+      addLog('回收站已清空')
+      showNotification('回收站已清空', '')
+      loadRecycleBin(1, recycleBinSortOrder)
+    } catch (e) {
+      addLog(`清空回收站失败: ${e}`)
+    }
+  }, [addLog, showNotification, loadRecycleBin, recycleBinSortOrder, deletedScreenshots])
+
   const loadShutterSound = useCallback(async () => {
     try {
       const sound = await invoke('get_shutter_sound')
@@ -556,6 +699,18 @@ function App() {
     setDateFilterEnd(null)
     loadGames()
   }, [loadGames])
+
+  const switchToRecycleBin = useCallback(() => {
+    setCurrentView('recycle-bin')
+    setSelectedGame(null)
+    setShowGameListMenu(false)
+    setShowGameDetailMenu(false)
+    setShowSortMenu(false)
+    setDateFilterStart(null)
+    setDateFilterEnd(null)
+    setGameSearchTerm('')
+    loadRecycleBin(1, recycleBinSortOrder)
+  }, [loadRecycleBin, recycleBinSortOrder])
 
   const selectGame = useCallback(async (game) => {
     console.log('[DEBUG] selectGame called, resetting menus')
@@ -988,7 +1143,26 @@ function App() {
         await loadTheme()
         await loadSortOrder()
         await loadGameSortOrder()
+        
+        try {
+          const enabled = await invoke('get_backup_enabled')
+          setBackupEnabled(enabled)
+        } catch (e) {
+          addLog(`加载备份设置失败: ${e}`)
+        }
+        
         await loadScreenshotsWithPagination(1, null)
+        
+        try {
+          const cleaned = await invoke('cleanup_expired_deleted')
+          if (cleaned > 0) {
+            addLog(`已清理 ${cleaned} 条过期回收站记录`)
+          }
+        } catch (e) {
+          addLog(`清理过期回收站记录失败: ${e}`)
+        }
+        
+        refreshRecycleBinCount()
       } catch (e) {
         addLog(`数据加载失败: ${e}`)
         setError('加载数据失败: ' + String(e))
@@ -1217,8 +1391,10 @@ function App() {
             onNavigate={(view) => {
               if (view === 'time') switchToTimeView()
               else if (view === 'games') switchToGames()
+              else if (view === 'recycle-bin') switchToRecycleBin()
               else setCurrentView(view)
             }}
+            recycleBinCount={recycleBinCount}
             onToggleSidebar={toggleSidebar}
           />
 
@@ -1379,6 +1555,26 @@ function App() {
               onToggleSortMenu={setShowSortMenu}
               onLoadPage={(page) => loadScreenshotsWithPagination(page, selectedGame?.game_id)}
             />
+          ) : currentView === 'recycle-bin' ? (
+            <RecycleBin
+              theme={theme}
+              styles={styles}
+              t={t}
+              screenshots={deletedScreenshots}
+              currentPage={recycleBinPage}
+              totalPages={recycleBinTotalPages}
+              sortOrder={recycleBinSortOrder}
+              onSortChange={(order) => {
+                setRecycleBinSortOrder(order)
+                loadRecycleBin(1, order)
+              }}
+              onLoadPage={(page) => loadRecycleBin(page, recycleBinSortOrder)}
+              onRestore={handleRestoreScreenshot}
+              onRestoreSelected={handleRestoreScreenshots}
+              onPermanentDelete={handlePermanentDelete}
+              onPermanentDeleteSelected={handlePermanentDeleteScreenshots}
+              onEmptyAll={handleEmptyRecycleBin}
+            />
           ) : (
             <SettingsPanel
               theme={theme}
@@ -1410,6 +1606,9 @@ function App() {
               onScreenshotQualityChange={saveScreenshotQuality}
               onBangumiAuthChange={handleBangumiAuthChange}
               onDeleteAll={() => setShowDeleteConfirm(true)}
+              backupEnabled={backupEnabled}
+              onBackupEnabledChange={handleBackupEnabledChange}
+              onManualBackup={handleManualBackup}
             />
           )}
         </main>

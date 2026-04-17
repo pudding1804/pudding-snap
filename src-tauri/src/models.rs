@@ -13,6 +13,24 @@ pub struct ScreenshotRecord {
     pub game_banner_url: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeletedScreenshotRecord {
+    pub id: i32,
+    pub original_id: i32,
+    pub file_path: String,
+    pub thumbnail_path: String,
+    pub original_file_path: String,
+    pub original_thumbnail_path: String,
+    pub game_id: String,
+    pub game_title: String,
+    pub display_title: String,
+    pub timestamp: i64,
+    pub note: String,
+    pub game_banner_url: String,
+    pub file_hash: Option<String>,
+    pub deleted_at: i64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GameSummary {
     pub game_id: String,

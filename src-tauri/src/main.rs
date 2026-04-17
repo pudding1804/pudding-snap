@@ -67,23 +67,7 @@ fn get_games_with_pagination(page: i32, page_size: i32, state: State<AppState>) 
 #[tauri::command]
 fn delete_screenshot(id: i32, state: State<AppState>) -> Result<(), String> {
     let conn = state.db.lock().unwrap();
-
-    if let Ok(ss_list) = db::get_screenshots(&conn, None, "desc") {
-        if let Some(ss) = ss_list.iter().find(|s| s.id == id) {
-            println!("[删除] 删除截图文件: {:?}", ss.file_path);
-            if let Err(e) = std::fs::remove_file(&ss.file_path) {
-                println!("[删除] 删除截图文件失败: {}", e);
-            }
-            println!("[删除] 删除缩略图文件: {:?}", ss.thumbnail_path);
-            if let Err(e) = std::fs::remove_file(&ss.thumbnail_path) {
-                println!("[删除] 删除缩略图文件失败: {}", e);
-            }
-        } else {
-            println!("[删除] 未找到ID为 {} 的截图记录", id);
-        }
-    }
-
-    db::delete_screenshot(&conn, id).map_err(|e| e.to_string())
+    db::soft_delete_screenshot(&conn, id)
 }
 
 #[tauri::command]
@@ -110,28 +94,77 @@ fn get_screenshots_with_pagination(
 #[tauri::command]
 fn delete_screenshots(ids: Vec<i32>, state: State<AppState>) -> Result<(), String> {
     let conn = state.db.lock().unwrap();
-    
-    if let Ok(ss_list) = db::get_screenshots(&conn, None, "desc") {
-        for id in &ids {
-            if let Some(ss) = ss_list.iter().find(|s| s.id == *id) {
-                println!("[批量删除] 删除截图文件: {:?}", ss.file_path);
-                if let Err(e) = std::fs::remove_file(&ss.file_path) {
-                    println!("[批量删除] 删除截图文件失败: {}", e);
-                }
-                println!("[批量删除] 删除缩略图文件: {:?}", ss.thumbnail_path);
-                if let Err(e) = std::fs::remove_file(&ss.thumbnail_path) {
-                    println!("[批量删除] 删除缩略图文件失败: {}", e);
-                }
-            }
-        }
-    }
+    db::soft_delete_screenshots(&conn, &ids)
+}
 
-    db::delete_screenshots(&conn, &ids).map_err(|e| e.to_string())
+#[tauri::command]
+fn get_deleted_screenshots(sort_order: String, page: i32, page_size: i32, state: State<AppState>) -> Result<PaginationResult, String> {
+    let conn = state.db.lock().unwrap();
+    db::get_deleted_screenshots_with_pagination(&conn, &sort_order, page, page_size)
+}
+
+#[tauri::command]
+fn restore_screenshot(id: i32, state: State<AppState>) -> Result<(), String> {
+    let conn = state.db.lock().unwrap();
+    db::restore_screenshot(&conn, id)
+}
+
+#[tauri::command]
+fn restore_screenshots(ids: Vec<i32>, state: State<AppState>) -> Result<(), String> {
+    let conn = state.db.lock().unwrap();
+    db::restore_screenshots(&conn, &ids)
+}
+
+#[tauri::command]
+fn permanent_delete_screenshot(id: i32, state: State<AppState>) -> Result<(), String> {
+    let conn = state.db.lock().unwrap();
+    db::permanent_delete_screenshot(&conn, id)
+}
+
+#[tauri::command]
+fn permanent_delete_screenshots(ids: Vec<i32>, state: State<AppState>) -> Result<(), String> {
+    let conn = state.db.lock().unwrap();
+    db::permanent_delete_screenshots(&conn, &ids)
+}
+
+#[tauri::command]
+fn cleanup_expired_deleted(state: State<AppState>) -> Result<usize, String> {
+    let conn = state.db.lock().unwrap();
+    db::cleanup_expired_deleted(&conn)
+}
+
+#[tauri::command]
+fn get_deleted_screenshots_count(state: State<AppState>) -> Result<i32, String> {
+    let conn = state.db.lock().unwrap();
+    Ok(db::get_deleted_screenshots_count(&conn))
 }
 
 #[tauri::command]
 fn get_storage_path() -> Result<String, String> {
     Ok(db::get_storage_path())
+}
+
+#[tauri::command]
+fn perform_backup(_state: State<AppState>) -> Result<String, String> {
+    db::perform_backup().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_last_backup_time() -> Result<Option<i64>, String> {
+    Ok(db::get_last_backup_time())
+}
+
+#[tauri::command]
+fn get_backup_enabled(state: State<AppState>) -> Result<bool, String> {
+    let conn = state.db.lock().unwrap();
+    Ok(db::get_setting(&conn, "backup_enabled").unwrap_or_else(|| "false".to_string()) == "true")
+}
+
+#[tauri::command]
+fn set_backup_enabled(enabled: bool, state: State<AppState>) -> Result<(), String> {
+    let conn = state.db.lock().unwrap();
+    db::set_setting(&conn, "backup_enabled", if enabled { "true" } else { "false" })
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1022,40 +1055,16 @@ async fn apply_bangumi_game_info(game_id: String, subject_id: u32, language: Str
 
 #[tauri::command]
 fn delete_game(game_id: String, state: State<AppState>) -> Result<(), String> {
-    println!("[游戏] 删除游戏: {}", game_id);
-    
+    println!("[游戏] 软删除游戏: {}", game_id);
     let conn = state.db.lock().unwrap();
-    
-    if let Ok(ss_list) = db::get_screenshots(&conn, Some(&game_id), "desc") {
-        for ss in ss_list {
-            let _ = std::fs::remove_file(&ss.file_path);
-            let _ = std::fs::remove_file(&ss.thumbnail_path);
-        }
-    }
-    
-    db::delete_game(&conn, &game_id).map_err(|e| e.to_string())?;
-    
-    Ok(())
+    db::delete_game(&conn, &game_id)
 }
 
 #[tauri::command]
 fn delete_games(game_ids: Vec<String>, state: State<AppState>) -> Result<(), String> {
-    println!("[游戏] 批量删除 {} 个游戏", game_ids.len());
-    
+    println!("[游戏] 批量软删除 {} 个游戏", game_ids.len());
     let conn = state.db.lock().unwrap();
-    
-    for game_id in &game_ids {
-        if let Ok(ss_list) = db::get_screenshots(&conn, Some(game_id), "desc") {
-            for ss in ss_list {
-                let _ = std::fs::remove_file(&ss.file_path);
-                let _ = std::fs::remove_file(&ss.thumbnail_path);
-            }
-        }
-    }
-    
-    db::delete_games(&conn, &game_ids).map_err(|e| e.to_string())?;
-    
-    Ok(())
+    db::delete_games(&conn, &game_ids)
 }
 
 #[tauri::command]
@@ -2064,7 +2073,18 @@ fn main() {
             import_screenshots,
             get_all_games_with_empty,
             get_file_metadata,
-            save_share_image
+            save_share_image,
+            perform_backup,
+            get_last_backup_time,
+            get_backup_enabled,
+            set_backup_enabled,
+            get_deleted_screenshots,
+            restore_screenshot,
+            restore_screenshots,
+            permanent_delete_screenshot,
+            permanent_delete_screenshots,
+            cleanup_expired_deleted,
+            get_deleted_screenshots_count
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

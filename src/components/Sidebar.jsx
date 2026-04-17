@@ -6,6 +6,7 @@ export function Sidebar({
   logs, 
   showDebug,
   t,
+  recycleBinCount = 0,
   onNavigate,
   onToggleSidebar 
 }) {
@@ -44,6 +45,35 @@ export function Sidebar({
           onClick={() => onNavigate('games')}
         >
           {t.nav.games}
+        </div>
+        <div 
+          style={{ 
+            ...styles.navItem, 
+            ...(currentView === 'recycle-bin' ? styles.navItemActive : {}),
+            opacity: sidebarCollapsed ? 0 : 1,
+            transition: 'opacity 0.2s ease',
+            whiteSpace: 'nowrap',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+          onClick={() => onNavigate('recycle-bin')}
+        >
+          <span>{t.nav.recycle_bin}</span>
+          {recycleBinCount > 0 && (
+            <span style={{
+              background: '#e74c3c',
+              color: '#fff',
+              borderRadius: 10,
+              padding: '1px 6px',
+              fontSize: 11,
+              fontWeight: 'bold',
+              minWidth: 18,
+              textAlign: 'center'
+            }}>
+              {recycleBinCount > 99 ? '99+' : recycleBinCount}
+            </span>
+          )}
         </div>
         <div 
           style={{ 

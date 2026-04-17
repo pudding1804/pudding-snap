@@ -3,6 +3,7 @@ export const translations = {
     nav: {
       time: '按时间浏览',
       games: '按游戏浏览',
+      recycle_bin: '回收站',
       settings: '设置'
     },
     header: {
@@ -93,6 +94,13 @@ export const translations = {
       delete_all: '删除所有数据',
       delete_all_hint: '此操作将删除所有截图、数据库和设置，无法恢复',
       delete_all_confirm: '确定要删除所有数据吗？此操作无法恢复！',
+      backup_title: '数据库备份',
+      backup_hint: '将数据库文件备份到程序目录下，保留最近3份备份。仅备份数据库文件，不含截图原图。',
+      backup_daily: '每日在程序目录下保存备份',
+      backup_manual: '手动备份',
+      backup_in_progress: '正在备份...',
+      backup_success: '备份成功',
+      backup_failed: '备份失败',
       restart_required: '需要重启程序',
       restart_now: '现在重启',
       cancel: '取消',
@@ -210,6 +218,25 @@ export const translations = {
       mouse_capture_saved: '鼠标捕捉设置已保存',
       mouse_capture_failed: '保存鼠标捕捉设置失败'
     },
+    recycle_bin: {
+      title: '回收站',
+      empty: '回收站为空',
+      empty_hint: '删除的截图会暂存在这里，超过30天将自动清除',
+      restore: '恢复',
+      permanent_delete: '永久删除',
+      restore_selected: '恢复选中',
+      permanent_delete_selected: '永久删除选中',
+      empty_all: '清空回收站',
+      empty_confirm: '确定要清空回收站吗？所有文件将被永久删除，无法恢复。',
+      permanent_delete_confirm: '确定要永久删除吗？此操作无法恢复。',
+      sort_deleted_desc: '按删除时间（新→旧）',
+      sort_deleted_asc: '按删除时间（旧→新）',
+      sort_original_desc: '按原始时间（新→旧）',
+      sort_original_asc: '按原始时间（旧→新）',
+      deleted_at: '删除于',
+      multi_select: '多选',
+      cancel_select: '取消选定'
+    },
     logs: {
       title: '日志'
     },
@@ -246,6 +273,7 @@ export const translations = {
     nav: {
       time: 'Browse by Time',
       games: 'Browse by Game',
+      recycle_bin: 'Recycle Bin',
       settings: 'Settings'
     },
     header: {
@@ -336,6 +364,13 @@ export const translations = {
       delete_all: 'Delete All Data',
       delete_all_hint: 'This operation will delete all screenshots, database and settings, cannot be recovered',
       delete_all_confirm: 'Are you sure you want to delete all data? This operation cannot be recovered!',
+      backup_title: 'Database Backup',
+      backup_hint: 'Back up the database file to the program directory, keeping the latest 3 backups. Only the database file is backed up, not the original screenshots.',
+      backup_daily: 'Save daily backup in program directory',
+      backup_manual: 'Manual Backup',
+      backup_in_progress: 'Backing up...',
+      backup_success: 'Backup successful',
+      backup_failed: 'Backup failed',
       restart_required: 'Restart required',
       restart_now: 'Restart Now',
       cancel: 'Cancel',
@@ -453,6 +488,25 @@ export const translations = {
       mouse_capture_saved: 'Mouse capture setting saved',
       mouse_capture_failed: 'Failed to save mouse capture setting'
     },
+    recycle_bin: {
+      title: 'Recycle Bin',
+      empty: 'Recycle bin is empty',
+      empty_hint: 'Deleted screenshots are stored here and will be automatically removed after 30 days',
+      restore: 'Restore',
+      permanent_delete: 'Delete Permanently',
+      restore_selected: 'Restore Selected',
+      permanent_delete_selected: 'Delete Selected Permanently',
+      empty_all: 'Empty Recycle Bin',
+      empty_confirm: 'Are you sure you want to empty the recycle bin? All files will be permanently deleted and cannot be recovered.',
+      permanent_delete_confirm: 'Are you sure you want to permanently delete? This action cannot be undone.',
+      sort_deleted_desc: 'By deletion time (newest)',
+      sort_deleted_asc: 'By deletion time (oldest)',
+      sort_original_desc: 'By original time (newest)',
+      sort_original_asc: 'By original time (oldest)',
+      deleted_at: 'Deleted',
+      multi_select: 'Multi-Select',
+      cancel_select: 'Cancel Selection'
+    },
     logs: {
       title: 'Logs'
     },
@@ -489,6 +543,7 @@ export const translations = {
     nav: {
       time: '時間で参照',
       games: 'ゲームで参照',
+      recycle_bin: 'ゴミ箱',
       settings: '設定'
     },
     header: {
@@ -567,6 +622,13 @@ export const translations = {
       delete_all: 'すべてのデータを削除',
       delete_all_hint: 'この操作により、すべてのスクリーンショット、データベース、設定が削除され、回復することはできません',
       delete_all_confirm: '本当にすべてのデータを削除しますか？この操作は元に戻すことができません！',
+      backup_title: 'データベースバックアップ',
+      backup_hint: 'データベースファイルをプログラムディレクトリにバックアップし、最新の3つのバックアップを保持します。データベースファイルのみバックアップされ、スクリーンショット原画は含まれません。',
+      backup_daily: 'プログラムディレクトリに毎日バックアップを保存',
+      backup_manual: '手動バックアップ',
+      backup_in_progress: 'バックアップ中...',
+      backup_success: 'バックアップ成功',
+      backup_failed: 'バックアップ失敗',
       restart_required: '再起動が必要',
       restart_now: '今すぐ再起動',
       cancel: 'キャンセル',
@@ -683,6 +745,25 @@ export const translations = {
       autostart_failed: '自動起動設定の保存に失敗しました',
       mouse_capture_saved: 'マウスキャプチャ設定が保存されました',
       mouse_capture_failed: 'マウスキャプチャ設定の保存に失敗しました'
+    },
+    recycle_bin: {
+      title: 'ゴミ箱',
+      empty: 'ゴミ箱は空です',
+      empty_hint: '削除されたスクリーンショットはここに保存され、30日後に自動的に削除されます',
+      restore: '復元',
+      permanent_delete: '完全に削除',
+      restore_selected: '選択を復元',
+      permanent_delete_selected: '選択を完全に削除',
+      empty_all: 'ゴミ箱を空にする',
+      empty_confirm: 'ゴミ箱を空にしてもよろしいですか？すべてのファイルが完全に削除され、復元できません。',
+      permanent_delete_confirm: '完全に削除してもよろしいですか？この操作は元に戻せません。',
+      sort_deleted_desc: '削除日時（新しい順）',
+      sort_deleted_asc: '削除日時（古い順）',
+      sort_original_desc: '元の日時（新しい順）',
+      sort_original_asc: '元の日時（古い順）',
+      deleted_at: '削除日時',
+      multi_select: '複数選択',
+      cancel_select: '選択をキャンセル'
     },
     logs: {
       title: 'ログ'

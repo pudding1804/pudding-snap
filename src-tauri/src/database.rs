@@ -256,6 +256,31 @@ pub fn init_db() -> Result<Connection> {
         [],
     )?;
 
+    tx.execute(
+        "CREATE TABLE IF NOT EXISTS deleted_screenshots (
+            id INTEGER PRIMARY KEY,
+            original_id INTEGER,
+            file_path TEXT NOT NULL,
+            thumbnail_path TEXT NOT NULL,
+            original_file_path TEXT NOT NULL,
+            original_thumbnail_path TEXT NOT NULL,
+            game_id TEXT NOT NULL,
+            game_title TEXT NOT NULL,
+            display_title TEXT,
+            timestamp INTEGER NOT NULL,
+            note TEXT,
+            game_banner_url TEXT,
+            file_hash TEXT,
+            deleted_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_deleted_at ON deleted_screenshots(deleted_at)",
+        [],
+    )?;
+
     let has_steam_appid: bool = tx.query_row(
         "SELECT EXISTS(SELECT 1 FROM pragma_table_info('game_cache') WHERE name='steam_appid')",
         [],
@@ -683,6 +708,96 @@ pub fn get_games(conn: &Connection) -> Result<Vec<GameSummary>> {
     iter.collect()
 }
 
+pub fn get_backup_dir() -> PathBuf {
+    let exe_dir = std::env::current_exe()
+        .expect("Could not get exe path")
+        .parent()
+        .expect("Could not get parent dir")
+        .to_path_buf();
+    exe_dir.join("db-backup")
+}
+
+pub fn perform_backup() -> std::result::Result<String, String> {
+    let db_path = get_db_path();
+    if !db_path.exists() {
+        return Err("数据库文件不存在".to_string());
+    }
+    
+    let backup_dir = get_backup_dir();
+    if !backup_dir.exists() {
+        std::fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+    }
+    
+    let now = chrono::Local::now();
+    let timestamp = now.format("%Y%m%d_%H%M%S").to_string();
+    let backup_file_name = format!("screenshots_v2_{}.db", timestamp);
+    let backup_path = backup_dir.join(&backup_file_name);
+    
+    std::fs::copy(&db_path, &backup_path).map_err(|e| e.to_string())?;
+    
+    println!("[备份] 数据库已备份到: {:?}", backup_path);
+    
+    cleanup_old_backups(&backup_dir, 3).map_err(|e| e.to_string())?;
+    
+    Ok(backup_path.to_string_lossy().to_string())
+}
+
+fn cleanup_old_backups(backup_dir: &PathBuf, keep_count: usize) -> std::result::Result<(), String> {
+    let mut backups: Vec<(String, std::time::SystemTime)> = Vec::new();
+    
+    let entries = std::fs::read_dir(backup_dir).map_err(|e| e.to_string())?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        if file_name.starts_with("screenshots_v2_") && file_name.ends_with(".db") {
+            if let Ok(metadata) = entry.metadata() {
+                if let Ok(modified) = metadata.modified() {
+                    backups.push((file_name, modified));
+                }
+            }
+        }
+    }
+    
+    backups.sort_by(|a, b| b.1.cmp(&a.1));
+    
+    if backups.len() > keep_count {
+        for old_backup in &backups[keep_count..] {
+            let old_path = backup_dir.join(&old_backup.0);
+            println!("[备份] 删除旧备份: {:?}", old_path);
+            let _ = std::fs::remove_file(old_path);
+        }
+    }
+    
+    Ok(())
+}
+
+pub fn get_last_backup_time() -> Option<i64> {
+    let backup_dir = get_backup_dir();
+    if !backup_dir.exists() {
+        return None;
+    }
+    
+    let mut latest: Option<std::time::SystemTime> = None;
+    
+    if let Ok(entries) = std::fs::read_dir(&backup_dir) {
+        for entry in entries.flatten() {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            if file_name.starts_with("screenshots_v2_") && file_name.ends_with(".db") {
+                if let Ok(metadata) = entry.metadata() {
+                    if let Ok(modified) = metadata.modified() {
+                        latest = Some(match latest {
+                            Some(current) => if modified > current { modified } else { current },
+                            None => modified,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    latest.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64)
+}
+
 pub fn get_games_with_pagination(conn: &Connection, page: i32, page_size: i32) -> Result<PaginatedGames> {
     let offset = (page - 1) * page_size;
     
@@ -772,6 +887,285 @@ pub fn delete_screenshots(conn: &Connection, ids: &[i32]) -> Result<()> {
     stmt.execute(rusqlite::params_from_iter(ids))?;
     
     Ok(())
+}
+
+fn get_trash_dir() -> PathBuf {
+    let data_dir = get_data_dir();
+    let trash_dir = data_dir.join(".trash");
+    if !trash_dir.exists() {
+        let _ = std::fs::create_dir_all(&trash_dir);
+    }
+    let thumb_dir = trash_dir.join("thumbnails");
+    if !thumb_dir.exists() {
+        let _ = std::fs::create_dir_all(&thumb_dir);
+    }
+    trash_dir
+}
+
+fn move_file_to_trash(file_path: &str) -> std::result::Result<String, String> {
+    let src = PathBuf::from(file_path);
+    if !src.exists() {
+        return Ok(file_path.to_string());
+    }
+    let trash_dir = get_trash_dir();
+    let file_name = src.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let mut dest = trash_dir.join(&file_name);
+    let mut counter = 1;
+    while dest.exists() {
+        let stem = src.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let ext = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+        let new_name = format!("{}_{}{}", stem, counter, ext);
+        dest = trash_dir.join(&new_name);
+        counter += 1;
+    }
+    std::fs::rename(&src, &dest).map_err(|e| format!("移动文件失败: {}", e))?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+fn move_thumbnail_to_trash(thumbnail_path: &str) -> std::result::Result<String, String> {
+    let src = PathBuf::from(thumbnail_path);
+    if !src.exists() {
+        return Ok(thumbnail_path.to_string());
+    }
+    let trash_dir = get_trash_dir().join("thumbnails");
+    if !trash_dir.exists() {
+        let _ = std::fs::create_dir_all(&trash_dir);
+    }
+    let file_name = src.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let mut dest = trash_dir.join(&file_name);
+    let mut counter = 1;
+    while dest.exists() {
+        let stem = src.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let ext = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+        let new_name = format!("{}_{}{}", stem, counter, ext);
+        dest = trash_dir.join(&new_name);
+        counter += 1;
+    }
+    std::fs::rename(&src, &dest).map_err(|e| format!("移动缩略图失败: {}", e))?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+pub fn soft_delete_screenshot(conn: &Connection, id: i32) -> std::result::Result<(), String> {
+    let ss = conn.query_row(
+        "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash FROM screenshots WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok((
+                row.get::<_, i32>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?.unwrap_or_default(),
+                row.get::<_, i64>(6)?,
+                row.get::<_, Option<String>>(7)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(8)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(9)?,
+            ))
+        }
+    ).map_err(|e| format!("查询截图失败: {}", e))?;
+
+    let (_, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash) = ss;
+    let original_file_path = file_path.clone();
+    let original_thumbnail_path = thumbnail_path.clone();
+
+    let new_file_path = move_file_to_trash(&file_path)?;
+    let new_thumbnail_path = move_thumbnail_to_trash(&thumbnail_path)?;
+
+    let now = chrono::Utc::now().timestamp();
+
+    conn.execute(
+        "INSERT INTO deleted_screenshots (original_id, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        params![id, new_file_path, new_thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, now],
+    ).map_err(|e| format!("插入回收站记录失败: {}", e))?;
+
+    conn.execute("DELETE FROM screenshots WHERE id = ?1", params![id])
+        .map_err(|e| format!("删除原记录失败: {}", e))?;
+
+    Ok(())
+}
+
+pub fn soft_delete_screenshots(conn: &Connection, ids: &[i32]) -> std::result::Result<(), String> {
+    for id in ids {
+        soft_delete_screenshot(conn, *id)?;
+    }
+    Ok(())
+}
+
+pub fn get_deleted_screenshots_with_pagination(
+    conn: &Connection,
+    sort_order: &str,
+    page: i32,
+    page_size: i32,
+) -> std::result::Result<crate::models::PaginationResult, String> {
+    let offset = (page - 1) * page_size;
+    let order = if sort_order == "original_asc" { "timestamp ASC" } else if sort_order == "original_desc" { "timestamp DESC" } else if sort_order == "asc" { "deleted_at ASC" } else { "deleted_at DESC" };
+
+    let total_count: i32 = conn.query_row("SELECT COUNT(*) FROM deleted_screenshots", [], |row| row.get(0))
+        .map_err(|e| format!("统计失败: {}", e))?;
+
+    let total_pages = if total_count == 0 { 1 } else { (total_count + page_size - 1) / page_size };
+
+    let sql = format!(
+        "SELECT id, original_id, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, deleted_at
+         FROM deleted_screenshots ORDER BY {} LIMIT ?1 OFFSET ?2",
+        order
+    );
+
+    let mut stmt = conn.prepare(&sql).map_err(|e| format!("准备查询失败: {}", e))?;
+    let screenshots: Vec<crate::models::ScreenshotRecord> = stmt.query_map(params![page_size, offset], |row| {
+        Ok(crate::models::ScreenshotRecord {
+            id: row.get(0)?,
+            file_path: row.get::<_, String>(2)?,
+            thumbnail_path: row.get::<_, String>(3)?,
+            game_id: row.get::<_, String>(6)?,
+            game_title: row.get::<_, String>(7)?,
+            display_title: row.get::<_, Option<String>>(8)?.unwrap_or_default(),
+            timestamp: row.get::<_, i64>(13)?,
+            note: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
+            game_banner_url: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
+        })
+    }).map_err(|e| format!("查询失败: {}", e))?.collect::<Result<Vec<_>, _>>().map_err(|e| format!("解析失败: {}", e))?;
+
+    Ok(crate::models::PaginationResult {
+        screenshots,
+        total: total_count,
+        page,
+        page_size,
+        total_pages,
+    })
+}
+
+pub fn restore_screenshot(conn: &Connection, id: i32) -> std::result::Result<(), String> {
+    let record = conn.query_row(
+        "SELECT id, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash FROM deleted_screenshots WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok((
+                row.get::<_, i32>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
+                row.get::<_, Option<String>>(7)?.unwrap_or_default(),
+                row.get::<_, i64>(8)?,
+                row.get::<_, Option<String>>(9)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(10)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(11)?,
+            ))
+        }
+    ).map_err(|e| format!("查询回收站记录失败: {}", e))?;
+
+    let (_, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash) = record;
+
+    let mut restored_file_path = original_file_path.clone();
+    let original_dir = PathBuf::from(&original_file_path).parent().unwrap_or(&PathBuf::from(".")).to_path_buf();
+    if !original_dir.exists() {
+        let _ = std::fs::create_dir_all(&original_dir);
+    }
+    if PathBuf::from(&original_file_path).exists() {
+        let stem = PathBuf::from(&original_file_path).file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let ext = PathBuf::from(&original_file_path).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+        let data_dir = get_data_dir();
+        let game_dir = data_dir.join(&game_id);
+        let _ = std::fs::create_dir_all(&game_dir);
+        let mut counter = 1;
+        let mut new_path = game_dir.join(&original_file_path);
+        loop {
+            let new_name = format!("{}_{}{}", stem, counter, ext);
+            new_path = game_dir.join(&new_name);
+            if !new_path.exists() { break; }
+            counter += 1;
+        }
+        restored_file_path = new_path.to_string_lossy().to_string();
+    } else {
+        if let Err(e) = std::fs::rename(&file_path, &original_file_path) {
+            println!("[恢复] 移动文件失败: {}, 尝试复制", e);
+            std::fs::copy(&file_path, &original_file_path).map_err(|e2| format!("复制文件失败: {}", e2))?;
+            let _ = std::fs::remove_file(&file_path);
+        }
+    }
+
+    if !PathBuf::from(&original_thumbnail_path).exists() {
+        if PathBuf::from(&thumbnail_path).exists() {
+            let thumb_dir = PathBuf::from(&original_thumbnail_path).parent().unwrap_or(&PathBuf::from(".")).to_path_buf();
+            if !thumb_dir.exists() {
+                let _ = std::fs::create_dir_all(&thumb_dir);
+            }
+            let _ = std::fs::rename(&thumbnail_path, &original_thumbnail_path);
+        }
+    }
+
+    conn.execute(
+        "INSERT INTO screenshots (file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![restored_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash],
+    ).map_err(|e| format!("恢复记录失败: {}", e))?;
+
+    conn.execute("DELETE FROM deleted_screenshots WHERE id = ?1", params![id])
+        .map_err(|e| format!("删除回收站记录失败: {}", e))?;
+
+    Ok(())
+}
+
+pub fn restore_screenshots(conn: &Connection, ids: &[i32]) -> std::result::Result<(), String> {
+    for id in ids {
+        restore_screenshot(conn, *id)?;
+    }
+    Ok(())
+}
+
+pub fn permanent_delete_screenshot(conn: &Connection, id: i32) -> std::result::Result<(), String> {
+    let record = conn.query_row(
+        "SELECT file_path, thumbnail_path FROM deleted_screenshots WHERE id = ?1",
+        params![id],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    ).map_err(|e| format!("查询回收站记录失败: {}", e))?;
+
+    let (file_path, thumbnail_path) = record;
+    let _ = std::fs::remove_file(&file_path);
+    let _ = std::fs::remove_file(&thumbnail_path);
+
+    conn.execute("DELETE FROM deleted_screenshots WHERE id = ?1", params![id])
+        .map_err(|e| format!("删除回收站记录失败: {}", e))?;
+
+    Ok(())
+}
+
+pub fn permanent_delete_screenshots(conn: &Connection, ids: &[i32]) -> std::result::Result<(), String> {
+    for id in ids {
+        permanent_delete_screenshot(conn, *id)?;
+    }
+    Ok(())
+}
+
+pub fn cleanup_expired_deleted(conn: &Connection) -> std::result::Result<usize, String> {
+    let now = chrono::Utc::now().timestamp();
+    let thirty_days_ago = now - 30 * 24 * 60 * 60;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, file_path, thumbnail_path FROM deleted_screenshots WHERE deleted_at < ?1"
+    ).map_err(|e| format!("查询过期记录失败: {}", e))?;
+
+    let expired: Vec<(i32, String, String)> = stmt.query_map(params![thirty_days_ago], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+    }).map_err(|e| format!("查询失败: {}", e))?.collect::<Result<Vec<_>, _>>().map_err(|e| format!("解析失败: {}", e))?;
+
+    let count = expired.len();
+    for (id, file_path, thumbnail_path) in &expired {
+        let _ = std::fs::remove_file(file_path);
+        let _ = std::fs::remove_file(thumbnail_path);
+        conn.execute("DELETE FROM deleted_screenshots WHERE id = ?1", params![id])
+            .map_err(|e| format!("删除记录失败: {}", e))?;
+    }
+
+    Ok(count)
+}
+
+pub fn get_deleted_screenshots_count(conn: &Connection) -> i32 {
+    conn.query_row("SELECT COUNT(*) FROM deleted_screenshots", [], |row| row.get(0))
+        .unwrap_or(0)
 }
 
 pub fn update_note(conn: &Connection, id: i32, note: &str) -> Result<()> {
@@ -1154,24 +1548,33 @@ pub fn create_empty_game(conn: &Connection, game_id: &str, display_title: &str, 
     Ok(())
 }
 
-pub fn delete_game(conn: &Connection, game_id: &str) -> Result<()> {
-    conn.execute("DELETE FROM screenshots WHERE game_id = ?1", params![game_id])?;
-    conn.execute("DELETE FROM game_cache WHERE game_id = ?1", params![game_id])?;
-    println!("[数据库] 删除游戏及其所有数据: {}", game_id);
+pub fn delete_game(conn: &Connection, game_id: &str) -> std::result::Result<(), String> {
+    let screenshot_ids: Vec<i32> = {
+        let mut stmt = conn.prepare("SELECT id FROM screenshots WHERE game_id = ?1").map_err(|e| format!("查询失败: {}", e))?;
+        let rows = stmt.query_map(params![game_id], |row| row.get(0)).map_err(|e| format!("查询失败: {}", e))?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| format!("解析失败: {}", e))?
+    };
+    
+    for id in &screenshot_ids {
+        soft_delete_screenshot(conn, *id)?;
+    }
+    
+    conn.execute("DELETE FROM game_cache WHERE game_id = ?1", params![game_id])
+        .map_err(|e| format!("删除游戏缓存失败: {}", e))?;
+    println!("[数据库] 软删除游戏及其所有截图: {}", game_id);
     Ok(())
 }
 
-pub fn delete_games(conn: &Connection, game_ids: &[String]) -> Result<()> {
+pub fn delete_games(conn: &Connection, game_ids: &[String]) -> std::result::Result<(), String> {
     if game_ids.is_empty() {
         return Ok(());
     }
     
     for game_id in game_ids {
-        conn.execute("DELETE FROM screenshots WHERE game_id = ?1", params![game_id])?;
-        conn.execute("DELETE FROM game_cache WHERE game_id = ?1", params![game_id])?;
+        delete_game(conn, game_id)?;
     }
     
-    println!("[数据库] 批量删除 {} 个游戏", game_ids.len());
+    println!("[数据库] 批量软删除 {} 个游戏", game_ids.len());
     Ok(())
 }
 

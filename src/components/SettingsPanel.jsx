@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 
 const ESTIMATED_SIZES = {
@@ -36,7 +38,11 @@ export function SettingsPanel({
   onScreenshotQualityChange,
   onBangumiAuthChange,
   onDeleteAll,
+  backupEnabled,
+  onBackupEnabledChange,
+  onManualBackup,
 }) {
+  const [backupStatus, setBackupStatus] = useState('')
   return (
     <div>
       <h1 style={styles.title}>{t.settings.title}</h1>
@@ -319,6 +325,59 @@ export function SettingsPanel({
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
+          <h3 style={{ marginBottom: 12 }}>{t.settings.backup_title}</h3>
+          <p style={{ color: theme.textMuted, fontSize: 14, marginBottom: 12 }}>
+            {t.settings.backup_hint}
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <label style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 8, 
+              cursor: 'pointer',
+              fontSize: 14,
+              color: theme.text
+            }}>
+              <input 
+                type="checkbox" 
+                checked={backupEnabled || false}
+                onChange={(e) => onBackupEnabledChange(e.target.checked)}
+                style={{ width: 16, height: 16, cursor: 'pointer' }}
+              />
+              {t.settings.backup_daily}
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              style={{
+                ...styles.btnPrimary,
+                padding: '8px 16px',
+                fontSize: 13
+              }}
+              {...btnEvents}
+              onClick={async () => {
+                try {
+                  setBackupStatus(t.settings.backup_in_progress)
+                  await onManualBackup()
+                  setBackupStatus(t.settings.backup_success)
+                  setTimeout(() => setBackupStatus(''), 3000)
+                } catch (e) {
+                  setBackupStatus(t.settings.backup_failed + ': ' + String(e))
+                  setTimeout(() => setBackupStatus(''), 5000)
+                }
+              }}
+            >
+              {t.settings.backup_manual}
+            </button>
+            {backupStatus && (
+              <span style={{ fontSize: 12, color: backupStatus.includes(t.settings.backup_failed) ? '#e74c3c' : theme.primary }}>
+                {backupStatus}
+              </span>
+            )}
           </div>
         </div>
 
