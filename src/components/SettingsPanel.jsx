@@ -90,36 +90,46 @@ export function SettingsPanel({
         <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
           <h3 style={{ marginBottom: 12 }}>{t.settings.theme}</h3>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {Object.entries(themes).map(([key, th]) => (
-              <button
-                key={key}
-                onClick={() => onThemeChange(key)}
-                style={{
-                  ...styles.themeBtn,
-                  ...(currentTheme === key ? styles.themeBtnActive : {}),
-                  background: th.colors.primary,
-                  color: key === 'night' ? '#fff' : '#333',
-                }}
-                onMouseEnter={e => {
-                  if (currentTheme !== key) {
-                    e.currentTarget.style.transform = 'scale(1.05)'
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (currentTheme !== key) {
-                    e.currentTarget.style.transform = 'scale(1)'
-                  }
-                }}
-                onMouseDown={e => {
-                  e.currentTarget.style.transform = 'scale(0.95)'
-                }}
-                onMouseUp={e => {
-                  e.currentTarget.style.transform = currentTheme === key ? 'scale(1.05)' : 'scale(1)'
-                }}
-              >
-                {th.name}
-              </button>
-            ))}
+            {Object.entries(themes).map(([key, th]) => {
+              const isSelected = currentTheme === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => onThemeChange(key)}
+                  style={{
+                    ...styles.themeBtn,
+                    background: th.colors.primary,
+                    color: '#fff',
+                    position: 'relative',
+                    outline: isSelected ? '3px solid #fff' : 'none',
+                    outlineOffset: isSelected ? '2px' : '0',
+                    boxShadow: isSelected ? `0 0 0 1px ${th.colors.primary}, 0 4px 12px rgba(0,0,0,0.3)` : 'none',
+                    transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                    opacity: isSelected ? 1 : 0.75,
+                  }}
+                  onMouseEnter={e => {
+                    if (!isSelected) {
+                      e.currentTarget.style.transform = 'scale(1.05)'
+                      e.currentTarget.style.opacity = '1'
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!isSelected) {
+                      e.currentTarget.style.transform = 'scale(1)'
+                      e.currentTarget.style.opacity = '0.75'
+                    }
+                  }}
+                  onMouseDown={e => {
+                    e.currentTarget.style.transform = 'scale(0.95)'
+                  }}
+                  onMouseUp={e => {
+                    e.currentTarget.style.transform = isSelected ? 'scale(1.05)' : 'scale(1)'
+                  }}
+                >
+                  {isSelected && '✓ '}{th.name}
+                </button>
+              )
+            })}
           </div>
         </div>
         

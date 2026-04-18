@@ -281,6 +281,22 @@ pub fn init_db() -> Result<Connection> {
         [],
     )?;
 
+    tx.execute(
+        "CREATE TABLE IF NOT EXISTS deleted_games (
+            game_id TEXT PRIMARY KEY,
+            exe_path TEXT,
+            icon_path TEXT,
+            display_title TEXT,
+            last_updated INTEGER,
+            steam_appid INTEGER,
+            steam_name TEXT,
+            steam_logo_path TEXT,
+            steam_match_status TEXT,
+            deleted_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
     let has_steam_appid: bool = tx.query_row(
         "SELECT EXISTS(SELECT 1 FROM pragma_table_info('game_cache') WHERE name='steam_appid')",
         [],
@@ -1106,6 +1122,22 @@ pub fn restore_screenshot(conn: &Connection, id: i32) -> std::result::Result<(),
     conn.execute("DELETE FROM deleted_screenshots WHERE id = ?1", params![id])
         .map_err(|e| format!("删除回收站记录失败: {}", e))?;
 
+    let game_exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM game_cache WHERE game_id = ?1)",
+        params![game_id],
+        |row| row.get(0),
+    ).unwrap_or(false);
+
+    if !game_exists {
+        conn.execute(
+            "INSERT OR IGNORE INTO game_cache (game_id, exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status) SELECT game_id, exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status FROM deleted_games WHERE game_id = ?1",
+            params![game_id],
+        ).map_err(|e| format!("恢复游戏记录失败: {}", e))?;
+
+        conn.execute("DELETE FROM deleted_games WHERE game_id = ?1", params![game_id])
+            .map_err(|e| format!("删除回收站游戏记录失败: {}", e))?;
+    }
+
     Ok(())
 }
 
@@ -1118,17 +1150,34 @@ pub fn restore_screenshots(conn: &Connection, ids: &[i32]) -> std::result::Resul
 
 pub fn permanent_delete_screenshot(conn: &Connection, id: i32) -> std::result::Result<(), String> {
     let record = conn.query_row(
-        "SELECT file_path, thumbnail_path FROM deleted_screenshots WHERE id = ?1",
+        "SELECT file_path, thumbnail_path, game_id FROM deleted_screenshots WHERE id = ?1",
         params![id],
-        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
     ).map_err(|e| format!("查询回收站记录失败: {}", e))?;
 
-    let (file_path, thumbnail_path) = record;
+    let (file_path, thumbnail_path, game_id) = record;
     let _ = std::fs::remove_file(&file_path);
     let _ = std::fs::remove_file(&thumbnail_path);
 
     conn.execute("DELETE FROM deleted_screenshots WHERE id = ?1", params![id])
         .map_err(|e| format!("删除回收站记录失败: {}", e))?;
+
+    let remaining: i32 = conn.query_row(
+        "SELECT COUNT(*) FROM deleted_screenshots WHERE game_id = ?1",
+        params![game_id],
+        |row| row.get(0),
+    ).unwrap_or(0);
+
+    let in_screenshots: i32 = conn.query_row(
+        "SELECT COUNT(*) FROM screenshots WHERE game_id = ?1",
+        params![game_id],
+        |row| row.get(0),
+    ).unwrap_or(0);
+
+    if remaining == 0 && in_screenshots == 0 {
+        conn.execute("DELETE FROM deleted_games WHERE game_id = ?1", params![game_id])
+            .map_err(|e| format!("清理回收站游戏记录失败: {}", e))?;
+    }
 
     Ok(())
 }
@@ -1159,6 +1208,11 @@ pub fn cleanup_expired_deleted(conn: &Connection) -> std::result::Result<usize, 
         conn.execute("DELETE FROM deleted_screenshots WHERE id = ?1", params![id])
             .map_err(|e| format!("删除记录失败: {}", e))?;
     }
+
+    conn.execute(
+        "DELETE FROM deleted_games WHERE deleted_at < ?1 AND game_id NOT IN (SELECT DISTINCT game_id FROM deleted_screenshots)",
+        params![thirty_days_ago],
+    ).map_err(|e| format!("清理过期游戏记录失败: {}", e))?;
 
     Ok(count)
 }
@@ -1558,6 +1612,12 @@ pub fn delete_game(conn: &Connection, game_id: &str) -> std::result::Result<(), 
     for id in &screenshot_ids {
         soft_delete_screenshot(conn, *id)?;
     }
+    
+    let now = chrono::Utc::now().timestamp();
+    conn.execute(
+        "INSERT OR IGNORE INTO deleted_games (game_id, exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status, deleted_at) SELECT game_id, exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status, ?2 FROM game_cache WHERE game_id = ?1",
+        params![game_id, now],
+    ).map_err(|e| format!("移动游戏缓存到回收站失败: {}", e))?;
     
     conn.execute("DELETE FROM game_cache WHERE game_id = ?1", params![game_id])
         .map_err(|e| format!("删除游戏缓存失败: {}", e))?;

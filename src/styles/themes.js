@@ -10,7 +10,7 @@ export const themes = {
       textMuted: '#888',
       primary: '#4ade80',
       danger: '#ef4444',
-      border: '#0f3460',
+      border: '#1a3a6a',
     }
   },
   day: {
@@ -24,21 +24,21 @@ export const themes = {
       textMuted: '#666',
       primary: '#3b82f6',
       danger: '#ef4444',
-      border: '#ddd',
+      border: '#d0d0d0',
     }
   },
   pink: {
     name: '浅粉',
     colors: {
       bg: '#fce4ec',
-      sidebar: '#f8bbd9',
+      sidebar: '#f8bbd0',
       card: '#ffffff',
       accent: '#f48fb1',
       text: '#4a4a4a',
       textMuted: '#7a7a7a',
       primary: '#ec407a',
       danger: '#e57373',
-      border: '#f8bbd9',
+      border: '#e8a0bf',
     }
   },
   blue: {
@@ -52,13 +52,13 @@ export const themes = {
       textMuted: '#778da9',
       primary: '#4cc9f0',
       danger: '#ef476f',
-      border: '#415a77',
+      border: '#2a4060',
     }
   },
   green: {
     name: '森林',
     colors: {
-      bg: '#1a1a2e',
+      bg: '#0d1b12',
       sidebar: '#1b4332',
       card: '#1b4332',
       accent: '#2d6a4f',
@@ -66,7 +66,7 @@ export const themes = {
       textMuted: '#95d5b2',
       primary: '#52b788',
       danger: '#e63946',
-      border: '#2d6a4f',
+      border: '#2a5a42',
     }
   }
 };
