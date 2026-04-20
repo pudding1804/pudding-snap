@@ -320,18 +320,24 @@ export function GameList({
                 }}
                 onClick={() => onToggleSelectGame && onToggleSelectGame(game)}
                 onMouseEnter={e => {
-                  e.currentTarget.style.transform = 'scale(1.03)'
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'
+                  e.currentTarget.style.borderColor = theme.primary
+                  const icon = e.currentTarget.querySelector('.game-icon-inner')
+                  if (icon) icon.style.transform = 'scale(1.05)'
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.transform = 'scale(1)'
                   e.currentTarget.style.boxShadow = 'none'
+                  e.currentTarget.style.borderColor = 'transparent'
+                  const icon = e.currentTarget.querySelector('.game-icon-inner')
+                  if (icon) icon.style.transform = 'scale(1)'
                 }}
                 onMouseDown={e => {
-                  e.currentTarget.style.transform = 'scale(0.98)'
+                  e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.08)'
+                  e.currentTarget.style.transform = 'translateY(1px)'
                 }}
                 onMouseUp={e => {
-                  e.currentTarget.style.transform = 'scale(1.03)'
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'
+                  e.currentTarget.style.transform = 'translateY(0)'
                 }}
               >
                 {isGameMultiSelectMode && (
@@ -345,6 +351,7 @@ export function GameList({
                   </div>
                 )}
                 <div style={styles.gameIcon}>
+                  <div className="game-icon-inner" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', transition: 'transform 0.3s ease' }}>
                   {iconSrc ? (
                     hasSteamLogo ? (
                       <img 
@@ -392,6 +399,7 @@ export function GameList({
                       {game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?'}
                     </div>
                   )}
+                  </div>
                 </div>
                 <div style={styles.gameTitle}>{game.display_title || game.game_title}</div>
                 <div style={styles.gameCount}>{game.count} {t.game.screenshots}</div>

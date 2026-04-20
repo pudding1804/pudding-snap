@@ -580,6 +580,7 @@ pub fn get_screenshots_with_pagination(
     page_size: i32,
     date_start: Option<i64>,
     date_end: Option<i64>,
+    note_search: Option<&str>,
 ) -> Result<PaginationResult> {
     let offset = (page - 1) * page_size;
     
@@ -601,6 +602,11 @@ pub fn get_screenshots_with_pagination(
         param_index += 1;
     }
     
+    if note_search.is_some() {
+        where_clauses.push(format!("note LIKE ?{}", param_index));
+        param_index += 1;
+    }
+    
     let where_sql = if where_clauses.is_empty() {
         String::new()
     } else {
@@ -609,7 +615,7 @@ pub fn get_screenshots_with_pagination(
     
     let count_sql = format!("SELECT COUNT(*) FROM screenshots{}", where_sql);
     
-    let total_count: i32 = if game_id.is_some() || date_start.is_some() || date_end.is_some() {
+    let total_count: i32 = if game_id.is_some() || date_start.is_some() || date_end.is_some() || note_search.is_some() {
         let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
         
         if let Some(gid) = game_id {
@@ -620,6 +626,9 @@ pub fn get_screenshots_with_pagination(
         }
         if let Some(end) = date_end {
             params_vec.push(Box::new(end));
+        }
+        if let Some(ns) = note_search {
+            params_vec.push(Box::new(format!("%{}%", ns)));
         }
         
         let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
@@ -644,7 +653,7 @@ pub fn get_screenshots_with_pagination(
 
     let mut stmt = conn.prepare(&sql)?;
     
-    let screenshots: Vec<ScreenshotRecord> = if game_id.is_some() || date_start.is_some() || date_end.is_some() {
+    let screenshots: Vec<ScreenshotRecord> = if game_id.is_some() || date_start.is_some() || date_end.is_some() || note_search.is_some() {
         let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
         
         if let Some(gid) = game_id {
@@ -655,6 +664,9 @@ pub fn get_screenshots_with_pagination(
         }
         if let Some(end) = date_end {
             params_vec.push(Box::new(end));
+        }
+        if let Some(ns) = note_search {
+            params_vec.push(Box::new(format!("%{}%", ns)));
         }
         params_vec.push(Box::new(page_size));
         params_vec.push(Box::new(offset));

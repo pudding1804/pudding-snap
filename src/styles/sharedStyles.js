@@ -11,17 +11,17 @@ export const createStyles = (theme, iconSize = 'large') => {
     main: { flex: 1, padding: 24, overflow: 'auto' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
     title: { fontSize: 24, fontWeight: 'bold' },
-    btn: { padding: '8px 16px', background: theme.accent, border: 'none', borderRadius: 6, color: theme.text, cursor: 'pointer', transition: 'transform 0.15s, background 0.15s, opacity 0.15s' },
-    btnPrimary: { padding: '8px 16px', background: theme.primary, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'transform 0.15s, background 0.15s, opacity 0.15s' },
-    btnDanger: { padding: '8px 16px', background: theme.danger, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', transition: 'transform 0.15s, background 0.15s, opacity 0.15s' },
-    btnDisabled: { padding: '8px 16px', background: theme.accent, border: 'none', borderRadius: 6, color: theme.textMuted, cursor: 'not-allowed', opacity: 0.6, transition: 'transform 0.15s' },
+    btn: { padding: '8px 16px', background: theme.accent, border: 'none', borderRadius: 6, color: theme.text, cursor: 'pointer', transition: 'background 0.15s, opacity 0.15s, transform 0.1s, box-shadow 0.15s' },
+    btnPrimary: { padding: '8px 16px', background: theme.primary, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'background 0.15s, opacity 0.15s, transform 0.1s, box-shadow 0.15s' },
+    btnDanger: { padding: '8px 16px', background: theme.danger, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', transition: 'background 0.15s, opacity 0.15s, transform 0.1s, box-shadow 0.15s' },
+    btnDisabled: { padding: '8px 16px', background: theme.accent, border: 'none', borderRadius: 6, color: theme.textMuted, cursor: 'not-allowed', opacity: 0.6, transition: 'opacity 0.15s' },
     grid: { display: 'grid', gridTemplateColumns: `repeat(auto-fill, ${cardWidth}px)`, gap: cardGap, justifyContent: 'flex-start' },
-    card: { background: theme.card, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', width: cardWidth },
+    card: { background: theme.card, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', transition: 'box-shadow 0.2s, border-color 0.2s', width: cardWidth, border: `1px solid transparent` },
     cardImage: { width: '100%', aspectRatio: '16 / 9', objectFit: 'contain', background: theme.accent },
     cardInfo: { padding: 12 },
     cardTitle: { fontSize: 14, fontWeight: 'bold', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     cardDate: { fontSize: 12, color: theme.textMuted },
-    gameCard: { background: theme.card, borderRadius: 8, padding: 12, cursor: 'pointer', textAlign: 'center', transition: 'transform 0.2s', width: cardWidth },
+    gameCard: { background: theme.card, borderRadius: 8, padding: 12, cursor: 'pointer', textAlign: 'center', transition: 'box-shadow 0.2s, border-color 0.2s', width: cardWidth, border: `1px solid transparent` },
     gameIcon: { width: '100%', height: iconSize === 'large' ? 94 : 71, borderRadius: 6, margin: '0 auto 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: iconSize === 'large' ? 32 : 24, overflow: 'hidden' },
     gameIconImage: { width: '100%', height: '100%', objectFit: 'contain' },
     gameLogoImage: { width: '100%', height: '100%', objectFit: 'contain', borderRadius: 6 },
@@ -32,7 +32,7 @@ export const createStyles = (theme, iconSize = 'large') => {
     modalContent: { background: theme.card, borderRadius: 12, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' },
     modalHeader: { padding: 16, borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     modalTitle: { fontSize: 18, fontWeight: 'bold' },
-    closeBtn: { background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: theme.textMuted, padding: 0, lineHeight: 1, transition: 'transform 0.15s, color 0.15s' },
+    closeBtn: { background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: theme.textMuted, padding: 0, lineHeight: 1, transition: 'color 0.15s' },
     modalBody: { padding: 16 },
     modalFooter: { padding: 16, borderTop: `1px solid ${theme.border}` },
     input: { width: '100%', padding: 8, background: theme.accent, border: `1px solid ${theme.border}`, borderRadius: 4, color: theme.text, boxSizing: 'border-box' },
@@ -41,17 +41,17 @@ export const createStyles = (theme, iconSize = 'large') => {
     debugLine: { color: theme.primary, marginBottom: 2 },
     empty: { textAlign: 'center', padding: 48, color: theme.textMuted },
     loading: { textAlign: 'center', padding: 48, color: theme.primary },
-    themeBtn: { padding: '10px 16px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', transition: 'transform 0.15s, box-shadow 0.15s' },
-    themeBtnActive: { transform: 'scale(1.05)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' },
+    themeBtn: { padding: '10px 16px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', transition: 'box-shadow 0.15s' },
+    themeBtnActive: { boxShadow: '0 2px 8px rgba(0,0,0,0.2)' },
     pagination: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24, padding: 16, background: theme.card, borderRadius: 8 },
-    paginationBtn: { padding: '6px 12px', background: theme.accent, border: 'none', borderRadius: 4, color: theme.text, cursor: 'pointer', transition: 'transform 0.15s, opacity 0.15s' },
+    paginationBtn: { padding: '6px 12px', background: theme.accent, border: 'none', borderRadius: 4, color: theme.text, cursor: 'pointer', transition: 'opacity 0.15s, transform 0.1s' },
     paginationBtnActive: { background: theme.primary, color: '#fff' },
     paginationInfo: { fontSize: 14, color: theme.textMuted },
     selectCheckbox: { position: 'absolute', top: 8, right: 8, width: 16, height: 16, border: `2px solid ${theme.border}`, borderRadius: 3, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
     selectCheckboxChecked: { background: theme.primary, borderColor: theme.primary },
     selectCheckboxInner: { width: 8, height: 8, background: '#fff' },
     cardWithCheckbox: { position: 'relative' },
-    cardSelected: { transform: 'scale(0.98)', boxShadow: `0 0 0 2px ${theme.primary}` },
+    cardSelected: { boxShadow: `0 0 0 2px ${theme.primary}` },
     migrationProgress: { width: '100%', height: 8, background: theme.accent, borderRadius: 4, overflow: 'hidden', marginTop: 12 },
     migrationProgressBar: { height: '100%', background: theme.primary, transition: 'width 0.3s ease' },
   }
@@ -59,18 +59,18 @@ export const createStyles = (theme, iconSize = 'large') => {
 
 export const btnEvents = {
   onMouseEnter: e => {
-    e.currentTarget.style.transform = 'scale(1.05)'
+    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)'
     e.currentTarget.style.opacity = '0.9'
   },
   onMouseLeave: e => {
-    e.currentTarget.style.transform = 'scale(1)'
+    e.currentTarget.style.boxShadow = 'none'
     e.currentTarget.style.opacity = '1'
   },
   onMouseDown: e => {
-    e.currentTarget.style.transform = 'scale(0.95)'
+    e.currentTarget.style.transform = 'translateY(1px)'
   },
   onMouseUp: e => {
-    e.currentTarget.style.transform = 'scale(1.05)'
+    e.currentTarget.style.transform = 'translateY(0)'
   }
 }
 

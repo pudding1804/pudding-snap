@@ -2,10 +2,10 @@ import { useCallback, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow, PhysicalSize, PhysicalPosition } from '@tauri-apps/api/window'
 
-const DEFAULT_WIDTH = 1200
-const DEFAULT_HEIGHT = 800
-const MIN_VALID_WIDTH = 400
-const MIN_VALID_HEIGHT = 300
+const DEFAULT_WIDTH = 860
+const DEFAULT_HEIGHT = 700
+const MIN_VALID_WIDTH = 860
+const MIN_VALID_HEIGHT = 700
 const MIN_VALID_POSITION = -10000
 
 export function useWindowSize(addLog) {

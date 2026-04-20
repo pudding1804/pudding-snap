@@ -104,26 +104,25 @@ export function SettingsPanel({
                     outline: isSelected ? '3px solid #fff' : 'none',
                     outlineOffset: isSelected ? '2px' : '0',
                     boxShadow: isSelected ? `0 0 0 1px ${th.colors.primary}, 0 4px 12px rgba(0,0,0,0.3)` : 'none',
-                    transform: isSelected ? 'scale(1.05)' : 'scale(1)',
                     opacity: isSelected ? 1 : 0.75,
                   }}
                   onMouseEnter={e => {
                     if (!isSelected) {
-                      e.currentTarget.style.transform = 'scale(1.05)'
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
                       e.currentTarget.style.opacity = '1'
                     }
                   }}
                   onMouseLeave={e => {
                     if (!isSelected) {
-                      e.currentTarget.style.transform = 'scale(1)'
+                      e.currentTarget.style.boxShadow = 'none'
                       e.currentTarget.style.opacity = '0.75'
                     }
                   }}
                   onMouseDown={e => {
-                    e.currentTarget.style.transform = 'scale(0.95)'
+                    e.currentTarget.style.transform = 'translateY(1px)'
                   }}
                   onMouseUp={e => {
-                    e.currentTarget.style.transform = isSelected ? 'scale(1.05)' : 'scale(1)'
+                    e.currentTarget.style.transform = 'translateY(0)'
                   }}
                 >
                   {isSelected && '✓ '}{th.name}
@@ -241,12 +240,12 @@ export function SettingsPanel({
                   onMouseEnter={e => {
                     if (shutterSound !== sound.id) {
                       e.currentTarget.style.background = theme.accent
-                      e.currentTarget.style.transform = 'scale(1.02)'
+                      e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.1)'
                     }
                   }}
                   onMouseLeave={e => {
                     if (shutterSound !== sound.id) {
-                      e.currentTarget.style.transform = 'scale(1)'
+                      e.currentTarget.style.boxShadow = 'none'
                     }
                   }}
                 >

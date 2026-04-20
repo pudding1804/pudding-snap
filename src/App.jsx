@@ -86,6 +86,7 @@ function App() {
   
   const [dateFilterStart, setDateFilterStart] = useState(null)
   const [dateFilterEnd, setDateFilterEnd] = useState(null)
+  const [noteSearch, setNoteSearch] = useState(null)
   const [showDateFilterModal, setShowDateFilterModal] = useState(false)
   
   const [gameSearchTerm, setGameSearchTerm] = useState('')
@@ -324,7 +325,8 @@ function App() {
         page: validPage,
         pageSize: pageSize,
         dateStart: dateStart,
-        dateEnd: dateEnd
+        dateEnd: dateEnd,
+        noteSearch: noteSearch || null
       })
       
       console.log(`[DEBUG] loadScreenshotsWithPagination 返回:`, {
@@ -346,7 +348,7 @@ function App() {
       addLog(`截图加载失败: ${e}`)
       setError('加载截图失败: ' + String(e))
     }
-  }, [addLog, pageSize, dateFilterStart, dateFilterEnd])
+  }, [addLog, pageSize, dateFilterStart, dateFilterEnd, noteSearch])
 
   const loadStoragePath = useCallback(async () => {
     try {
@@ -685,6 +687,7 @@ function App() {
     setShowGameDetailMenu(false)
     setShowSortMenu(false)
     setGameSearchTerm('')
+    setNoteSearch(null)
     loadScreenshotsWithPagination(1, null)
   }, [loadScreenshotsWithPagination])
 
@@ -697,6 +700,7 @@ function App() {
     setShowSortMenu(false)
     setDateFilterStart(null)
     setDateFilterEnd(null)
+    setNoteSearch(null)
     loadGames()
   }, [loadGames])
 
@@ -709,6 +713,7 @@ function App() {
     setDateFilterStart(null)
     setDateFilterEnd(null)
     setGameSearchTerm('')
+    setNoteSearch(null)
     loadRecycleBin(1, recycleBinSortOrder)
   }, [loadRecycleBin, recycleBinSortOrder])
 
@@ -740,7 +745,7 @@ function App() {
     if (currentView === 'time') {
       loadScreenshotsWithPagination(1, null)
     }
-  }, [dateFilterStart, dateFilterEnd, currentView, loadScreenshotsWithPagination])
+  }, [dateFilterStart, dateFilterEnd, noteSearch, currentView, loadScreenshotsWithPagination])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1421,6 +1426,7 @@ function App() {
               totalPages={totalPages}
               dateFilterStart={dateFilterStart}
               dateFilterEnd={dateFilterEnd}
+              noteSearch={noteSearch}
               onSortChange={handleSortChange}
               onIconSizeChange={handleIconSizeChange}
               onToggleMultiSelect={handleToggleMultiSelectMode}
@@ -1440,6 +1446,9 @@ function App() {
               onDateFilterChange={(start, end) => {
                 setDateFilterStart(start)
                 setDateFilterEnd(end)
+              }}
+              onNoteSearchChange={(search) => {
+                setNoteSearch(search)
               }}
             />
           ) : currentView === 'games' ? (
@@ -1879,15 +1888,15 @@ function App() {
                               background: theme.accent, 
                               borderRadius: 8, 
                               cursor: 'pointer',
-                              transition: 'transform 0.15s, background 0.15s'
+                              transition: 'background 0.15s, box-shadow 0.15s, transform 0.1s'
                             }}
                             onMouseEnter={e => {
-                              e.currentTarget.style.transform = 'scale(1.02)'
                               e.currentTarget.style.background = theme.card
+                              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'
                             }}
                             onMouseLeave={e => {
-                              e.currentTarget.style.transform = 'scale(1)'
                               e.currentTarget.style.background = theme.accent
+                              e.currentTarget.style.boxShadow = 'none'
                             }}
                             onClick={async () => {
                               if (!selectedGame) return
@@ -2595,7 +2604,7 @@ function App() {
               <p style={{ margin: '0 0 20px 0', color: theme.textMuted, fontSize: 14, lineHeight: 1.5, textAlign: 'center' }}>
                 {multiDeleteCount > 0 
                   ? `确定要删除 ${multiDeleteCount} 张截图吗？此操作不可撤销。`
-                  : (t.detail?.confirm_delete_message || '确定要删除这张截图吗？此操作不可撤销。')
+                  : (t.detail?.confirm_delete_message || '删除后可以在回收站里恢复。')
                 }
               </p>
               <div style={{ display: 'flex', gap: 12 }}>

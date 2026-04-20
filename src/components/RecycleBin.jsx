@@ -191,22 +191,26 @@ export function RecycleBin({
                   ...(isMultiSelectMode ? styles.cardWithCheckbox : {}),
                   ...(isMultiSelectMode && selectedIds.includes(ss.id) ? styles.cardSelected : {})
                 }}
-                onClick={() => {
-                  if (isMultiSelectMode) {
-                    toggleSelect(ss.id)
-                  }
-                }}
+                onClick={() => onToggleSelect && onToggleSelect(ss.id, index)}
                 onMouseEnter={e => {
-                  if (!isMultiSelectMode) {
-                    e.currentTarget.style.transform = 'scale(1.03)'
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
-                  }
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'
+                  e.currentTarget.style.borderColor = theme.primary
+                  const img = e.currentTarget.querySelector('.card-img')
+                  if (img) img.style.transform = 'scale(1.05)'
                 }}
                 onMouseLeave={e => {
-                  if (!isMultiSelectMode) {
-                    e.currentTarget.style.transform = 'scale(1)'
-                    e.currentTarget.style.boxShadow = 'none'
-                  }
+                  e.currentTarget.style.boxShadow = 'none'
+                  e.currentTarget.style.borderColor = 'transparent'
+                  const img = e.currentTarget.querySelector('.card-img')
+                  if (img) img.style.transform = 'scale(1)'
+                }}
+                onMouseDown={e => {
+                  e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.08)'
+                  e.currentTarget.style.transform = 'translateY(1px)'
+                }}
+                onMouseUp={e => {
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'
+                  e.currentTarget.style.transform = 'translateY(0)'
                 }}
               >
                 {isMultiSelectMode && (
@@ -225,7 +229,8 @@ export function RecycleBin({
                 <div style={{ width: '100%', aspectRatio: '16 / 9', overflow: 'hidden', position: 'relative' }}>
                   <img 
                     src={getImageSrc(ss.thumbnail_path)} 
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    className="card-img"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s ease' }} 
                     loading="lazy"
                     alt=""
                   />

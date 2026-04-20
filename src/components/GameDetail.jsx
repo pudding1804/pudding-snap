@@ -363,18 +363,24 @@ export function GameDetail({
                 }}
                 onClick={() => onToggleSelect && onToggleSelect(ss.id, index)}
                 onMouseEnter={e => {
-                  e.currentTarget.style.transform = 'scale(1.03)'
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'
+                  e.currentTarget.style.borderColor = theme.primary
+                  const img = e.currentTarget.querySelector('.card-img')
+                  if (img) img.style.transform = 'scale(1.05)'
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.transform = 'scale(1)'
                   e.currentTarget.style.boxShadow = 'none'
+                  e.currentTarget.style.borderColor = 'transparent'
+                  const img = e.currentTarget.querySelector('.card-img')
+                  if (img) img.style.transform = 'scale(1)'
                 }}
                 onMouseDown={e => {
-                  e.currentTarget.style.transform = 'scale(0.98)'
+                  e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.08)'
+                  e.currentTarget.style.transform = 'translateY(1px)'
                 }}
                 onMouseUp={e => {
-                  e.currentTarget.style.transform = 'scale(1.03)'
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'
+                  e.currentTarget.style.transform = 'translateY(0)'
                 }}
               >
                 {isMultiSelectMode && (
@@ -399,11 +405,13 @@ export function GameDetail({
                   <img 
                     src={getImageSrc(ss.thumbnail_path)} 
                     alt="截图缩略图" 
+                    className="card-img"
                     style={{ 
                       width: '100%', 
                       height: '100%', 
                       objectFit: 'cover',
-                      objectPosition: 'center center'
+                      objectPosition: 'center center',
+                      transition: 'transform 0.3s ease'
                     }}
                     onError={(e) => { e.target.style.display = 'none'; }}
                     loading="lazy"

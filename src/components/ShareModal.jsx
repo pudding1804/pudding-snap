@@ -199,14 +199,14 @@ export function ShareModal({
       
       if (e.key === 'F5') {
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         setUseAdvancedMode(prev => !prev)
         return
       }
       
       if (e.key === 'Escape' || e.key === 'Backspace') {
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         onClose()
       }
     }
@@ -214,18 +214,18 @@ export function ShareModal({
     const handleWindowMouseDown = (e) => {
       if (e.button === 3 || e.button === 4) {
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         onClose()
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('mousedown', handleWindowMouseDown)
+    window.addEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('mousedown', handleWindowMouseDown, true)
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('mousedown', handleWindowMouseDown)
+      window.removeEventListener('keydown', handleKeyDown, true)
+      window.removeEventListener('mousedown', handleWindowMouseDown, true)
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }

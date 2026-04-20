@@ -39,7 +39,11 @@ export const translations = {
       search_game: '搜索游戏',
       no_search_results: '未找到匹配的游戏',
       try_other_keywords: '请尝试其他关键词',
-      search_result_for: '搜索结果'
+      search_result_for: '搜索结果',
+      search: '检索',
+      search_by_date: '按时间检索',
+      search_by_note: '按附注检索',
+      note_search_placeholder: '输入附注内容搜索...'
     },
     search: {
       title: '检索游戏信息',
@@ -192,7 +196,7 @@ export const translations = {
     },
     delete_game_confirm: {
       title: '删除游戏',
-      message: '确定要删除选中的游戏及其所有截图吗？此操作不可撤销。',
+      message: '确定要删除选中的游戏及其所有截图吗？',
       confirm: '确定删除',
       cancel: '取消'
     },
@@ -309,7 +313,11 @@ export const translations = {
       search_game: 'Search games',
       no_search_results: 'No matching games found',
       try_other_keywords: 'Try different keywords',
-      search_result_for: 'Search results for'
+      search_result_for: 'Search results for',
+      search: 'Search',
+      search_by_date: 'Search by Date',
+      search_by_note: 'Search by Note',
+      note_search_placeholder: 'Enter note content to search...'
     },
     search: {
       title: 'Search Game Info',
@@ -567,7 +575,11 @@ export const translations = {
       note_shortcut: 'Ctrl+Enterで保存',
       note_saved: 'メモを保存しました',
       icon_large: '大きなアイコン',
-      icon_small: '小さなアイコン'
+      icon_small: '小さなアイコン',
+      search: '検索',
+      search_by_date: '日付で検索',
+      search_by_note: 'メモで検索',
+      note_search_placeholder: 'メモ内容を入力して検索...'
     },
     search: {
       title: 'ゲーム情報検索',

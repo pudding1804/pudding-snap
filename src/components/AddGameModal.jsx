@@ -174,15 +174,15 @@ export function AddGameModal({
                         background: theme.accent, 
                         borderRadius: 8, 
                         cursor: 'pointer',
-                        transition: 'transform 0.15s, background 0.15s'
+                        transition: 'background 0.15s, box-shadow 0.15s, transform 0.1s'
                       }}
                       onMouseEnter={e => {
-                        e.currentTarget.style.transform = 'scale(1.02)'
                         e.currentTarget.style.background = theme.card
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'
                       }}
                       onMouseLeave={e => {
-                        e.currentTarget.style.transform = 'scale(1)'
                         e.currentTarget.style.background = theme.accent
+                        e.currentTarget.style.boxShadow = 'none'
                       }}
                       onClick={() => onAddGame && onAddGame(source === 'bangumi' ? 'create-bangumi' : 'create', result)}
                     >
