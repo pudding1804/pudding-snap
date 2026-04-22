@@ -840,11 +840,12 @@ function App() {
         await loadGames()
       }
       await loadScreenshotsWithPagination(1, currentGameId || null)
+      refreshRecycleBinCount()
     } catch (e) {
       addLog(`截图删除失败: ${e}`)
       setError('删除截图失败: ' + String(e))
     }
-  }, [addLog, closeModal, loadGames, loadScreenshotsWithPagination, t, showNotification])
+  }, [addLog, closeModal, loadGames, loadScreenshotsWithPagination, t, showNotification, refreshRecycleBinCount])
 
   const deleteScreenshot = useCallback((id) => {
     setScreenshotToDelete(id)
@@ -866,11 +867,12 @@ function App() {
       
       await loadGames()
       await loadScreenshotsWithPagination(1, currentGameId || null)
+      refreshRecycleBinCount()
     } catch (e) {
       addLog(`批量删除失败: ${e}`)
       setError('批量删除失败: ' + String(e))
     }
-  }, [selectedScreenshots, addLog, loadScreenshotsWithPagination, loadGames, showNotification])
+  }, [selectedScreenshots, addLog, loadScreenshotsWithPagination, loadGames, showNotification, refreshRecycleBinCount])
 
   const deleteSelectedScreenshots = useCallback(() => {
     if (selectedScreenshots.length === 0) return
@@ -1374,7 +1376,7 @@ function App() {
           onCloseConfirm={() => setShowCloseConfirm(true)}
         />
         
-        <main style={{ ...styles.main, flex: 1, overflow: 'auto' }} ref={gridRef}>
+        <main style={{ ...styles.main, flex: 1, overflow: 'auto', paddingBottom: 0 }} ref={gridRef}>
           {notification && (
             <div style={styles.notification}>
               {notification.title}{notification.body ? `: ${notification.body}` : ''}

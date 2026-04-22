@@ -2,15 +2,15 @@ export const themes = {
   night: {
     name: '夜晚',
     colors: {
-      bg: '#1a1a2e',
-      sidebar: '#16213e',
-      card: '#16213e',
-      accent: '#0f3460',
-      text: '#eee',
-      textMuted: '#888',
-      primary: '#4ade80',
-      danger: '#ef4444',
-      border: '#1a3a6a',
+      bg: '#1e1e1e',
+      sidebar: '#252526',
+      card: '#2d2d2d',
+      accent: '#3c3c3c',
+      text: '#e4e4e4',
+      textMuted: '#9d9d9d',
+      primary: '#58a6ff',
+      danger: '#f85149',
+      border: '#404040',
     }
   },
   day: {
@@ -44,15 +44,15 @@ export const themes = {
   blue: {
     name: '深蓝',
     colors: {
-      bg: '#0d1b2a',
-      sidebar: '#1b263b',
-      card: '#1b263b',
-      accent: '#415a77',
-      text: '#e0e1dd',
-      textMuted: '#778da9',
-      primary: '#4cc9f0',
-      danger: '#ef476f',
-      border: '#2a4060',
+      bg: '#0a192f',
+      sidebar: '#112240',
+      card: '#172a45',
+      accent: '#1d3557',
+      text: '#ccd6f6',
+      textMuted: '#8892b0',
+      primary: '#00bfa5',
+      danger: '#ff6b6b',
+      border: '#233554',
     }
   },
   green: {
@@ -67,6 +67,34 @@ export const themes = {
       primary: '#52b788',
       danger: '#e63946',
       border: '#2a5a42',
+    }
+  },
+  lavender: {
+    name: '薰衣草',
+    colors: {
+      bg: '#1a1625',
+      sidebar: '#2d2640',
+      card: '#362f4a',
+      accent: '#4a4268',
+      text: '#e8e0f0',
+      textMuted: '#a89ec4',
+      primary: '#b794f6',
+      danger: '#fc8181',
+      border: '#524576',
+    }
+  },
+  amber: {
+    name: '暖橙',
+    colors: {
+      bg: '#1f1a14',
+      sidebar: '#2d251c',
+      card: '#3a3025',
+      accent: '#4d4035',
+      text: '#f5e6d3',
+      textMuted: '#c4a882',
+      primary: '#f6ad55',
+      danger: '#fc8181',
+      border: '#5a4a3a',
     }
   }
 };

@@ -430,7 +430,6 @@ export function GameList({
       {totalPages > 1 && onLoadPage && (
         <Pagination
           theme={theme}
-          styles={styles}
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={onLoadPage}

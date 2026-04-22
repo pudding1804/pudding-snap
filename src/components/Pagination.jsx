@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { btnEvents } from '../styles/sharedStyles'
 
 export function Pagination({
   theme,
-  styles,
   currentPage = 1,
   totalPages = 1,
   onPageChange,
@@ -47,22 +45,11 @@ export function Pagination({
   }
 
   const jumpToPage = () => {
-    if (inputValue === '') {
-      return
-    }
-    
+    if (inputValue === '') return
     let page = parseInt(inputValue, 10)
-    
-    if (isNaN(page)) {
-      return
-    }
-    
-    if (page < 1) {
-      page = 1
-    } else if (page > totalPages) {
-      page = totalPages
-    }
-    
+    if (isNaN(page)) return
+    if (page < 1) page = 1
+    else if (page > totalPages) page = totalPages
     if (page !== currentPage && onPageChange) {
       onPageChange(page)
     }
@@ -71,40 +58,46 @@ export function Pagination({
   const isFirstPage = currentPage === 1
   const isLastPage = currentPage === totalPages
 
-  const disabledBtnStyle = {
-    ...styles.paginationBtn,
-    opacity: 0.4,
-    cursor: 'not-allowed',
-    pointerEvents: 'none'
-  }
+  const btnStyle = (disabled) => ({
+    padding: '4px 10px',
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 4,
+    color: disabled ? theme.textMuted : theme.text,
+    cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.4 : 1,
+    fontSize: 13,
+    transition: 'background 0.15s, opacity 0.15s',
+  })
 
   return (
-    <div style={{ 
-      ...styles.pagination, 
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 4,
       flexShrink: 0,
-      position: 'sticky',
-      bottom: 0,
-      background: theme.bg,
-      zIndex: 10,
-      marginTop: 0
+      padding: '10px 0',
     }}>
-      <button 
-        style={isFirstPage ? disabledBtnStyle : styles.paginationBtn}
-        {...(isFirstPage ? {} : btnEvents)}
-        onClick={() => onPageChange && onPageChange(1)}
+      <button
+        style={btnStyle(isFirstPage)}
+        onClick={() => !isFirstPage && onPageChange && onPageChange(1)}
         disabled={isFirstPage}
+        onMouseEnter={(e) => { if (!isFirstPage) e.currentTarget.style.background = theme.accent }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
       >
         首页
       </button>
-      <button 
-        style={isFirstPage ? disabledBtnStyle : styles.paginationBtn}
-        {...(isFirstPage ? {} : btnEvents)}
-        onClick={() => onPageChange && onPageChange(currentPage - 1)}
+      <button
+        style={btnStyle(isFirstPage)}
+        onClick={() => !isFirstPage && onPageChange && onPageChange(currentPage - 1)}
         disabled={isFirstPage}
+        onMouseEnter={(e) => { if (!isFirstPage) e.currentTarget.style.background = theme.accent }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
       >
         上一页
       </button>
-      
+
       {isEditing ? (
         <input
           ref={inputRef}
@@ -114,44 +107,52 @@ export function Pagination({
           onBlur={handleInputBlur}
           onKeyDown={handleInputKeyDown}
           style={{
-            width: 60,
-            padding: '4px 8px',
+            width: 50,
+            padding: '3px 6px',
             textAlign: 'center',
-            fontSize: 14,
+            fontSize: 13,
             border: `1px solid ${theme.primary}`,
             borderRadius: 4,
-            background: theme.inputBg,
-            color: '#333',
-            outline: 'none'
+            background: theme.accent,
+            color: theme.text,
+            outline: 'none',
           }}
         />
       ) : (
-        <span 
-          style={{ 
-            ...styles.paginationInfo,
+        <span
+          style={{
+            fontSize: 13,
+            color: theme.textMuted,
             cursor: 'pointer',
-            userSelect: 'none'
+            userSelect: 'none',
+            padding: '3px 8px',
+            borderRadius: 4,
+            transition: 'background 0.15s',
           }}
           onClick={handlePageClick}
+          onMouseEnter={(e) => { e.currentTarget.style.background = theme.accent }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
           title="点击跳转"
         >
-          {currentPage}/{totalPages}页
+          {currentPage} / {totalPages}
         </span>
       )}
-      
-      <button 
-        style={isLastPage ? disabledBtnStyle : styles.paginationBtn}
-        {...(isLastPage ? {} : btnEvents)}
-        onClick={() => onPageChange && onPageChange(currentPage + 1)}
+
+      <button
+        style={btnStyle(isLastPage)}
+        onClick={() => !isLastPage && onPageChange && onPageChange(currentPage + 1)}
         disabled={isLastPage}
+        onMouseEnter={(e) => { if (!isLastPage) e.currentTarget.style.background = theme.accent }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
       >
         下一页
       </button>
-      <button 
-        style={isLastPage ? disabledBtnStyle : styles.paginationBtn}
-        {...(isLastPage ? {} : btnEvents)}
-        onClick={() => onPageChange && onPageChange(totalPages)}
+      <button
+        style={btnStyle(isLastPage)}
+        onClick={() => !isLastPage && onPageChange && onPageChange(totalPages)}
         disabled={isLastPage}
+        onMouseEnter={(e) => { if (!isLastPage) e.currentTarget.style.background = theme.accent }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
       >
         末页
       </button>
