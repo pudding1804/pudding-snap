@@ -95,6 +95,8 @@ function App() {
   const [recycleBinPage, setRecycleBinPage] = useState(1)
   const [recycleBinTotalPages, setRecycleBinTotalPages] = useState(1)
   const [recycleBinSortOrder, setRecycleBinSortOrder] = useState('desc')
+  const [batchProcessing, setBatchProcessing] = useState(false)
+  const [batchProcessingText, setBatchProcessingText] = useState('')
   
   const showNotification = useCallback((title, body = '', duration = 3000) => {
     setNotification({ title, body })
@@ -141,7 +143,7 @@ function App() {
   const [isApplyingInfo, setIsApplyingInfo] = useState(false)
   const [showApplySuccess, setShowApplySuccess] = useState(false)
   const [appliedGameName, setAppliedGameName] = useState('')
-  const [screenshotNotification, setScreenshotNotification] = useState(false)
+  const [screenshotNotificationEnabled, setScreenshotNotificationEnabled] = useState(true)
   
   const [showAddGameModal, setShowAddGameModal] = useState(false)
   const [addGameStep, setAddGameStep] = useState('platform')
@@ -206,12 +208,7 @@ function App() {
     selectedScreenshotRef.current = selectedScreenshot
   }, [selectedScreenshot])
 
-  const showScreenshotNotification = useCallback(() => {
-    setScreenshotNotification(true)
-    setTimeout(() => {
-      setScreenshotNotification(false)
-    }, 2000)
-  }, [])
+
 
 
 
@@ -462,6 +459,8 @@ function App() {
 
   const handleRestoreScreenshots = useCallback(async (ids) => {
     try {
+      setBatchProcessing(true)
+      setBatchProcessingText(t.batch?.restoring || `正在恢复 ${ids.length} 张截图...`)
       await invoke('restore_screenshots', { ids })
       addLog(`已恢复 ${ids.length} 张截图`)
       showNotification('恢复成功', `已恢复 ${ids.length} 张截图`)
@@ -473,8 +472,10 @@ function App() {
       }
     } catch (e) {
       addLog(`批量恢复失败: ${e}`)
+    } finally {
+      setBatchProcessing(false)
     }
-  }, [addLog, showNotification, loadRecycleBin, recycleBinSortOrder, currentView, loadScreenshotsWithPagination, selectedGame])
+  }, [addLog, showNotification, loadRecycleBin, recycleBinSortOrder, currentView, loadScreenshotsWithPagination, selectedGame, t])
 
   const handlePermanentDelete = useCallback(async (id) => {
     try {
@@ -488,26 +489,34 @@ function App() {
 
   const handlePermanentDeleteScreenshots = useCallback(async (ids) => {
     try {
+      setBatchProcessing(true)
+      setBatchProcessingText(t.batch?.permanent_deleting || `正在永久删除 ${ids.length} 张截图...`)
       await invoke('permanent_delete_screenshots', { ids })
       addLog(`已永久删除 ${ids.length} 张截图`)
       loadRecycleBin(1, recycleBinSortOrder)
     } catch (e) {
       addLog(`批量永久删除失败: ${e}`)
+    } finally {
+      setBatchProcessing(false)
     }
-  }, [addLog, loadRecycleBin, recycleBinSortOrder])
+  }, [addLog, loadRecycleBin, recycleBinSortOrder, t])
 
   const handleEmptyRecycleBin = useCallback(async () => {
     try {
       const allIds = deletedScreenshots.map(ss => ss.id)
       if (allIds.length === 0) return
+      setBatchProcessing(true)
+      setBatchProcessingText(t.batch?.emptying_recycle_bin || `正在清空回收站 (${allIds.length} 张)...`)
       await invoke('permanent_delete_screenshots', { ids: allIds })
       addLog('回收站已清空')
       showNotification('回收站已清空', '')
       loadRecycleBin(1, recycleBinSortOrder)
     } catch (e) {
       addLog(`清空回收站失败: ${e}`)
+    } finally {
+      setBatchProcessing(false)
     }
-  }, [addLog, showNotification, loadRecycleBin, recycleBinSortOrder, deletedScreenshots])
+  }, [addLog, showNotification, loadRecycleBin, recycleBinSortOrder, deletedScreenshots, t])
 
   const loadShutterSound = useCallback(async () => {
     try {
@@ -525,6 +534,25 @@ function App() {
       addLog(`音效设置已保存: ${soundType}`)
     } catch (e) {
       addLog(`保存音效设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const loadScreenshotNotification = useCallback(async () => {
+    try {
+      const enabled = await invoke('get_screenshot_notification')
+      setScreenshotNotificationEnabled(enabled)
+    } catch (e) {
+      addLog(`加载截图通知设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const handleScreenshotNotificationChange = useCallback(async (enabled) => {
+    try {
+      await invoke('set_screenshot_notification', { enabled })
+      setScreenshotNotificationEnabled(enabled)
+      addLog(`截图通知已${enabled ? '启用' : '禁用'}`)
+    } catch (e) {
+      addLog(`保存截图通知设置失败: ${e}`)
     }
   }, [addLog])
 
@@ -858,6 +886,8 @@ function App() {
     const currentGameId = selectedGameRef.current?.game_id
     
     try {
+      setBatchProcessing(true)
+      setBatchProcessingText(t.batch?.deleting || `正在删除 ${deleteCount} 张截图...`)
       await invoke('delete_screenshots', { ids: selectedScreenshots })
       addLog(`批量删除成功: ${deleteCount} 张`)
       
@@ -871,8 +901,10 @@ function App() {
     } catch (e) {
       addLog(`批量删除失败: ${e}`)
       setError('批量删除失败: ' + String(e))
+    } finally {
+      setBatchProcessing(false)
     }
-  }, [selectedScreenshots, addLog, loadScreenshotsWithPagination, loadGames, showNotification, refreshRecycleBinCount])
+  }, [selectedScreenshots, addLog, loadScreenshotsWithPagination, loadGames, showNotification, refreshRecycleBinCount, t])
 
   const deleteSelectedScreenshots = useCallback(() => {
     if (selectedScreenshots.length === 0) return
@@ -1116,6 +1148,26 @@ function App() {
       setImportProgress(null)
       setImportResult(result)
       await loadScreenshotsWithPagination(1, currentGameId)
+
+      if (result.imported_count > 0) {
+        try {
+          const screenshots = await invoke('get_screenshots_with_pagination', {
+            gameId: currentGameId,
+            sortOrder: 'desc',
+            page: 1,
+            pageSize: result.imported_count,
+            dateStart: null,
+            dateEnd: null,
+            noteSearch: null,
+          })
+          const newIds = screenshots.screenshots.map(ss => ss.id)
+          if (newIds.length > 0) {
+            invoke('generate_thumbnails', { screenshotIds: newIds })
+          }
+        } catch (thumbErr) {
+          addLog(`启动缩略图生成失败: ${thumbErr}`)
+        }
+      }
     } catch (e) {
       addLog(`导入失败: ${e}`)
       showNotification(t.import.import_failed.replace('{error}', e))
@@ -1147,6 +1199,8 @@ function App() {
         } catch (e) {
           addLog(`加载备份设置失败: ${e}`)
         }
+        
+        await loadScreenshotNotification()
         
         await loadScreenshotsWithPagination(1, null)
         
@@ -1212,7 +1266,6 @@ function App() {
       console.log(`[DEBUG] gameId: ${gameId}`)
       console.log(`[DEBUG] selectedGameRef.current: ${selectedGameRef.current?.game_id || 'null'}`)
       addLog(`收到截图事件，游戏ID: ${gameId || '未知'}`)
-      showScreenshotNotification()
       
       if (refreshDebounceRef.current) {
         console.log(`[DEBUG] 清除之前的防抖定时器`)
@@ -1334,11 +1387,27 @@ function App() {
         setCurrentView('settings')
       })
       
+      let thumbnailDebounce = null
+      const unlistenThumbnailProgress = await listen('thumbnail-progress', (event) => {
+        const payload = event.payload || {}
+        if (payload.status === 'complete') {
+          if (thumbnailDebounce) clearTimeout(thumbnailDebounce)
+          thumbnailDebounce = setTimeout(() => {
+            if (selectedGameRef.current) {
+              loadScreenshotsWithPagination(currentPage, selectedGameRef.current.game_id)
+            } else {
+              loadScreenshotsWithPagination(currentPage, null)
+            }
+          }, 200)
+        }
+      })
+      
       return () => {
         unlistenClose()
         unlistenFocused()
         unlistenShown()
         unlistenNavigateSettings()
+        unlistenThumbnailProgress()
       }
     }
     
@@ -1374,6 +1443,14 @@ function App() {
           theme={theme} 
           t={t} 
           onCloseConfirm={() => setShowCloseConfirm(true)}
+          currentView={currentView}
+          onNavigate={(view) => {
+            if (view === 'time') switchToTimeView()
+            else if (view === 'games') switchToGames()
+            else if (view === 'recycle-bin') switchToRecycleBin()
+            else if (view === 'settings') setCurrentView('settings')
+          }}
+          recycleBinCount={recycleBinCount}
         />
         
         <main style={{ ...styles.main, flex: 1, overflow: 'auto', paddingBottom: 0 }} ref={gridRef}>
@@ -1424,7 +1501,6 @@ function App() {
                 setNoteSearch(search)
               }}
               currentView={currentView}
-              recycleBinCount={recycleBinCount}
               onNavigate={(view) => {
                 if (view === 'time') switchToTimeView()
                 else if (view === 'games') switchToGames()
@@ -1497,7 +1573,6 @@ function App() {
               }}
               onLoadPage={(page) => loadGamesWithPage(page)}
               currentView={currentView}
-              recycleBinCount={recycleBinCount}
               onNavigate={(view) => {
                 if (view === 'time') switchToTimeView()
                 else if (view === 'games') switchToGames()
@@ -1539,7 +1614,7 @@ function App() {
               onOpenSearch={() => {
                 setShowSearchModal(true)
                 setSearchModalStep('source')
-                setSteamSearchTerm('')
+                setSteamSearchTerm(selectedGame?.display_title || selectedGame?.game_title || '')
                 setSteamSearchResults([])
               }}
               onOpenImport={() => {
@@ -1572,13 +1647,8 @@ function App() {
               onPermanentDelete={handlePermanentDelete}
               onPermanentDeleteSelected={handlePermanentDeleteScreenshots}
               onEmptyAll={handleEmptyRecycleBin}
-              currentView={currentView}
-              recycleBinCount={recycleBinCount}
               onNavigate={(view) => {
                 if (view === 'time') switchToTimeView()
-                else if (view === 'games') switchToGames()
-                else if (view === 'recycle-bin') switchToRecycleBin()
-                else setCurrentView(view)
               }}
             />
           ) : (
@@ -1615,13 +1685,10 @@ function App() {
               backupEnabled={backupEnabled}
               onBackupEnabledChange={handleBackupEnabledChange}
               onManualBackup={handleManualBackup}
-              currentView={currentView}
-              recycleBinCount={recycleBinCount}
+              screenshotNotificationEnabled={screenshotNotificationEnabled}
+              onScreenshotNotificationChange={handleScreenshotNotificationChange}
               onNavigate={(view) => {
                 if (view === 'time') switchToTimeView()
-                else if (view === 'games') switchToGames()
-                else if (view === 'recycle-bin') switchToRecycleBin()
-                else setCurrentView(view)
               }}
             />
           )}
@@ -2186,18 +2253,18 @@ function App() {
                 </p>
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
                   <button 
-                    style={{ ...styles.btnDanger, padding: '12px 24px' }}
-                    {...btnEvents}
-                    onClick={() => deleteGameCallback && deleteGameCallback(true)}
-                  >
-                    {deleteConfirmMode === 'delete_game' ? t.delete_game_confirm.confirm : t.delete_last_screenshot.delete_game}
-                  </button>
-                  <button 
                     style={{ ...styles.btnPrimary, padding: '12px 24px' }}
                     {...btnEvents}
                     onClick={() => deleteGameCallback && deleteGameCallback(false)}
                   >
                     {deleteConfirmMode === 'delete_game' ? t.delete_game_confirm.cancel : t.delete_last_screenshot.keep_game}
+                  </button>
+                  <button 
+                    style={{ ...styles.btnDanger, padding: '12px 24px' }}
+                    {...btnEvents}
+                    onClick={() => deleteGameCallback && deleteGameCallback(true)}
+                  >
+                    {deleteConfirmMode === 'delete_game' ? t.delete_game_confirm.confirm : t.delete_last_screenshot.delete_game}
                   </button>
                 </div>
               </div>
@@ -2233,42 +2300,6 @@ function App() {
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-
-        {screenshotNotification && (
-          <div style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            background: 'rgba(30, 30, 40, 0.95)',
-            borderRadius: 8,
-            padding: '16px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            zIndex: 10001,
-            animation: 'slideInRight 0.3s ease-out',
-            minWidth: 220
-          }}>
-            <div style={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #4CAF50, #45a049)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </div>
-            <div>
-              <div style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>截图成功</div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>已保存到本地</div>
             </div>
           </div>
         )}
@@ -2496,6 +2527,44 @@ function App() {
           </div>
         )}
 
+        {batchProcessing && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10001
+          }}>
+            <div style={{
+              background: theme.card,
+              padding: '32px 48px',
+              borderRadius: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 16,
+              boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+            }}>
+              <div style={{
+                width: 36,
+                height: 36,
+                border: `3px solid ${theme.border}`,
+                borderTopColor: theme.primary,
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite'
+              }} />
+              <span style={{ color: theme.text, fontSize: 14, fontWeight: 500 }}>
+                {batchProcessingText}
+              </span>
+            </div>
+          </div>
+        )}
+
         {showCloseConfirm && (
           <div style={{
             position: 'fixed',
@@ -2628,7 +2697,7 @@ function App() {
               </h4>
               <p style={{ margin: '0 0 20px 0', color: theme.textMuted, fontSize: 14, lineHeight: 1.5, textAlign: 'center' }}>
                 {multiDeleteCount > 0 
-                  ? `确定要删除 ${multiDeleteCount} 张截图吗？此操作不可撤销。`
+                  ? `确定要删除 ${multiDeleteCount} 张截图吗？`
                   : (t.detail?.confirm_delete_message || '删除后可以在回收站里恢复。')
                 }
               </p>

@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 import { Pagination } from './Pagination'
-import { NavDropdown } from './NavDropdown'
+import { ThumbnailImage } from './ThumbnailImage'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -34,8 +34,6 @@ export function RecycleBin({
   onPermanentDelete,
   onPermanentDeleteSelected,
   onEmptyAll,
-  currentView,
-  recycleBinCount,
   onNavigate,
 }) {
   const scrollContainerRef = useRef(null)
@@ -101,13 +99,16 @@ export function RecycleBin({
         background: theme.bg,
         zIndex: 10
       }}>
-        <NavDropdown
-          theme={theme}
-          currentView={currentView}
-          t={t}
-          recycleBinCount={recycleBinCount}
-          onNavigate={onNavigate}
-        />
+        <button 
+          style={{ ...styles.btn, padding: '8px 12px' }} 
+          {...btnEvents}
+          onClick={() => onNavigate && onNavigate('time')}
+          title={t.nav.time}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {isMultiSelectMode ? (
             <>
@@ -230,18 +231,9 @@ export function RecycleBin({
                   </div>
                 )}
                 <div style={{ width: '100%', aspectRatio: '16 / 9', overflow: 'hidden', position: 'relative' }}>
-                  <img 
-                    src={getImageSrc(ss.thumbnail_path)} 
-                    className="card-img"
-                    style={{ 
-                      width: '100%', 
-                      height: '100%', 
-                      objectFit: 'cover', 
-                      transition: 'transform 0.3s ease',
-                      transform: isHovered ? 'scale(1.05)' : 'scale(1)'
-                    }} 
-                    loading="lazy"
-                    alt=""
+                  <ThumbnailImage 
+                    thumbnailPath={ss.thumbnail_path}
+                    theme={theme}
                   />
                   {!isMultiSelectMode && (
                     <div style={{

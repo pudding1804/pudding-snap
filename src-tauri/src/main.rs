@@ -170,6 +170,18 @@ fn set_backup_enabled(enabled: bool, state: State<AppState>) -> Result<(), Strin
 }
 
 #[tauri::command]
+fn get_screenshot_notification(state: State<AppState>) -> Result<bool, String> {
+    let conn = state.db.lock().unwrap();
+    Ok(db::get_screenshot_notification(&conn))
+}
+
+#[tauri::command]
+fn set_screenshot_notification(enabled: bool, state: State<AppState>) -> Result<(), String> {
+    let conn = state.db.lock().unwrap();
+    db::set_screenshot_notification(&conn, enabled).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn migrate_data(app: AppHandle, new_path: String, state: State<'_, AppState>) -> Result<MigrationResult, String> {
     let old_data_dir = db::get_data_dir();
     let new_data_dir = std::path::PathBuf::from(&new_path);
@@ -1102,10 +1114,8 @@ struct ImportProgress {
     status: String,
 }
 
-fn parse_filename_timestamp(filename: &str) -> Option<i64> {
-    use chrono::{NaiveDateTime, NaiveDate, NaiveTime, TimeZone, Local};
-    
-    let patterns = [
+static TIMESTAMP_PATTERNS: once_cell::sync::Lazy<Vec<regex::Regex>> = once_cell::sync::Lazy::new(|| {
+    let pattern_strs = [
         r"^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})",
         r"^(\d{4})-(\d{2})-(\d{2})[ _](\d{2})-(\d{2})-(\d{2})",
         r"^(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})",
@@ -1113,42 +1123,37 @@ fn parse_filename_timestamp(filename: &str) -> Option<i64> {
         r"^Screenshot[_\s](\d{4})-(\d{2})-(\d{2})[ _](\d{2})-(\d{2})-(\d{2})",
         r"^Screenshot[_\s](\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})",
     ];
+    pattern_strs.iter().filter_map(|p| regex::Regex::new(p).ok()).collect()
+});
+
+fn parse_filename_timestamp(filename: &str) -> Option<i64> {
+    use chrono::{NaiveDate, NaiveTime, TimeZone, Local};
     
-    for pattern in &patterns {
-        if let Some(timestamp) = try_parse_with_pattern(filename, pattern) {
-            return Some(timestamp);
+    for re in TIMESTAMP_PATTERNS.iter() {
+        if let Some(caps) = re.captures(filename) {
+            let year: i32 = caps.get(1)?.as_str().parse().ok()?;
+            let month: u32 = caps.get(2)?.as_str().parse().ok()?;
+            let day: u32 = caps.get(3)?.as_str().parse().ok()?;
+            let hour: u32 = caps.get(4)?.as_str().parse().ok()?;
+            let minute: u32 = caps.get(5)?.as_str().parse().ok()?;
+            let second: u32 = caps.get(6)?.as_str().parse().ok()?;
+            
+            if month < 1 || month > 12 || day < 1 || day > 31 
+               || hour > 23 || minute > 59 || second > 59 {
+                continue;
+            }
+            
+            let naive_dt = chrono::NaiveDateTime::new(
+                NaiveDate::from_ymd_opt(year, month, day)?,
+                NaiveTime::from_hms_opt(hour, minute, second)?
+            );
+            
+            let local_dt = Local.from_local_datetime(&naive_dt).single()?;
+            return Some(local_dt.timestamp());
         }
     }
     
     None
-}
-
-fn try_parse_with_pattern(filename: &str, pattern: &str) -> Option<i64> {
-    use chrono::{NaiveDateTime, NaiveDate, NaiveTime, TimeZone, Local};
-    
-    let re = regex::Regex::new(pattern).ok()?;
-    let caps = re.captures(filename)?;
-    
-    let year: i32 = caps.get(1)?.as_str().parse().ok()?;
-    let month: u32 = caps.get(2)?.as_str().parse().ok()?;
-    let day: u32 = caps.get(3)?.as_str().parse().ok()?;
-    let hour: u32 = caps.get(4)?.as_str().parse().ok()?;
-    let minute: u32 = caps.get(5)?.as_str().parse().ok()?;
-    let second: u32 = caps.get(6)?.as_str().parse().ok()?;
-    
-    if month < 1 || month > 12 || day < 1 || day > 31 
-       || hour > 23 || minute > 59 || second > 59 {
-        return None;
-    }
-    
-    let naive_dt = NaiveDateTime::new(
-        NaiveDate::from_ymd_opt(year, month, day)?,
-        NaiveTime::from_hms_opt(hour, minute, second)?
-    );
-    
-    let local_dt = Local.from_local_datetime(&naive_dt).single()?;
-    
-    Some(local_dt.timestamp())
 }
 
 fn calculate_file_hash(path: &std::path::PathBuf) -> Result<String, String> {
@@ -1222,6 +1227,8 @@ async fn import_screenshots(
         let mut skipped_count = 0u32;
         let mut failed_count = 0u32;
         
+        let mut pending_db_inserts: Vec<(String, String, i64)> = Vec::new();
+
         for file in &files_clone {
             current += 1;
             
@@ -1240,10 +1247,8 @@ async fn import_screenshots(
                 continue;
             }
             
-            let step1 = std::time::Instant::now();
             let timestamp = parse_filename_timestamp(&file.name)
                 .unwrap_or(file.modified);
-            println!("[导入] 解析时间戳耗时: {}ms", step1.elapsed().as_millis());
             
             let original_ext = src_path
                 .extension()
@@ -1266,30 +1271,14 @@ async fn import_screenshots(
             let dest_path = game_dir.join(&filename);
             let thumbnail_path = thumbnails_dir.join(&thumbnail_filename);
             
-            let step2 = std::time::Instant::now();
-            match process_and_save_image(&src_path, &dest_path, &thumbnail_path) {
-                Ok(process_time) => {
-                    println!("[导入] 处理图片耗时: {}ms (复制:{}ms, 打开:{}ms, 缩略图:{}ms, 保存:{}ms)", 
-                        step2.elapsed().as_millis(),
-                        process_time.copy_ms,
-                        process_time.open_ms,
-                        process_time.thumb_ms,
-                        process_time.save_ms
-                    );
-                    
-                    let step3 = std::time::Instant::now();
+            match process_and_save_image_fast(&src_path, &dest_path) {
+                Ok(_) => {
                     if let (Some(file_path_str), Some(thumb_path_str)) = 
                         (dest_path.to_str(), thumbnail_path.to_str()) {
-                        let conn = db.lock().unwrap();
-                        if db::insert_screenshot(&conn, file_path_str, thumb_path_str, &game_id_clone, &display_title_clone, timestamp, None).is_ok() {
-                            imported_count += 1;
-                        } else {
-                            failed_count += 1;
-                        }
+                        pending_db_inserts.push((file_path_str.to_string(), thumb_path_str.to_string(), timestamp));
                     } else {
                         failed_count += 1;
                     }
-                    println!("[导入] 数据库插入耗时: {}ms", step3.elapsed().as_millis());
                 }
                 Err(e) => {
                     println!("[导入] 处理图片失败: {} - {}", file.name, e);
@@ -1297,6 +1286,19 @@ async fn import_screenshots(
                 }
             }
             println!("[导入] 文件 {} 总耗时: {}ms", file.name, file_start.elapsed().as_millis());
+        }
+
+        if !pending_db_inserts.is_empty() {
+            let conn = db.lock().unwrap();
+            conn.execute_batch("BEGIN TRANSACTION").map_err(|e| format!("开启事务失败: {}", e)).ok();
+            for (file_path_str, thumb_path_str, ts) in &pending_db_inserts {
+                if db::insert_screenshot(&conn, file_path_str, thumb_path_str, &game_id_clone, &display_title_clone, *ts, None).is_ok() {
+                    imported_count += 1;
+                } else {
+                    failed_count += 1;
+                }
+            }
+            conn.execute_batch("COMMIT").map_err(|e| format!("提交事务失败: {}", e)).ok();
         }
         
         let duration_ms = start_time.elapsed().as_millis() as u64;
@@ -1324,34 +1326,117 @@ async fn import_screenshots(
     rx.await.map_err(|_| "导入过程中发生错误".to_string())
 }
 
-struct ProcessTime {
-    copy_ms: u128,
-    open_ms: u128,
-    thumb_ms: u128,
-    save_ms: u128,
+#[tauri::command]
+fn generate_thumbnails(screenshot_ids: Vec<i32>, app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    if screenshot_ids.is_empty() {
+        return Ok(());
+    }
+
+    let db = state.db.clone();
+    let total = screenshot_ids.len() as u32;
+    let app_handle = app.clone();
+
+    std::thread::spawn(move || {
+        let mut current = 0u32;
+        let mut generated = 0u32;
+
+        for id in &screenshot_ids {
+            current += 1;
+            let file_path: Option<String>;
+            let thumbnail_path: Option<String>;
+            {
+                let conn = db.lock().unwrap();
+                file_path = conn.query_row(
+                    "SELECT file_path FROM screenshots WHERE id = ?1",
+                    params![id],
+                    |row| row.get(0),
+                ).ok();
+                thumbnail_path = conn.query_row(
+                    "SELECT thumbnail_path FROM screenshots WHERE id = ?1",
+                    params![id],
+                    |row| row.get(0),
+                ).ok();
+            }
+
+            if let (Some(fp), Some(tp)) = (&file_path, &thumbnail_path) {
+                let thumb_pb = std::path::PathBuf::from(tp);
+                if thumb_pb.exists() {
+                    let _ = app_handle.emit("thumbnail-progress", serde_json::json!({
+                        "current": current,
+                        "total": total,
+                        "screenshot_id": id,
+                        "status": "skipped"
+                    }));
+                    continue;
+                }
+
+                let src_pb = std::path::PathBuf::from(fp);
+                if !src_pb.exists() {
+                    let _ = app_handle.emit("thumbnail-progress", serde_json::json!({
+                        "current": current,
+                        "total": total,
+                        "screenshot_id": id,
+                        "status": "failed"
+                    }));
+                    continue;
+                }
+
+                if let Some(parent) = thumb_pb.parent() {
+                    if !parent.exists() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                }
+
+                match image::open(&src_pb) {
+                    Ok(img) => {
+                        let thumbnail = create_thumbnail(&img, 320);
+                        if save_as_jpg(&thumbnail, &thumb_pb, 75).is_ok() {
+                            generated += 1;
+                            let _ = app_handle.emit("thumbnail-progress", serde_json::json!({
+                                "current": current,
+                                "total": total,
+                                "screenshot_id": id,
+                                "status": "done"
+                            }));
+                        } else {
+                            let _ = app_handle.emit("thumbnail-progress", serde_json::json!({
+                                "current": current,
+                                "total": total,
+                                "screenshot_id": id,
+                                "status": "failed"
+                            }));
+                        }
+                    }
+                    Err(e) => {
+                        println!("[缩略图] 打开图片失败: {} - {}", fp, e);
+                        let _ = app_handle.emit("thumbnail-progress", serde_json::json!({
+                            "current": current,
+                            "total": total,
+                            "screenshot_id": id,
+                            "status": "failed"
+                        }));
+                    }
+                }
+            }
+        }
+
+        println!("[缩略图] 后台生成完成: {}/{} 成功", generated, total);
+        let _ = app_handle.emit("thumbnail-progress", serde_json::json!({
+            "current": total,
+            "total": total,
+            "screenshot_id": null,
+            "status": "complete"
+        }));
+    });
+
+    Ok(())
 }
 
-fn process_and_save_image(src: &std::path::PathBuf, dest: &std::path::PathBuf, thumbnail_path: &std::path::PathBuf) -> Result<ProcessTime, String> {
+fn process_and_save_image_fast(src: &std::path::PathBuf, dest: &std::path::PathBuf) -> Result<u128, String> {
     let t1 = std::time::Instant::now();
     std::fs::copy(src, dest)
         .map_err(|e| format!("复制图片失败: {}", e))?;
-    let copy_ms = t1.elapsed().as_millis();
-    
-    let t2 = std::time::Instant::now();
-    let img = image::open(src)
-        .map_err(|e| format!("无法打开图片生成缩略图: {}", e))?;
-    let open_ms = t2.elapsed().as_millis();
-    
-    let t3 = std::time::Instant::now();
-    let thumbnail = create_thumbnail(&img, 320);
-    let thumb_ms = t3.elapsed().as_millis();
-    
-    let t4 = std::time::Instant::now();
-    save_as_jpg(&thumbnail, thumbnail_path, 75)
-        .map_err(|e| format!("保存缩略图失败: {}", e))?;
-    let save_ms = t4.elapsed().as_millis();
-    
-    Ok(ProcessTime { copy_ms, open_ms, thumb_ms, save_ms })
+    Ok(t1.elapsed().as_millis())
 }
 
 #[tauri::command]
@@ -1858,7 +1943,23 @@ fn main() {
                                                                          }
                                                                      }
                                                                     
-                                                                    // 立即发送事件通知前端刷新
+                                                                    // 发送系统原生通知（不受窗口可见性限制）
+                                                                    {
+                                                                        let notify_enabled = {
+                                                                            let conn = db_clone.lock().unwrap();
+                                                                            db::get_screenshot_notification(&conn)
+                                                                        };
+                                                                        if notify_enabled {
+                                                                            use tauri_plugin_notification::NotificationExt;
+                                                                            let _ = app_h.notification().builder()
+                                                                                .title("截图成功")
+                                                                                .body("截图已保存到本地")
+                                                                                .show();
+                                                                            println!("[通知] 系统通知已发送");
+                                                                        }
+                                                                    }
+
+                                                                    // 窗口可见时发送前端刷新事件
                                                                     let is_window_shown = {
                                                                         let shown = window_shown_h.lock().unwrap();
                                                                         *shown
@@ -1873,7 +1974,7 @@ fn main() {
                                                                             Err(e) => println!("[事件] 事件发送失败: {}", e),
                                                                         }
                                                                     } else {
-                                                                        println!("[事件] 窗口未显示，跳过事件发送");
+                                                                        println!("[事件] 窗口未显示，跳过前端事件发送");
                                                                     }
                                                                     
                                                                     if !has_icon {
@@ -2086,7 +2187,10 @@ fn main() {
             permanent_delete_screenshot,
             permanent_delete_screenshots,
             cleanup_expired_deleted,
-            get_deleted_screenshots_count
+            get_deleted_screenshots_count,
+            get_screenshot_notification,
+            set_screenshot_notification,
+            generate_thumbnails
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

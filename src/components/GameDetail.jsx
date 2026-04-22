@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 import { Pagination } from './Pagination'
+import { ThumbnailImage } from './ThumbnailImage'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -402,19 +403,9 @@ export function GameDetail({
                   justifyContent: 'center',
                   overflow: 'hidden'
                 }}>
-                  <img 
-                    src={getImageSrc(ss.thumbnail_path)} 
-                    alt="截图缩略图" 
-                    className="card-img"
-                    style={{ 
-                      width: '100%', 
-                      height: '100%', 
-                      objectFit: 'cover',
-                      objectPosition: 'center center',
-                      transition: 'transform 0.3s ease'
-                    }}
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                    loading="lazy"
+                  <ThumbnailImage 
+                    thumbnailPath={ss.thumbnail_path}
+                    theme={theme}
                   />
                 </div>
                 <div style={styles.cardInfo}>

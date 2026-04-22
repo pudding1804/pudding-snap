@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::fs;
 use std::io;
 use std::sync::{Arc, Mutex};
+use std::collections::HashSet;
 
 static CUSTOM_DATA_DIR: once_cell::sync::Lazy<Arc<Mutex<Option<PathBuf>>>> = 
     once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(None)));
@@ -1036,9 +1037,70 @@ pub fn soft_delete_screenshot(conn: &Connection, id: i32) -> std::result::Result
 }
 
 pub fn soft_delete_screenshots(conn: &Connection, ids: &[i32]) -> std::result::Result<(), String> {
-    for id in ids {
-        soft_delete_screenshot(conn, *id)?;
+    if ids.is_empty() {
+        return Ok(());
     }
+
+    let placeholders: String = (0..ids.len()).map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT s.id, s.file_path, s.thumbnail_path, s.game_id, 
+                COALESCE(gc.display_title, gc.steam_name, s.game_id) as game_title,
+                COALESCE(gc.display_title, s.game_id) as display_title,
+                s.timestamp, s.note, s.game_banner_url, s.file_hash 
+         FROM screenshots s LEFT JOIN game_cache gc ON s.game_id = gc.game_id WHERE s.id IN ({})",
+        placeholders
+    );
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+    let mut stmt = conn.prepare(&sql).map_err(|e| format!("批量查询截图失败: {}", e))?;
+    let records: Vec<(i32, String, String, String, String, String, i64, String, String, Option<String>)> = stmt
+        .query_map(params_refs.as_slice(), |row| {
+            Ok((
+                row.get::<_, i32>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?.unwrap_or_default(),
+                row.get::<_, i64>(6)?,
+                row.get::<_, Option<String>>(7)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(8)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(9)?,
+            ))
+        })
+        .map_err(|e| format!("批量查询截图失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("解析截图数据失败: {}", e))?;
+
+    let file_ops: Vec<(String, String)> = records.iter().map(|r| (r.1.clone(), r.2.clone())).collect();
+
+    let mut new_paths: Vec<(String, String)> = Vec::with_capacity(records.len());
+    for (file_path, thumbnail_path) in &file_ops {
+        let new_file_path = move_file_to_trash(file_path)?;
+        let new_thumbnail_path = move_thumbnail_to_trash(thumbnail_path)?;
+        new_paths.push((new_file_path, new_thumbnail_path));
+    }
+
+    conn.execute_batch("BEGIN TRANSACTION").map_err(|e| format!("开启事务失败: {}", e))?;
+
+    let now = chrono::Utc::now().timestamp();
+    for (i, record) in records.iter().enumerate() {
+        let (id, _, _, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash) = record;
+        let (new_file_path, new_thumbnail_path) = &new_paths[i];
+        let original_file_path = &file_ops[i].0;
+        let original_thumbnail_path = &file_ops[i].1;
+
+        conn.execute(
+            "INSERT INTO deleted_screenshots (original_id, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            params![id, new_file_path, new_thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, now],
+        ).map_err(|e| format!("插入回收站记录失败: {}", e))?;
+
+        conn.execute("DELETE FROM screenshots WHERE id = ?1", params![id])
+            .map_err(|e| format!("删除原记录失败: {}", e))?;
+    }
+
+    conn.execute_batch("COMMIT").map_err(|e| format!("提交事务失败: {}", e))?;
+
     Ok(())
 }
 
@@ -1113,7 +1175,7 @@ pub fn restore_screenshot(conn: &Connection, id: i32) -> std::result::Result<(),
         }
     ).map_err(|e| format!("查询回收站记录失败: {}", e))?;
 
-    let (_, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash) = record;
+    let (_, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, _game_title, _display_title, timestamp, note, game_banner_url, file_hash) = record;
 
     let mut restored_file_path = original_file_path.clone();
     let original_dir = PathBuf::from(&original_file_path).parent().unwrap_or(&PathBuf::from(".")).to_path_buf();
@@ -1130,7 +1192,7 @@ pub fn restore_screenshot(conn: &Connection, id: i32) -> std::result::Result<(),
         let mut new_path = game_dir.join(&original_file_path);
         loop {
             let new_name = format!("{}_{}{}", stem, counter, ext);
-            new_path = game_dir.join(&new_name);
+            new_path = game_dir.join(new_name);
             if !new_path.exists() { break; }
             counter += 1;
         }
@@ -1181,9 +1243,125 @@ pub fn restore_screenshot(conn: &Connection, id: i32) -> std::result::Result<(),
 }
 
 pub fn restore_screenshots(conn: &Connection, ids: &[i32]) -> std::result::Result<(), String> {
-    for id in ids {
-        restore_screenshot(conn, *id)?;
+    if ids.is_empty() {
+        return Ok(());
     }
+
+    let placeholders: String = (0..ids.len()).map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT id, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash FROM deleted_screenshots WHERE id IN ({})",
+        placeholders
+    );
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+    let mut stmt = conn.prepare(&sql).map_err(|e| format!("批量查询回收站记录失败: {}", e))?;
+    let records: Vec<(i32, String, String, String, String, String, String, String, i64, String, String, Option<String>)> = stmt
+        .query_map(params_refs.as_slice(), |row| {
+            Ok((
+                row.get::<_, i32>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
+                row.get::<_, Option<String>>(7)?.unwrap_or_default(),
+                row.get::<_, i64>(8)?,
+                row.get::<_, Option<String>>(9)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(10)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(11)?,
+            ))
+        })
+        .map_err(|e| format!("批量查询回收站记录失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("解析回收站数据失败: {}", e))?;
+
+    let mut restored_file_paths: Vec<String> = Vec::with_capacity(records.len());
+    let mut restored_thumbnail_paths: Vec<String> = Vec::with_capacity(records.len());
+
+    for record in &records {
+        let (_, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, _, _, _, _, _, _) = record;
+
+        let mut restored_file_path = original_file_path.clone();
+        let original_dir = PathBuf::from(original_file_path).parent().unwrap_or(&PathBuf::from(".")).to_path_buf();
+        if !original_dir.exists() {
+            let _ = std::fs::create_dir_all(&original_dir);
+        }
+        if PathBuf::from(original_file_path).exists() {
+            let stem = PathBuf::from(original_file_path).file_stem().unwrap_or_default().to_string_lossy().to_string();
+            let ext = PathBuf::from(original_file_path).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+            let data_dir = get_data_dir();
+            let game_dir = data_dir.join(game_id);
+            let _ = std::fs::create_dir_all(&game_dir);
+            let mut counter = 1;
+            let mut new_path = game_dir.join(original_file_path);
+            loop {
+                let new_name = format!("{}_{}{}", stem, counter, ext);
+                new_path = game_dir.join(&new_name);
+                if !new_path.exists() { break; }
+                counter += 1;
+            }
+            restored_file_path = new_path.to_string_lossy().to_string();
+        } else {
+            if let Err(_e) = std::fs::rename(file_path, original_file_path) {
+                std::fs::copy(file_path, original_file_path).map_err(|e2| format!("复制文件失败: {}", e2))?;
+                let _ = std::fs::remove_file(file_path);
+            }
+        }
+
+        let mut restored_thumbnail_path = original_thumbnail_path.clone();
+        if !PathBuf::from(original_thumbnail_path).exists() {
+            if PathBuf::from(thumbnail_path).exists() {
+                let thumb_dir = PathBuf::from(original_thumbnail_path).parent().unwrap_or(&PathBuf::from(".")).to_path_buf();
+                if !thumb_dir.exists() {
+                    let _ = std::fs::create_dir_all(&thumb_dir);
+                }
+                if let Err(_e) = std::fs::rename(thumbnail_path, original_thumbnail_path) {
+                    restored_thumbnail_path = thumbnail_path.clone();
+                }
+            }
+        }
+
+        restored_file_paths.push(restored_file_path);
+        restored_thumbnail_paths.push(restored_thumbnail_path);
+    }
+
+    conn.execute_batch("BEGIN TRANSACTION").map_err(|e| format!("开启事务失败: {}", e))?;
+
+    let mut affected_game_ids: HashSet<String> = HashSet::new();
+    for (i, record) in records.iter().enumerate() {
+        let (id, _, _, _, _, game_id, _, _, timestamp, note, game_banner_url, file_hash) = record;
+        affected_game_ids.insert(game_id.clone());
+
+        conn.execute(
+            "INSERT INTO screenshots (file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash) VALUES (?1, ?2, ?3, ?3, ?3, ?4, ?5, ?6, ?7)",
+            params![restored_file_paths[i], restored_thumbnail_paths[i], game_id, timestamp, note, game_banner_url, file_hash],
+        ).map_err(|e| format!("恢复记录失败: {}", e))?;
+
+        conn.execute("DELETE FROM deleted_screenshots WHERE id = ?1", params![id])
+            .map_err(|e| format!("删除回收站记录失败: {}", e))?;
+    }
+
+    for game_id in &affected_game_ids {
+        let game_exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM game_cache WHERE game_id = ?1)",
+            params![game_id],
+            |row| row.get(0),
+        ).unwrap_or(false);
+
+        if !game_exists {
+            conn.execute(
+                "INSERT OR IGNORE INTO game_cache (game_id, exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status) SELECT game_id, exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status FROM deleted_games WHERE game_id = ?1",
+                params![game_id],
+            ).map_err(|e| format!("恢复游戏记录失败: {}", e))?;
+
+            conn.execute("DELETE FROM deleted_games WHERE game_id = ?1", params![game_id])
+                .map_err(|e| format!("删除回收站游戏记录失败: {}", e))?;
+        }
+    }
+
+    conn.execute_batch("COMMIT").map_err(|e| format!("提交事务失败: {}", e))?;
+
     Ok(())
 }
 
@@ -1222,9 +1400,63 @@ pub fn permanent_delete_screenshot(conn: &Connection, id: i32) -> std::result::R
 }
 
 pub fn permanent_delete_screenshots(conn: &Connection, ids: &[i32]) -> std::result::Result<(), String> {
-    for id in ids {
-        permanent_delete_screenshot(conn, *id)?;
+    if ids.is_empty() {
+        return Ok(());
     }
+
+    let placeholders: String = (0..ids.len()).map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT id, file_path, thumbnail_path, game_id FROM deleted_screenshots WHERE id IN ({})",
+        placeholders
+    );
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+    let mut stmt = conn.prepare(&sql).map_err(|e| format!("批量查询回收站记录失败: {}", e))?;
+    let records: Vec<(i32, String, String, String)> = stmt
+        .query_map(params_refs.as_slice(), |row| {
+            Ok((row.get::<_, i32>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?))
+        })
+        .map_err(|e| format!("批量查询回收站记录失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("解析回收站数据失败: {}", e))?;
+
+    for record in &records {
+        let (_, file_path, thumbnail_path, _) = record;
+        let _ = std::fs::remove_file(file_path);
+        let _ = std::fs::remove_file(thumbnail_path);
+    }
+
+    conn.execute_batch("BEGIN TRANSACTION").map_err(|e| format!("开启事务失败: {}", e))?;
+
+    let mut affected_game_ids: HashSet<String> = HashSet::new();
+    for record in &records {
+        let (id, _, _, game_id) = record;
+        affected_game_ids.insert(game_id.clone());
+        conn.execute("DELETE FROM deleted_screenshots WHERE id = ?1", params![id])
+            .map_err(|e| format!("删除回收站记录失败: {}", e))?;
+    }
+
+    for game_id in &affected_game_ids {
+        let remaining: i32 = conn.query_row(
+            "SELECT COUNT(*) FROM deleted_screenshots WHERE game_id = ?1",
+            params![game_id],
+            |row| row.get(0),
+        ).unwrap_or(0);
+
+        let in_screenshots: i32 = conn.query_row(
+            "SELECT COUNT(*) FROM screenshots WHERE game_id = ?1",
+            params![game_id],
+            |row| row.get(0),
+        ).unwrap_or(0);
+
+        if remaining == 0 && in_screenshots == 0 {
+            conn.execute("DELETE FROM deleted_games WHERE game_id = ?1", params![game_id])
+                .map_err(|e| format!("清理回收站游戏记录失败: {}", e))?;
+        }
+    }
+
+    conn.execute_batch("COMMIT").map_err(|e| format!("提交事务失败: {}", e))?;
+
     Ok(())
 }
 
@@ -1533,6 +1765,16 @@ pub fn set_shutter_sound(conn: &Connection, sound_type: &str) -> Result<()> {
     set_setting(conn, "shutter_sound", sound_type)
 }
 
+pub fn get_screenshot_notification(conn: &Connection) -> bool {
+    get_setting(conn, "screenshot_notification")
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(true)
+}
+
+pub fn set_screenshot_notification(conn: &Connection, enabled: bool) -> Result<()> {
+    set_setting(conn, "screenshot_notification", &enabled.to_string())
+}
+
 pub fn get_game_cache(conn: &Connection, game_id: &str) -> Option<GameCache> {
     conn.query_row(
         "SELECT exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status FROM game_cache WHERE game_id = ?1",
@@ -1664,11 +1906,32 @@ pub fn delete_games(conn: &Connection, game_ids: &[String]) -> std::result::Resu
     if game_ids.is_empty() {
         return Ok(());
     }
-    
+
+    let mut all_screenshot_ids: Vec<i32> = Vec::new();
     for game_id in game_ids {
-        delete_game(conn, game_id)?;
+        let mut stmt = conn.prepare("SELECT id FROM screenshots WHERE game_id = ?1").map_err(|e| format!("查询失败: {}", e))?;
+        let rows: Vec<i32> = stmt.query_map(params![game_id], |row| row.get(0)).map_err(|e| format!("查询失败: {}", e))?
+            .collect::<Result<Vec<_>, _>>().map_err(|e| format!("解析失败: {}", e))?;
+        all_screenshot_ids.extend(rows);
     }
-    
+
+    if !all_screenshot_ids.is_empty() {
+        soft_delete_screenshots(conn, &all_screenshot_ids)?;
+    }
+
+    conn.execute_batch("BEGIN TRANSACTION").map_err(|e| format!("开启事务失败: {}", e))?;
+    let now = chrono::Utc::now().timestamp();
+    for game_id in game_ids {
+        conn.execute(
+            "INSERT OR IGNORE INTO deleted_games (game_id, exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status, deleted_at) SELECT game_id, exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status, ?2 FROM game_cache WHERE game_id = ?1",
+            params![game_id, now],
+        ).map_err(|e| format!("移动游戏缓存到回收站失败: {}", e))?;
+
+        conn.execute("DELETE FROM game_cache WHERE game_id = ?1", params![game_id])
+            .map_err(|e| format!("删除游戏缓存失败: {}", e))?;
+    }
+    conn.execute_batch("COMMIT").map_err(|e| format!("提交事务失败: {}", e))?;
+
     println!("[数据库] 批量软删除 {} 个游戏", game_ids.len());
     Ok(())
 }

@@ -3,6 +3,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 import { Pagination } from './Pagination'
 import { NavDropdown } from './NavDropdown'
+import { ThumbnailImage } from './ThumbnailImage'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -42,7 +43,6 @@ export function ScreenshotGrid({
   onDateFilterChange,
   onNoteSearchChange,
   currentView,
-  recycleBinCount,
   onNavigate,
 }) {
   const scrollContainerRef = useRef(null)
@@ -108,7 +108,6 @@ export function ScreenshotGrid({
           theme={theme}
           currentView={currentView}
           t={t}
-          recycleBinCount={recycleBinCount}
           onNavigate={onNavigate}
         />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -302,19 +301,9 @@ export function ScreenshotGrid({
                   justifyContent: 'center',
                   overflow: 'hidden'
                 }}>
-                  <img 
-                    src={getImageSrc(ss.thumbnail_path)} 
-                    alt="截图缩略图" 
-                    className="card-img"
-                    style={{ 
-                      width: '100%', 
-                      height: '100%', 
-                      objectFit: 'cover',
-                      objectPosition: 'center center',
-                      transition: 'transform 0.3s ease'
-                    }}
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                    loading="lazy"
+                  <ThumbnailImage 
+                    thumbnailPath={ss.thumbnail_path}
+                    theme={theme}
                   />
                 </div>
                 <div style={styles.cardInfo}>

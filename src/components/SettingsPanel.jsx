@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
-import { NavDropdown } from './NavDropdown'
 
 const ESTIMATED_SIZES = {
   jpg: { low: { '1080p': '~200KB', '4k': '~800KB' }, medium: { '1080p': '~500KB', '4k': '~2MB' }, high: { '1080p': '~1MB', '4k': '~4MB' } },
@@ -42,21 +41,24 @@ export function SettingsPanel({
   backupEnabled,
   onBackupEnabledChange,
   onManualBackup,
-  currentView,
-  recycleBinCount,
+  screenshotNotificationEnabled,
+  onScreenshotNotificationChange,
   onNavigate,
 }) {
   const [backupStatus, setBackupStatus] = useState('')
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <NavDropdown
-          theme={theme}
-          currentView={currentView}
-          t={t}
-          recycleBinCount={recycleBinCount}
-          onNavigate={onNavigate}
-        />
+        <button 
+          style={{ ...styles.btn, padding: '8px 12px' }} 
+          {...btnEvents}
+          onClick={() => onNavigate && onNavigate('time')}
+          title={t.nav.time}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
       </div>
       <div style={{ marginTop: 24 }}>
         <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
@@ -265,6 +267,24 @@ export function SettingsPanel({
                 </button>
               ))}
             </div>
+          </div>
+          
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <input
+                type="checkbox"
+                id="screenshot_notification"
+                checked={screenshotNotificationEnabled}
+                onChange={(e) => onScreenshotNotificationChange(e.target.checked)}
+                style={{ width: 18, height: 18, cursor: 'pointer' }}
+              />
+              <label htmlFor="screenshot_notification" style={{ cursor: 'pointer', color: theme.text, fontSize: 14 }}>
+                {t.settings.screenshot_notification}
+              </label>
+            </div>
+            <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
+              {t.settings.screenshot_notification_hint}
+            </p>
           </div>
           
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>

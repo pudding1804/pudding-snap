@@ -6,6 +6,12 @@ export const translations = {
       recycle_bin: '回收站',
       settings: '设置'
     },
+    batch: {
+      deleting: '正在删除截图...',
+      restoring: '正在恢复截图...',
+      permanent_deleting: '正在永久删除截图...',
+      emptying_recycle_bin: '正在清空回收站...'
+    },
     header: {
       sort_newest: '从新到旧',
       sort_oldest: '从旧到新',
@@ -84,6 +90,8 @@ export const translations = {
       screenshot: '截图选项',
       shutter_sound: '截图音效',
       shutter_sound_hint: '选择截图时播放的音效',
+      screenshot_notification: '截图完成通知',
+      screenshot_notification_hint: '截图完成后在屏幕右下角显示系统通知',
       sound_none: '无声',
       sound_default: '默认',
       sound_camera1: '相机1',
@@ -280,6 +288,12 @@ export const translations = {
       recycle_bin: 'Recycle Bin',
       settings: 'Settings'
     },
+    batch: {
+      deleting: 'Deleting screenshots...',
+      restoring: 'Restoring screenshots...',
+      permanent_deleting: 'Permanently deleting screenshots...',
+      emptying_recycle_bin: 'Emptying recycle bin...'
+    },
     header: {
       sort_newest: 'Newest First',
       sort_oldest: 'Oldest First',
@@ -358,6 +372,8 @@ export const translations = {
       screenshot: 'Screenshot Options',
       shutter_sound: 'Shutter Sound',
       shutter_sound_hint: 'Choose the sound to play when taking a screenshot',
+      screenshot_notification: 'Screenshot Notification',
+      screenshot_notification_hint: 'Show a system notification in the bottom-right corner when a screenshot is taken',
       sound_none: 'None',
       sound_default: 'Default',
       sound_camera1: 'Camera 1',
@@ -554,6 +570,12 @@ export const translations = {
       recycle_bin: 'ゴミ箱',
       settings: '設定'
     },
+    batch: {
+      deleting: 'スクリーンショットを削除中...',
+      restoring: 'スクリーンショットを復元中...',
+      permanent_deleting: 'スクリーンショットを完全に削除中...',
+      emptying_recycle_bin: 'ゴミ箱を空にしています...'
+    },
     header: {
       sort_newest: '新しい順',
       sort_oldest: '古い順',
@@ -620,6 +642,8 @@ export const translations = {
       screenshot: 'スクリーンショットオプション',
       shutter_sound: 'シャッター音',
       shutter_sound_hint: 'スクリーンショット撮影時に再生する音を選択',
+      screenshot_notification: 'スクリーンショット通知',
+      screenshot_notification_hint: 'スクリーンショット撮影後に画面右下にシステム通知を表示',
       sound_none: 'なし',
       sound_default: 'デフォルト',
       sound_camera1: 'カメラ1',

@@ -41,7 +41,6 @@ export function GameList({
   onToggleMenu,
   onLoadPage,
   currentView,
-  recycleBinCount,
   onNavigate,
 }) {
   const scrollContainerRef = useRef(null)
@@ -81,7 +80,6 @@ export function GameList({
           theme={theme}
           currentView={currentView}
           t={t}
-          recycleBinCount={recycleBinCount}
           onNavigate={onNavigate}
         />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
