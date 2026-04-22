@@ -20,17 +20,19 @@ ScreenshotProject/
 ├── src/                          # 前端源码
 │   ├── components/               # React 组件
 │   │   ├── index.js             # 组件导出
-│   │   ├── Sidebar.jsx          # 侧边栏
+│   │   ├── NavDropdown.jsx      # 悬浮下拉菜单导航
+│   │   ├── Pagination.jsx       # 分页组件
 │   │   ├── ScreenshotGrid.jsx   # 截图网格
 │   │   ├── ScreenshotModal.jsx  # 截图详情弹窗
 │   │   ├── GameList.jsx         # 游戏列表
 │   │   ├── GameDetail.jsx       # 游戏详情
 │   │   ├── SettingsPanel.jsx    # 设置面板
+│   │   ├── RecycleBin.jsx       # 回收站
 │   │   ├── AddGameModal.jsx     # 添加游戏弹窗
 │   │   ├── ImportModal.jsx      # 导入截图弹窗
 │   │   ├── ShareModal.jsx       # 分享弹窗
 │   │   ├── TitleBar.jsx         # 自定义标题栏
-│   │   └── ErrorBoundary.jsx     # 错误边界
+│   │   └── ErrorBoundary.jsx    # 错误边界
 │   ├── hooks/                    # 自定义 Hooks
 │   │   ├── useAppState.js       # 全局状态管理
 │   │   └── useWindowSize.js     # 窗口大小记忆
