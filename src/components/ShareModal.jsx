@@ -45,6 +45,7 @@ export function ShareModal({
   const [originalImageHeight, setOriginalImageHeight] = useState(0)
   const [layoutMode, setLayoutMode] = useState('landscape16x9')
   const [useAdvancedMode, setUseAdvancedMode] = useState(false)
+  const [copySuccess, setCopySuccess] = useState(false)
   const cardRef = useRef(null)
   const imageRef = useRef(null)
   const isDraggingRef = useRef(false)
@@ -113,9 +114,6 @@ export function ShareModal({
           setCardWidth(Math.round(calculatedWidth))
           setOriginalCardWidth(Math.round(calculatedWidth))
         }
-        
-        const scale = Math.min(1, PREVIEW_MAX_HEIGHT / calculatedHeight)
-        setPreviewScale(scale)
       }
       img.src = getImageSrc(screenshot.file_path)
     }
@@ -142,9 +140,6 @@ export function ShareModal({
         setCardWidth(newCardWidth)
       }
     }
-    
-    const scale = Math.min(1, PREVIEW_MAX_HEIGHT / newCardHeight)
-    setPreviewScale(scale)
   }, [styleType, originalImageHeight, layoutMode, useAdvancedMode])
 
   useEffect(() => {
@@ -307,6 +302,8 @@ export function ShareModal({
         await navigator.clipboard.write([
           new ClipboardItem({ 'image/png': blob })
         ])
+        setCopySuccess(true)
+        setTimeout(() => setCopySuccess(false), 2000)
       }
     } catch (err) {
       console.error('复制失败:', err)
@@ -316,28 +313,39 @@ export function ShareModal({
 
   if (!screenshot) return null
 
-  const displayWidth = useAdvancedMode ? cardWidth * widthRatio : cardWidth
-  const displayHeight = cardHeight * heightRatio
-  const scaledWidth = displayWidth * previewScale
-  const scaledHeight = displayHeight * previewScale
+  const maxModalWidth = window.innerWidth * 0.98
+  const maxModalHeight = window.innerHeight * 0.85
+  
   const previewPadding = 20
   const outerPadding = 16
   const headerHeight = 48
-  const rightPanelWidth = 180
-  const gap = 20
+  const rightPanelWidth = 200
+  const gap = 16
   
-  const originalScaledWidth = cardWidth * previewScale
-  const originalScaledHeight = cardHeight * previewScale
-  const modalWidth = originalScaledWidth + previewPadding * 2 + outerPadding * 2 + rightPanelWidth + gap + 20
-  const modalHeight = originalScaledHeight + previewPadding * 2 + outerPadding * 2 + headerHeight + 20
+  const availablePreviewWidth = maxModalWidth - outerPadding * 2 - rightPanelWidth - gap - previewPadding * 2
+  const availablePreviewHeight = maxModalHeight - outerPadding * 2 - headerHeight - previewPadding * 2
+  
+  const displayWidth = useAdvancedMode ? cardWidth * widthRatio : cardWidth
+  const displayHeight = cardHeight * heightRatio
+  
+  const scaleX = availablePreviewWidth / displayWidth
+  const scaleY = availablePreviewHeight / displayHeight
+  const autoPreviewScale = Math.min(1, scaleX, scaleY)
+  const finalPreviewScale = Math.min(autoPreviewScale, previewScale)
+  
+  const scaledWidth = displayWidth * finalPreviewScale
+  const scaledHeight = displayHeight * finalPreviewScale
+  
+  const modalWidth = Math.min(maxModalWidth, scaledWidth + previewPadding * 2 + outerPadding * 2 + rightPanelWidth + gap)
+  const modalHeight = Math.min(maxModalHeight, scaledHeight + previewPadding * 2 + outerPadding * 2 + headerHeight)
 
   return (
     <div style={styles.modal} onClick={handleModalClick}>
       <div 
         style={{ 
           ...styles.modalContent, 
-          width: Math.min(95 * window.innerWidth / 100, modalWidth),
-          height: Math.min(90 * window.innerHeight / 100, modalHeight),
+          width: modalWidth,
+          height: modalHeight,
           display: 'flex',
           flexDirection: 'column'
         }} 
@@ -368,8 +376,8 @@ export function ShareModal({
             background: theme.accent,
             borderRadius: 8,
             padding: previewPadding,
-            width: originalScaledWidth + previewPadding * 2,
-            height: originalScaledHeight + previewPadding * 2,
+            width: scaledWidth + previewPadding * 2,
+            height: scaledHeight + previewPadding * 2,
             flexShrink: 0
           }}
             ref={previewRef}
@@ -388,7 +396,7 @@ export function ShareModal({
                 position: 'absolute',
                 top: '50%',
                 left: '50%',
-                transform: `translate(-50%, -50%) scale(${previewScale})`
+                transform: `translate(-50%, -50%) scale(${finalPreviewScale})`
               }}>
                 <ShareCard
                   styleType={styleType}
@@ -416,8 +424,9 @@ export function ShareModal({
             width: rightPanelWidth, 
             display: 'flex', 
             flexDirection: 'column', 
-            gap: 12,
-            flexShrink: 0
+            gap: 10,
+            flexShrink: 0,
+            overflowY: 'auto'
           }}>
             <div>
               <label style={{ 
@@ -713,18 +722,21 @@ export function ShareModal({
             <button
               style={{
                 width: '100%',
-                padding: '10px 16px',
-                fontSize: 13,
+                padding: '8px 12px',
+                fontSize: 12,
                 borderRadius: 6,
                 border: 'none',
                 background: theme.primary,
                 color: '#fff',
                 cursor: 'pointer',
                 fontWeight: 500,
-                opacity: isExporting ? 0.6 : 1
+                opacity: isExporting ? 0.6 : 1,
+                transition: 'opacity 0.15s'
               }}
               onClick={handleExport}
               disabled={isExporting}
+              onMouseEnter={e => !isExporting && (e.currentTarget.style.opacity = '0.85')}
+              onMouseLeave={e => !isExporting && (e.currentTarget.style.opacity = '1')}
             >
               {isExporting ? (t.share?.exporting || '导出中...') : (t.share?.export || '导出图片')}
             </button>
@@ -732,23 +744,45 @@ export function ShareModal({
             <button
               style={{
                 width: '100%',
-                padding: '10px 16px',
-                fontSize: 13,
+                padding: '8px 12px',
+                fontSize: 12,
                 borderRadius: 6,
                 border: `1px solid ${theme.border}`,
                 background: theme.accent,
                 color: theme.text,
                 cursor: 'pointer',
                 fontWeight: 500,
-                opacity: isExporting ? 0.6 : 1
+                opacity: isExporting ? 0.6 : 1,
+                transition: 'opacity 0.15s, background 0.15s'
               }}
               onClick={handleCopyToClipboard}
               disabled={isExporting}
+              onMouseEnter={e => !isExporting && (e.currentTarget.style.opacity = '0.85')}
+              onMouseLeave={e => !isExporting && (e.currentTarget.style.opacity = '1')}
             >
               {t.share?.copy || '复制到剪贴板'}
             </button>
           </div>
         </div>
+
+        {copySuccess && (
+          <div style={{
+            position: 'absolute',
+            top: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: theme.primary,
+            color: '#fff',
+            padding: '10px 20px',
+            borderRadius: 8,
+            fontWeight: 'bold',
+            fontSize: 13,
+            zIndex: 100,
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            {t.share?.copy_success || '已复制到剪贴板'}
+          </div>
+        )}
 
         {showUsernameInput && (
           <div style={{

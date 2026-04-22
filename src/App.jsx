@@ -9,7 +9,6 @@ import { getTranslation } from './i18n/translations'
 import { createStyles, btnEvents, modalKeyframes } from './styles/sharedStyles'
 import { useWindowSize } from './hooks/useWindowSize'
 import { 
-  Sidebar, 
   ScreenshotGrid, 
   ScreenshotModal,
   GameList, 
@@ -167,11 +166,6 @@ function App() {
   const [showGameListMenu, setShowGameListMenu] = useState(false)
   const [showGameDetailMenu, setShowGameDetailMenu] = useState(false)
   const [showSortMenu, setShowSortMenu] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    const saved = localStorage.getItem('sidebarCollapsed')
-    return saved === 'true'
-  })
-  
   const [importConfirmPath, setImportConfirmPath] = useState(null)
   
   const [showShareModal, setShowShareModal] = useState(false)
@@ -219,11 +213,7 @@ function App() {
     }, 2000)
   }, [])
 
-  const toggleSidebar = useCallback(() => {
-    const newState = !sidebarCollapsed
-    setSidebarCollapsed(newState)
-    localStorage.setItem('sidebarCollapsed', String(newState))
-  }, [sidebarCollapsed])
+
 
   const handleIconSizeChange = useCallback((size) => {
     setIconSize(size)
@@ -1384,26 +1374,7 @@ function App() {
           onCloseConfirm={() => setShowCloseConfirm(true)}
         />
         
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <Sidebar
-            theme={theme}
-            styles={styles}
-            currentView={currentView}
-            sidebarCollapsed={sidebarCollapsed}
-            logs={logs}
-            showDebug={showDebug}
-            t={t}
-            onNavigate={(view) => {
-              if (view === 'time') switchToTimeView()
-              else if (view === 'games') switchToGames()
-              else if (view === 'recycle-bin') switchToRecycleBin()
-              else setCurrentView(view)
-            }}
-            recycleBinCount={recycleBinCount}
-            onToggleSidebar={toggleSidebar}
-          />
-
-          <main style={styles.main} ref={gridRef}>
+        <main style={{ ...styles.main, flex: 1, overflow: 'auto' }} ref={gridRef}>
           {notification && (
             <div style={styles.notification}>
               {notification.title}{notification.body ? `: ${notification.body}` : ''}
@@ -1449,6 +1420,14 @@ function App() {
               }}
               onNoteSearchChange={(search) => {
                 setNoteSearch(search)
+              }}
+              currentView={currentView}
+              recycleBinCount={recycleBinCount}
+              onNavigate={(view) => {
+                if (view === 'time') switchToTimeView()
+                else if (view === 'games') switchToGames()
+                else if (view === 'recycle-bin') switchToRecycleBin()
+                else setCurrentView(view)
               }}
             />
           ) : currentView === 'games' ? (
@@ -1515,6 +1494,14 @@ function App() {
                 setShowGameListMenu(show)
               }}
               onLoadPage={(page) => loadGamesWithPage(page)}
+              currentView={currentView}
+              recycleBinCount={recycleBinCount}
+              onNavigate={(view) => {
+                if (view === 'time') switchToTimeView()
+                else if (view === 'games') switchToGames()
+                else if (view === 'recycle-bin') switchToRecycleBin()
+                else setCurrentView(view)
+              }}
             />
           ) : currentView === 'game-detail' ? (
             <GameDetail
@@ -1583,6 +1570,14 @@ function App() {
               onPermanentDelete={handlePermanentDelete}
               onPermanentDeleteSelected={handlePermanentDeleteScreenshots}
               onEmptyAll={handleEmptyRecycleBin}
+              currentView={currentView}
+              recycleBinCount={recycleBinCount}
+              onNavigate={(view) => {
+                if (view === 'time') switchToTimeView()
+                else if (view === 'games') switchToGames()
+                else if (view === 'recycle-bin') switchToRecycleBin()
+                else setCurrentView(view)
+              }}
             />
           ) : (
             <SettingsPanel
@@ -1618,10 +1613,38 @@ function App() {
               backupEnabled={backupEnabled}
               onBackupEnabledChange={handleBackupEnabledChange}
               onManualBackup={handleManualBackup}
+              currentView={currentView}
+              recycleBinCount={recycleBinCount}
+              onNavigate={(view) => {
+                if (view === 'time') switchToTimeView()
+                else if (view === 'games') switchToGames()
+                else if (view === 'recycle-bin') switchToRecycleBin()
+                else setCurrentView(view)
+              }}
             />
           )}
         </main>
-        </div>
+
+        {showDebug && (
+          <div style={{
+            position: 'fixed',
+            bottom: 16,
+            right: 16,
+            background: theme.accent,
+            borderRadius: 8,
+            padding: 8,
+            fontSize: 10,
+            maxHeight: 120,
+            maxWidth: 300,
+            overflow: 'auto',
+            zIndex: 500,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          }}>
+            {logs.slice(-5).map((log, i) => (
+              <div key={i} style={{ color: theme.primary, marginBottom: 2 }}>{log}</div>
+            ))}
+          </div>
+        )}
 
         <ScreenshotModal
           theme={theme}

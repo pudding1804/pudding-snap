@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
+import { NavDropdown } from './NavDropdown'
 
 const ESTIMATED_SIZES = {
   jpg: { low: { '1080p': '~200KB', '4k': '~800KB' }, medium: { '1080p': '~500KB', '4k': '~2MB' }, high: { '1080p': '~1MB', '4k': '~4MB' } },
@@ -41,11 +42,22 @@ export function SettingsPanel({
   backupEnabled,
   onBackupEnabledChange,
   onManualBackup,
+  currentView,
+  recycleBinCount,
+  onNavigate,
 }) {
   const [backupStatus, setBackupStatus] = useState('')
   return (
     <div>
-      <h1 style={styles.title}>{t.settings.title}</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <NavDropdown
+          theme={theme}
+          currentView={currentView}
+          t={t}
+          recycleBinCount={recycleBinCount}
+          onNavigate={onNavigate}
+        />
+      </div>
       <div style={{ marginTop: 24 }}>
         <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
           <h3 style={{ marginBottom: 12 }}>{t.settings.language}</h3>

@@ -1,4 +1,4 @@
-export { Sidebar } from './Sidebar'
+export { NavDropdown } from './NavDropdown'
 export { ScreenshotGrid } from './ScreenshotGrid'
 export { GameList } from './GameList'
 export { GameDetail } from './GameDetail'

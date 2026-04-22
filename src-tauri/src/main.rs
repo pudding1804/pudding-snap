@@ -1829,7 +1829,7 @@ fn main() {
                                                                     
                                                                     let has_steam_info = db::get_game_cache(&conn, &game_id)
                                                                         .and_then(|c| c.steam_match_status)
-                                                                        .map(|s| s == "found" || s == "skipped" || s == "NotFound")
+                                                                        .map(|s| s == "found" || s == "skipped" || s == "NotFound" || s == "manual")
                                                                         .unwrap_or(false);
                                                                     println!("[Steam] 检查Steam信息: game_id={}, has_steam_info={}", game_id, has_steam_info);
                                                                     

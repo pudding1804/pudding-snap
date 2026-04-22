@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 import { Pagination } from './Pagination'
+import { NavDropdown } from './NavDropdown'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -33,11 +34,15 @@ export function RecycleBin({
   onPermanentDelete,
   onPermanentDeleteSelected,
   onEmptyAll,
+  currentView,
+  recycleBinCount,
+  onNavigate,
 }) {
   const scrollContainerRef = useRef(null)
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState([])
   const [confirmAction, setConfirmAction] = useState(null)
+  const [hoveredId, setHoveredId] = useState(null)
 
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -96,7 +101,13 @@ export function RecycleBin({
         background: theme.bg,
         zIndex: 10
       }}>
-        <h1 style={styles.title}>{t.recycle_bin.title}</h1>
+        <NavDropdown
+          theme={theme}
+          currentView={currentView}
+          t={t}
+          recycleBinCount={recycleBinCount}
+          onNavigate={onNavigate}
+        />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {isMultiSelectMode ? (
             <>
@@ -183,43 +194,35 @@ export function RecycleBin({
           </div>
         ) : (
           <div style={styles.grid}>
-            {screenshots.map((ss, index) => (
+            {screenshots.map((ss, index) => {
+              const isHovered = hoveredId === ss.id
+              const isSelected = selectedIds.includes(ss.id)
+              return (
               <div 
                 key={ss.id} 
                 style={{ 
                   ...styles.card,
                   ...(isMultiSelectMode ? styles.cardWithCheckbox : {}),
-                  ...(isMultiSelectMode && selectedIds.includes(ss.id) ? styles.cardSelected : {})
+                  ...(isMultiSelectMode && isSelected ? styles.cardSelected : {}),
+                  boxShadow: isHovered ? '0 4px 16px rgba(0,0,0,0.12)' : 'none',
+                  borderColor: isHovered ? theme.primary : 'transparent',
+                  transition: 'box-shadow 0.2s, border-color 0.2s, transform 0.1s'
                 }}
-                onClick={() => onToggleSelect && onToggleSelect(ss.id, index)}
-                onMouseEnter={e => {
-                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'
-                  e.currentTarget.style.borderColor = theme.primary
-                  const img = e.currentTarget.querySelector('.card-img')
-                  if (img) img.style.transform = 'scale(1.05)'
+                onClick={() => {
+                  if (isMultiSelectMode) {
+                    toggleSelect(ss.id)
+                  }
                 }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.boxShadow = 'none'
-                  e.currentTarget.style.borderColor = 'transparent'
-                  const img = e.currentTarget.querySelector('.card-img')
-                  if (img) img.style.transform = 'scale(1)'
-                }}
-                onMouseDown={e => {
-                  e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.08)'
-                  e.currentTarget.style.transform = 'translateY(1px)'
-                }}
-                onMouseUp={e => {
-                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'
-                  e.currentTarget.style.transform = 'translateY(0)'
-                }}
+                onMouseEnter={() => setHoveredId(ss.id)}
+                onMouseLeave={() => setHoveredId(null)}
               >
                 {isMultiSelectMode && (
                   <div style={{
                     ...styles.selectCheckbox,
-                    background: selectedIds.includes(ss.id) ? theme.primary : 'transparent',
-                    border: selectedIds.includes(ss.id) ? 'none' : `2px solid ${theme.textMuted}`
+                    background: isSelected ? theme.primary : 'transparent',
+                    border: isSelected ? 'none' : `2px solid ${theme.textMuted}`
                   }}>
-                    {selectedIds.includes(ss.id) && (
+                    {isSelected && (
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3">
                         <polyline points="20 6 9 17 4 12"/>
                       </svg>
@@ -230,7 +233,13 @@ export function RecycleBin({
                   <img 
                     src={getImageSrc(ss.thumbnail_path)} 
                     className="card-img"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s ease' }} 
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover', 
+                      transition: 'transform 0.3s ease',
+                      transform: isHovered ? 'scale(1.05)' : 'scale(1)'
+                    }} 
                     loading="lazy"
                     alt=""
                   />
@@ -244,12 +253,9 @@ export function RecycleBin({
                       gap: 4,
                       padding: 6,
                       background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
-                      opacity: 0,
+                      opacity: isHovered ? 1 : 0,
                       transition: 'opacity 0.2s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.opacity = 1 }}
-                    onMouseLeave={e => { e.currentTarget.style.opacity = 0 }}
-                    >
+                    }}>
                       <button
                         style={{
                           flex: 1,
@@ -290,7 +296,8 @@ export function RecycleBin({
                   </div>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

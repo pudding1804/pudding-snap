@@ -4,10 +4,6 @@ export const createStyles = (theme, iconSize = 'large') => {
   
   return {
     container: { display: 'flex', height: '100vh', background: theme.bg, color: theme.text, fontFamily: 'system-ui, sans-serif' },
-    sidebar: { width: 200, background: theme.sidebar, padding: 16, display: 'flex', flexDirection: 'column' },
-    sidebarTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 24, color: theme.primary },
-    navItem: { padding: '12px 16px', cursor: 'pointer', borderRadius: 8, marginBottom: 4, transition: 'background 0.2s' },
-    navItemActive: { background: theme.accent },
     main: { flex: 1, padding: 24, overflow: 'auto' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
     title: { fontSize: 24, fontWeight: 'bold' },
@@ -37,8 +33,6 @@ export const createStyles = (theme, iconSize = 'large') => {
     modalFooter: { padding: 16, borderTop: `1px solid ${theme.border}` },
     input: { width: '100%', padding: 8, background: theme.accent, border: `1px solid ${theme.border}`, borderRadius: 4, color: theme.text, boxSizing: 'border-box' },
     notification: { position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', background: theme.primary, color: '#fff', padding: '12px 24px', borderRadius: 8, zIndex: 2000, fontWeight: 'bold' },
-    debugPanel: { marginTop: 'auto', padding: 8, background: theme.accent, borderRadius: 4, fontSize: 10, maxHeight: 100, overflow: 'auto' },
-    debugLine: { color: theme.primary, marginBottom: 2 },
     empty: { textAlign: 'center', padding: 48, color: theme.textMuted },
     loading: { textAlign: 'center', padding: 48, color: theme.primary },
     themeBtn: { padding: '10px 16px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', transition: 'box-shadow 0.15s' },

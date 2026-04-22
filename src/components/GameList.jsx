@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useMemo } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 import { Pagination } from './Pagination'
+import { NavDropdown } from './NavDropdown'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -39,6 +40,9 @@ export function GameList({
   onAddGame,
   onToggleMenu,
   onLoadPage,
+  currentView,
+  recycleBinCount,
+  onNavigate,
 }) {
   const scrollContainerRef = useRef(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -73,7 +77,13 @@ export function GameList({
         background: theme.bg,
         zIndex: 10
       }}>
-        <h1 style={styles.title}>{t.nav.games}</h1>
+        <NavDropdown
+          theme={theme}
+          currentView={currentView}
+          t={t}
+          recycleBinCount={recycleBinCount}
+          onNavigate={onNavigate}
+        />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {isGameMultiSelectMode ? (
             <>

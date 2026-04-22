@@ -486,14 +486,14 @@ pub fn insert_screenshot(
     file_path: &str,
     thumbnail_path: &str,
     game_id: &str,
-    game_title: &str,
+    _game_title: &str,
     timestamp: i64,
     file_hash: Option<&str>,
 ) -> Result<i64> {
     conn.execute(
         "INSERT INTO screenshots (file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash)
-         VALUES (?1, ?2, ?3, ?4, ?4, ?5, '', '', ?6)",
-        params![file_path, thumbnail_path, game_id, game_title, timestamp, file_hash],
+         VALUES (?1, ?2, ?3, ?3, ?3, ?4, '', '', ?5)",
+        params![file_path, thumbnail_path, game_id, timestamp, file_hash],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -525,14 +525,24 @@ pub fn get_screenshots(
     let order = if sort_order.to_lowercase() == "asc" { "ASC" } else { "DESC" };
     let sql = if game_id.is_some() {
         format!(
-            "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url
-             FROM screenshots WHERE game_id = ?1 ORDER BY timestamp {}",
+            "SELECT s.id, s.file_path, s.thumbnail_path, s.game_id, 
+                    COALESCE(gc.display_title, gc.steam_name, s.game_id) as game_title,
+                    COALESCE(gc.display_title, s.game_id) as display_title,
+                    s.timestamp, s.note, s.game_banner_url
+             FROM screenshots s
+             LEFT JOIN game_cache gc ON s.game_id = gc.game_id
+             WHERE s.game_id = ?1 ORDER BY s.timestamp {}",
             order
         )
     } else {
         format!(
-            "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url
-             FROM screenshots ORDER BY timestamp {}",
+            "SELECT s.id, s.file_path, s.thumbnail_path, s.game_id, 
+                    COALESCE(gc.display_title, gc.steam_name, s.game_id) as game_title,
+                    COALESCE(gc.display_title, s.game_id) as display_title,
+                    s.timestamp, s.note, s.game_banner_url
+             FROM screenshots s
+             LEFT JOIN game_cache gc ON s.game_id = gc.game_id
+             ORDER BY s.timestamp {}",
             order
         )
     };
@@ -588,22 +598,22 @@ pub fn get_screenshots_with_pagination(
     let mut param_index = 1;
     
     if game_id.is_some() {
-        where_clauses.push(format!("game_id = ?{}", param_index));
+        where_clauses.push(format!("s.game_id = ?{}", param_index));
         param_index += 1;
     }
     
     if date_start.is_some() {
-        where_clauses.push(format!("timestamp >= ?{}", param_index));
+        where_clauses.push(format!("s.timestamp >= ?{}", param_index));
         param_index += 1;
     }
     
     if date_end.is_some() {
-        where_clauses.push(format!("timestamp <= ?{}", param_index));
+        where_clauses.push(format!("s.timestamp <= ?{}", param_index));
         param_index += 1;
     }
     
     if note_search.is_some() {
-        where_clauses.push(format!("note LIKE ?{}", param_index));
+        where_clauses.push(format!("s.note LIKE ?{}", param_index));
         param_index += 1;
     }
     
@@ -613,7 +623,7 @@ pub fn get_screenshots_with_pagination(
         format!(" WHERE {}", where_clauses.join(" AND "))
     };
     
-    let count_sql = format!("SELECT COUNT(*) FROM screenshots{}", where_sql);
+    let count_sql = format!("SELECT COUNT(*) FROM screenshots s{}", where_sql);
     
     let total_count: i32 = if game_id.is_some() || date_start.is_some() || date_end.is_some() || note_search.is_some() {
         let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -646,8 +656,12 @@ pub fn get_screenshots_with_pagination(
     
     let order = if sort_order.to_lowercase() == "asc" { "ASC" } else { "DESC" };
     let sql = format!(
-        "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url
-         FROM screenshots{} ORDER BY timestamp {} LIMIT ?{} OFFSET ?{}",
+        "SELECT s.id, s.file_path, s.thumbnail_path, s.game_id, 
+                COALESCE(gc.display_title, gc.steam_name, s.game_id) as game_title,
+                COALESCE(gc.display_title, s.game_id) as display_title,
+                s.timestamp, s.note, s.game_banner_url
+         FROM screenshots s
+         LEFT JOIN game_cache gc ON s.game_id = gc.game_id{} ORDER BY s.timestamp {} LIMIT ?{} OFFSET ?{}",
         where_sql, order, param_index, param_index + 1
     );
 
@@ -713,7 +727,11 @@ pub fn get_screenshots_with_pagination(
 
 pub fn get_games(conn: &Connection) -> Result<Vec<GameSummary>> {
     let mut stmt = conn.prepare(
-        "SELECT s.game_id, s.game_title, COALESCE(s.display_title, s.game_title), s.game_banner_url, COUNT(*) as count, MAX(s.timestamp) as last_timestamp,
+        "SELECT s.game_id, 
+                COALESCE(gc.display_title, gc.steam_name, s.game_id) as game_title, 
+                COALESCE(gc.display_title, s.game_id) as display_title, 
+                COALESCE(s.game_banner_url, '') as game_banner_url, 
+                COUNT(*) as count, MAX(s.timestamp) as last_timestamp,
                 gc.icon_path, gc.steam_logo_path
          FROM screenshots s
          LEFT JOIN game_cache gc ON s.game_id = gc.game_id
@@ -845,8 +863,8 @@ pub fn get_games_with_pagination(conn: &Connection, page: i32, page_size: i32) -
          FROM (
              SELECT 
                  s.game_id, 
-                 s.game_title, 
-                 COALESCE(s.display_title, s.game_title) as display_title, 
+                 COALESCE(gc.display_title, gc.steam_name, s.game_id) as game_title, 
+                 COALESCE(gc.display_title, s.game_id) as display_title, 
                  COALESCE(s.game_banner_url, '') as game_banner_url, 
                  COUNT(*) as screenshot_count, 
                  MAX(s.timestamp) as last_timestamp,
@@ -975,7 +993,11 @@ fn move_thumbnail_to_trash(thumbnail_path: &str) -> std::result::Result<String, 
 
 pub fn soft_delete_screenshot(conn: &Connection, id: i32) -> std::result::Result<(), String> {
     let ss = conn.query_row(
-        "SELECT id, file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash FROM screenshots WHERE id = ?1",
+        "SELECT s.id, s.file_path, s.thumbnail_path, s.game_id, 
+                COALESCE(gc.display_title, gc.steam_name, s.game_id) as game_title,
+                COALESCE(gc.display_title, s.game_id) as display_title,
+                s.timestamp, s.note, s.game_banner_url, s.file_hash 
+         FROM screenshots s LEFT JOIN game_cache gc ON s.game_id = gc.game_id WHERE s.id = ?1",
         params![id],
         |row| {
             Ok((
@@ -1035,8 +1057,13 @@ pub fn get_deleted_screenshots_with_pagination(
     let total_pages = if total_count == 0 { 1 } else { (total_count + page_size - 1) / page_size };
 
     let sql = format!(
-        "SELECT id, original_id, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, deleted_at
-         FROM deleted_screenshots ORDER BY {} LIMIT ?1 OFFSET ?2",
+        "SELECT ds.id, ds.original_id, ds.file_path, ds.thumbnail_path, ds.original_file_path, ds.original_thumbnail_path, ds.game_id, 
+                COALESCE(gc.display_title, gc.steam_name, ds.game_id) as game_title,
+                COALESCE(gc.display_title, ds.game_id) as display_title,
+                ds.timestamp, ds.note, ds.game_banner_url, ds.file_hash, ds.deleted_at
+         FROM deleted_screenshots ds
+         LEFT JOIN game_cache gc ON ds.game_id = gc.game_id
+         ORDER BY {} LIMIT ?1 OFFSET ?2",
         order
     );
 
@@ -1127,8 +1154,8 @@ pub fn restore_screenshot(conn: &Connection, id: i32) -> std::result::Result<(),
     }
 
     conn.execute(
-        "INSERT INTO screenshots (file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        params![restored_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash],
+        "INSERT INTO screenshots (file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash) VALUES (?1, ?2, ?3, ?3, ?3, ?4, ?5, ?6, ?7)",
+        params![restored_file_path, original_thumbnail_path, game_id, timestamp, note, game_banner_url, file_hash],
     ).map_err(|e| format!("恢复记录失败: {}", e))?;
 
     conn.execute("DELETE FROM deleted_screenshots WHERE id = ?1", params![id])
@@ -1244,7 +1271,7 @@ pub fn update_note(conn: &Connection, id: i32, note: &str) -> Result<()> {
 
 pub fn update_display_title(conn: &Connection, game_id: &str, display_title: &str) -> Result<()> {
     conn.execute(
-        "UPDATE screenshots SET display_title = ?1 WHERE game_id = ?2",
+        "UPDATE game_cache SET display_title = ?1 WHERE game_id = ?2",
         params![display_title, game_id],
     )?;
     Ok(())
@@ -1536,10 +1563,6 @@ pub fn set_game_cache(conn: &Connection, cache: &GameCache) -> Result<()> {
 }
 
 pub fn update_game_display_title(conn: &Connection, game_id: &str, display_title: &str) -> Result<()> {
-    conn.execute(
-        "UPDATE screenshots SET display_title = ?1 WHERE game_id = ?2",
-        params![display_title, game_id],
-    )?;
     conn.execute(
         "UPDATE game_cache SET display_title = ?1 WHERE game_id = ?2",
         params![display_title, game_id],
