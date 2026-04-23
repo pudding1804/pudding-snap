@@ -72,17 +72,20 @@ pub fn search_steam_game_info(game_id: String, game_title: String, language: Str
     }
     
     let conn = state.db.lock().unwrap();
-    let mut cache = db::get_game_cache(&conn, &game_id).unwrap_or_else(|| GameCache {
-        game_id: game_id.clone(),
-        exe_path: None,
-        icon_path: None,
-        display_title: None,
-        last_updated: chrono::Utc::now().timestamp(),
-        steam_appid: None,
-        steam_name: None,
-        steam_logo_path: None,
-        steam_match_status: Some(result.status.clone().to_string()),
-    });
+    let mut cache = match db::get_game_cache(&conn, &game_id) {
+        Some(existing) => existing,
+        None => GameCache {
+            game_id: game_id.clone(),
+            exe_path: None,
+            icon_path: None,
+            display_title: Some(game_title.clone()),
+            last_updated: chrono::Utc::now().timestamp(),
+            steam_appid: None,
+            steam_name: None,
+            steam_logo_path: None,
+            steam_match_status: Some(result.status.clone().to_string()),
+        }
+    };
     
     cache.steam_match_status = Some(result.status.clone().to_string());
     cache.last_updated = chrono::Utc::now().timestamp();

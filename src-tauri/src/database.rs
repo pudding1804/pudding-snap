@@ -936,6 +936,60 @@ pub fn get_games_with_pagination(conn: &Connection, page: i32, page_size: i32) -
     })
 }
 
+pub fn search_all_games(conn: &Connection, search_term: &str) -> Result<Vec<GameSummary>> {
+    let pattern = format!("%{}%", search_term);
+    
+    let mut stmt = conn.prepare(
+        "SELECT game_id, game_title, display_title, game_banner_url, screenshot_count, last_timestamp, icon_path, steam_logo_path
+         FROM (
+             SELECT 
+                 s.game_id, 
+                 COALESCE(gc.display_title, gc.steam_name, s.game_id) as game_title, 
+                 COALESCE(gc.display_title, s.game_id) as display_title, 
+                 COALESCE(s.game_banner_url, '') as game_banner_url, 
+                 COUNT(*) as screenshot_count, 
+                 MAX(s.timestamp) as last_timestamp,
+                 gc.icon_path,
+                 gc.steam_logo_path
+             FROM screenshots s
+             LEFT JOIN game_cache gc ON s.game_id = gc.game_id
+             GROUP BY s.game_id
+             
+             UNION ALL
+             
+             SELECT 
+                 gc.game_id, 
+                 COALESCE(gc.steam_name, gc.display_title, gc.game_id) as game_title, 
+                 COALESCE(gc.display_title, '') as display_title, 
+                 '' as game_banner_url, 
+                 0 as screenshot_count, 
+                 0 as last_timestamp,
+                 gc.icon_path,
+                 gc.steam_logo_path
+             FROM game_cache gc
+             WHERE gc.game_id NOT IN (SELECT DISTINCT game_id FROM screenshots)
+         )
+         WHERE game_title LIKE ?1 OR display_title LIKE ?1 OR game_id LIKE ?1
+         ORDER BY last_timestamp DESC",
+    )?;
+
+    let iter = stmt.query_map(params![pattern], |row| {
+        Ok(GameSummary {
+            game_id: row.get(0)?,
+            game_title: row.get(1)?,
+            display_title: row.get(2)?,
+            game_banner_url: row.get(3)?,
+            count: row.get(4)?,
+            last_timestamp: row.get(5)?,
+            game_icon_path: row.get(6)?,
+            steam_logo_path: row.get(7)?,
+        })
+    })?;
+
+    let games: Vec<GameSummary> = iter.collect::<Result<Vec<_>>>()?;
+    Ok(games)
+}
+
 pub fn delete_screenshot(conn: &Connection, id: i32) -> Result<()> {
     conn.execute("DELETE FROM screenshots WHERE id = ?1", params![id])?;
     Ok(())
@@ -1139,8 +1193,8 @@ pub fn get_deleted_screenshots_with_pagination(
 
     let sql = format!(
         "SELECT ds.id, ds.original_id, ds.file_path, ds.thumbnail_path, ds.original_file_path, ds.original_thumbnail_path, ds.game_id, 
-                COALESCE(gc.display_title, gc.steam_name, ds.game_id) as game_title,
-                COALESCE(gc.display_title, ds.game_id) as display_title,
+                COALESCE(ds.display_title, gc.display_title, gc.steam_name, ds.game_title, ds.game_id) as game_title,
+                COALESCE(ds.display_title, gc.display_title, ds.game_id) as display_title,
                 ds.timestamp, ds.note, ds.game_banner_url, ds.file_hash, ds.deleted_at
          FROM deleted_screenshots ds
          LEFT JOIN game_cache gc ON ds.game_id = gc.game_id
@@ -1217,10 +1271,22 @@ pub fn restore_screenshot(conn: &Connection, id: i32) -> std::result::Result<(),
         }
         restored_file_path = new_path.to_string_lossy().to_string();
     } else {
-        if let Err(e) = std::fs::rename(&file_path, &original_file_path) {
-            println!("[恢复] 移动文件失败: {}, 尝试复制", e);
-            std::fs::copy(&file_path, &original_file_path).map_err(|e2| format!("复制文件失败: {}", e2))?;
-            let _ = std::fs::remove_file(&file_path);
+        if PathBuf::from(&file_path).exists() {
+            let dest_dir = PathBuf::from(&original_file_path).parent().unwrap_or(&PathBuf::from(".")).to_path_buf();
+            if !dest_dir.exists() {
+                let _ = std::fs::create_dir_all(&dest_dir);
+            }
+            if let Err(e) = std::fs::rename(&file_path, &original_file_path) {
+                println!("[恢复] 移动文件失败: {}, 尝试复制", e);
+                match std::fs::copy(&file_path, &original_file_path) {
+                    Ok(_) => { let _ = std::fs::remove_file(&file_path); }
+                    Err(e2) => {
+                        println!("[恢复] 复制文件失败: {} -> {}: {}", file_path, original_file_path, e2);
+                    }
+                }
+            }
+        } else {
+            println!("[恢复] 源文件不存在: {}", file_path);
         }
     }
 
@@ -1297,8 +1363,9 @@ pub fn restore_screenshots(conn: &Connection, ids: &[i32]) -> std::result::Resul
 
     let mut restored_file_paths: Vec<String> = Vec::with_capacity(records.len());
     let mut restored_thumbnail_paths: Vec<String> = Vec::with_capacity(records.len());
+    let mut valid_records: Vec<usize> = Vec::with_capacity(records.len());
 
-    for record in &records {
+    for (i, record) in records.iter().enumerate() {
         let (_, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, _, _, _, _, _, _) = record;
 
         let mut restored_file_path = original_file_path.clone();
@@ -1316,15 +1383,28 @@ pub fn restore_screenshots(conn: &Connection, ids: &[i32]) -> std::result::Resul
             let mut new_path = game_dir.join(original_file_path);
             loop {
                 let new_name = format!("{}_{}{}", stem, counter, ext);
-                new_path = game_dir.join(&new_name);
+                new_path = game_dir.join(new_name);
                 if !new_path.exists() { break; }
                 counter += 1;
             }
             restored_file_path = new_path.to_string_lossy().to_string();
         } else {
-            if let Err(_e) = std::fs::rename(file_path, original_file_path) {
-                std::fs::copy(file_path, original_file_path).map_err(|e2| format!("复制文件失败: {}", e2))?;
-                let _ = std::fs::remove_file(file_path);
+            if PathBuf::from(file_path).exists() {
+                let dest_dir = PathBuf::from(original_file_path).parent().unwrap_or(&PathBuf::from(".")).to_path_buf();
+                if !dest_dir.exists() {
+                    let _ = std::fs::create_dir_all(&dest_dir);
+                }
+                if let Err(_e) = std::fs::rename(file_path, original_file_path) {
+                    match std::fs::copy(file_path, original_file_path) {
+                        Ok(_) => { let _ = std::fs::remove_file(file_path); }
+                        Err(e2) => {
+                            println!("[恢复] 复制文件失败: {} -> {}: {}", file_path, original_file_path, e2);
+                            restored_file_path = file_path.clone();
+                        }
+                    }
+                }
+            } else {
+                println!("[恢复] 源文件不存在: {}, 使用原路径恢复数据库记录", file_path);
             }
         }
 
@@ -1343,12 +1423,14 @@ pub fn restore_screenshots(conn: &Connection, ids: &[i32]) -> std::result::Resul
 
         restored_file_paths.push(restored_file_path);
         restored_thumbnail_paths.push(restored_thumbnail_path);
+        valid_records.push(i);
     }
 
     conn.execute_batch("BEGIN TRANSACTION").map_err(|e| format!("开启事务失败: {}", e))?;
 
     let mut affected_game_ids: HashSet<String> = HashSet::new();
-    for (i, record) in records.iter().enumerate() {
+    for &i in &valid_records {
+        let record = &records[i];
         let (id, _, _, _, _, game_id, _, _, timestamp, note, game_banner_url, file_hash) = record;
         affected_game_ids.insert(game_id.clone());
 
@@ -1416,6 +1498,16 @@ pub fn permanent_delete_screenshot(conn: &Connection, id: i32) -> std::result::R
     }
 
     Ok(())
+}
+
+pub fn get_all_deleted_screenshot_ids(conn: &Connection) -> std::result::Result<Vec<i32>, String> {
+    let mut stmt = conn.prepare("SELECT id FROM deleted_screenshots")
+        .map_err(|e| format!("查询回收站ID失败: {}", e))?;
+    let ids: Vec<i32> = stmt.query_map([], |row| row.get(0))
+        .map_err(|e| format!("查询回收站ID失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("解析回收站ID失败: {}", e))?;
+    Ok(ids)
 }
 
 pub fn permanent_delete_screenshots(conn: &Connection, ids: &[i32]) -> std::result::Result<(), String> {
@@ -1898,6 +1990,23 @@ pub fn create_empty_game(conn: &Connection, game_id: &str, display_title: &str, 
     Ok(())
 }
 
+pub fn get_screenshots_with_missing_thumbnails(conn: &Connection) -> Result<Vec<i32>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, thumbnail_path FROM screenshots"
+    )?;
+    
+    let rows: Vec<i32> = stmt.query_map([], |row| {
+        let id: i32 = row.get(0)?;
+        let thumbnail_path: String = row.get(1)?;
+        Ok((id, thumbnail_path))
+    })?.filter_map(|r| r.ok())
+      .filter(|(_, tp)| !std::path::PathBuf::from(tp).exists())
+      .map(|(id, _)| id)
+      .collect();
+    
+    Ok(rows)
+}
+
 pub fn delete_game(conn: &Connection, game_id: &str) -> std::result::Result<(), String> {
     let screenshot_ids: Vec<i32> = {
         let mut stmt = conn.prepare("SELECT id FROM screenshots WHERE game_id = ?1").map_err(|e| format!("查询失败: {}", e))?;
@@ -1905,8 +2014,8 @@ pub fn delete_game(conn: &Connection, game_id: &str) -> std::result::Result<(), 
         rows.collect::<Result<Vec<_>, _>>().map_err(|e| format!("解析失败: {}", e))?
     };
     
-    for id in &screenshot_ids {
-        soft_delete_screenshot(conn, *id)?;
+    if !screenshot_ids.is_empty() {
+        soft_delete_screenshots(conn, &screenshot_ids)?;
     }
     
     let now = chrono::Utc::now().timestamp();

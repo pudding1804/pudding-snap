@@ -217,7 +217,7 @@ function App() {
     localStorage.setItem('iconSize', size)
   }, [])
 
-  const loadGames = useCallback(async (sortType = null) => {
+  const loadGames = useCallback(async (sortType = null, resetScroll = true) => {
     try {
       setIsGamesLoading(true)
       addLog(`调用 get_games_with_pagination: 页码=${gameCurrentPage}`)
@@ -244,7 +244,7 @@ function App() {
       setGameTotalPages(result.total_pages)
       setGameCurrentPage(result.page)
       
-      if (gridRef.current) {
+      if (resetScroll && gridRef.current) {
         gridRef.current.scrollTop = 0
       }
       
@@ -503,7 +503,7 @@ function App() {
 
   const handleEmptyRecycleBin = useCallback(async () => {
     try {
-      const allIds = deletedScreenshots.map(ss => ss.id)
+      const allIds = await invoke('get_all_deleted_screenshot_ids')
       if (allIds.length === 0) return
       setBatchProcessing(true)
       setBatchProcessingText(t.batch?.emptying_recycle_bin || `正在清空回收站 (${allIds.length} 张)...`)
@@ -516,7 +516,7 @@ function App() {
     } finally {
       setBatchProcessing(false)
     }
-  }, [addLog, showNotification, loadRecycleBin, recycleBinSortOrder, deletedScreenshots, t])
+  }, [addLog, showNotification, loadRecycleBin, recycleBinSortOrder, t])
 
   const loadShutterSound = useCallback(async () => {
     try {
@@ -756,7 +756,7 @@ function App() {
     setShowGameListMenu(false)
     setShowGameDetailMenu(false)
     setShowSortMenu(false)
-    loadGames()
+    loadGames(null, false)
   }, [loadGames])
 
   useEffect(() => {
@@ -1089,7 +1089,9 @@ function App() {
         })
         addLog(`创建游戏成功: ${game.display_title}`)
         setShowAddGameModal(false)
-        await loadGamesWithPage(1)
+        const result = await invoke('get_games_with_pagination', { page: 1, pageSize: gamePageSize })
+        const newTotalPages = result.total_pages
+        await loadGamesWithPage(newTotalPages)
         showNotification(t.add_game.create_success, game.display_title)
       } catch (err) {
         addLog(`创建游戏失败: ${err}`)
@@ -1108,7 +1110,9 @@ function App() {
         })
         addLog(`创建游戏成功: ${game.display_title}`)
         setShowAddGameModal(false)
-        await loadGamesWithPage(1)
+        const result = await invoke('get_games_with_pagination', { page: 1, pageSize: gamePageSize })
+        const newTotalPages = result.total_pages
+        await loadGamesWithPage(newTotalPages)
         showNotification(t.add_game.create_success, game.display_title)
       } catch (err) {
         addLog(`创建游戏失败: ${err}`)
@@ -1214,6 +1218,13 @@ function App() {
         }
         
         refreshRecycleBinCount()
+        
+        try {
+          await invoke('resume_thumbnail_generation')
+          addLog('缩略图恢复生成已启动')
+        } catch (e) {
+          addLog(`缩略图恢复生成失败: ${e}`)
+        }
       } catch (e) {
         addLog(`数据加载失败: ${e}`)
         setError('加载数据失败: ' + String(e))
@@ -1390,7 +1401,17 @@ function App() {
       let thumbnailDebounce = null
       const unlistenThumbnailProgress = await listen('thumbnail-progress', (event) => {
         const payload = event.payload || {}
-        if (payload.status === 'complete') {
+        if (payload.status === 'done' && payload.screenshot_id != null) {
+          setScreenshots(prev => prev.map(ss => {
+            if (ss.id === payload.screenshot_id) {
+              const thumbPath = ss.thumbnail_path
+              if (thumbPath) {
+                return { ...ss, _thumbVersion: (ss._thumbVersion || 0) + 1 }
+              }
+            }
+            return ss
+          }))
+        } else if (payload.status === 'complete') {
           if (thumbnailDebounce) clearTimeout(thumbnailDebounce)
           thumbnailDebounce = setTimeout(() => {
             if (selectedGameRef.current) {
@@ -1532,14 +1553,17 @@ function App() {
                   setDeleteGameCallback(() => async (confirm) => {
                     if (confirm) {
                       try {
-                        for (const gameId of selectedGames) {
-                          await invoke('delete_game', { gameId })
-                          addLog(`已删除游戏: ${gameId}`)
-                        }
+                        setBatchProcessing(true)
+                        setBatchProcessingText(t.batch?.deleting || `正在删除 ${selectedGames.length} 个游戏...`)
+                        await invoke('delete_games', { gameIds: selectedGames })
+                        addLog(`已删除游戏: ${selectedGames.length} 个`)
                         showNotification('删除成功', `已删除 ${selectedGames.length} 个游戏`)
+                        refreshRecycleBinCount()
                       } catch (e) {
                         addLog(`删除游戏失败: ${e}`)
                         setError('删除游戏失败: ' + String(e))
+                      } finally {
+                        setBatchProcessing(false)
                       }
                     }
                     setShowDeleteGameConfirm(false)

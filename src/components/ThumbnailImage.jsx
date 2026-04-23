@@ -11,7 +11,7 @@ function getImageSrc(path) {
   }
 }
 
-export function ThumbnailImage({ thumbnailPath, theme, placeholderText = '缩略图生成中', style = {} }) {
+export function ThumbnailImage({ thumbnailPath, theme, placeholderText = 'Please Wait...', style = {} }) {
   const [imgError, setImgError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
 

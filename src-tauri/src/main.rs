@@ -8,8 +8,9 @@ mod audio;
 mod steam;
 mod bangumi;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::collections::VecDeque;
+use std::time::Instant;
 use image::DynamicImage;
 use tauri::{Manager, State, Emitter, AppHandle, menu::{Menu, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState}};
 use rdev::{listen, Event, EventType, Key};
@@ -32,6 +33,11 @@ struct ScreenshotTask {
     exe_path: Option<String>,
     process_name: String,
     steam_appid: Option<u32>,
+}
+
+enum HotkeyEvent {
+    PrintScreen,
+    F12,
 }
 
 struct AppState {
@@ -63,6 +69,12 @@ fn get_games(state: State<AppState>) -> Result<Vec<GameSummary>, String> {
 fn get_games_with_pagination(page: i32, page_size: i32, state: State<AppState>) -> Result<PaginatedGames, String> {
     let conn = state.db.lock().unwrap();
     db::get_games_with_pagination(&conn, page, page_size).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn search_all_games(search_term: String, state: State<AppState>) -> Result<Vec<GameSummary>, String> {
+    let conn = state.db.lock().unwrap();
+    db::search_all_games(&conn, &search_term).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -122,6 +134,12 @@ fn restore_screenshots(ids: Vec<i32>, state: State<AppState>) -> Result<(), Stri
 fn permanent_delete_screenshot(id: i32, state: State<AppState>) -> Result<(), String> {
     let conn = state.db.lock().unwrap();
     db::permanent_delete_screenshot(&conn, id)
+}
+
+#[tauri::command]
+fn get_all_deleted_screenshot_ids(state: State<AppState>) -> Result<Vec<i32>, String> {
+    let conn = state.db.lock().unwrap();
+    db::get_all_deleted_screenshot_ids(&conn)
 }
 
 #[tauri::command]
@@ -725,17 +743,20 @@ fn search_steam_game_info(game_id: String, game_title: String, language: String,
     }
     
     let conn = state.db.lock().unwrap();
-    let mut cache = db::get_game_cache(&conn, &game_id).unwrap_or(GameCache {
-        game_id: game_id.clone(),
-        exe_path: None,
-        icon_path: None,
-        display_title: None,
-        last_updated: chrono::Utc::now().timestamp(),
-        steam_appid: None,
-        steam_name: None,
-        steam_logo_path: None,
-        steam_match_status: Some(result.status.clone().to_string()),
-    });
+    let mut cache = match db::get_game_cache(&conn, &game_id) {
+        Some(existing) => existing,
+        None => GameCache {
+            game_id: game_id.clone(),
+            exe_path: None,
+            icon_path: None,
+            display_title: Some(game_title.clone()),
+            last_updated: chrono::Utc::now().timestamp(),
+            steam_appid: None,
+            steam_name: None,
+            steam_logo_path: None,
+            steam_match_status: Some(result.status.clone().to_string()),
+        }
+    };
     
     cache.steam_match_status = Some(result.status.clone().to_string());
     cache.last_updated = chrono::Utc::now().timestamp();
@@ -984,7 +1005,7 @@ async fn create_game_from_bangumi(
     }
     
     let display_title = if language == "zh" {
-        info.name_cn.as_ref().unwrap_or(&info.name)
+        info.name_cn.as_ref().filter(|s| !s.is_empty()).unwrap_or(&info.name)
     } else {
         &info.name
     };
@@ -1032,7 +1053,7 @@ async fn apply_bangumi_game_info(game_id: String, subject_id: u32, language: Str
     }
     
     let display_title = if language == "zh" {
-        info.name_cn.as_ref().unwrap_or(&info.name)
+        info.name_cn.as_ref().filter(|s| !s.is_empty()).unwrap_or(&info.name)
     } else {
         &info.name
     };
@@ -1433,6 +1454,23 @@ fn generate_thumbnails(screenshot_ids: Vec<i32>, app: AppHandle, state: State<Ap
     Ok(())
 }
 
+#[tauri::command]
+fn resume_thumbnail_generation(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    let ids: Vec<i32> = {
+        let conn = state.db.lock().unwrap();
+        db::get_screenshots_with_missing_thumbnails(&conn)
+            .map_err(|e| format!("查询缺失缩略图失败: {}", e))?
+    };
+    
+    if ids.is_empty() {
+        println!("[缩略图] 没有需要恢复生成的缩略图");
+        return Ok(());
+    }
+    
+    println!("[缩略图] 发现 {} 个缺失缩略图，开始恢复生成", ids.len());
+    generate_thumbnails(ids, app, state)
+}
+
 fn process_and_save_image_fast(src: &std::path::PathBuf, dest: &std::path::PathBuf) -> Result<u128, String> {
     let t1 = std::time::Instant::now();
     std::fs::copy(src, dest)
@@ -1781,85 +1819,129 @@ fn main() {
             let window_shown_clone = state.window_shown.clone();
             let unread_count_clone = state.unread_count.clone();
 
+            let (hotkey_tx, hotkey_rx) = mpsc::channel::<HotkeyEvent>();
+
             std::thread::spawn(move || {
                 println!("[启动] 热键监听线程启动");
-                
+
+                let tx = hotkey_tx;
                 let callback = move |event: Event| {
                     if let EventType::KeyPress(key) = event.event_type {
-                        if key == Key::PrintScreen || key == Key::F12 {
-                            let key_name = if key == Key::PrintScreen { "PrintScreen" } else { "F12" };
+                        let hotkey = match key {
+                            Key::PrintScreen => Some(HotkeyEvent::PrintScreen),
+                            Key::F12 => Some(HotkeyEvent::F12),
+                            _ => None,
+                        };
+                        if let Some(hotkey) = hotkey {
+                            let t = Instant::now();
+                            match tx.send(hotkey) {
+                                Ok(_) => println!("[热键] 信号发送成功, 耗时: {:.2}ms", t.elapsed().as_secs_f64() * 1000.0),
+                                Err(e) => eprintln!("[热键] 信号发送失败: {:?}", e),
+                            }
+                        }
+                    }
+                };
+
+                if let Err(e) = listen(callback) {
+                    eprintln!("[错误] 热键监听失败: {:?}", e);
+                }
+                println!("[热键] 监听线程退出，钩子可能已被系统移除!");
+            });
+
+            let app_handle_hotkey = app_handle.clone();
+            std::thread::spawn(move || {
+                println!("[启动] 热键处理线程启动");
+
+                loop {
+                    match hotkey_rx.recv() {
+                        Ok(hotkey) => {
+                            let key_name = match hotkey {
+                                HotkeyEvent::PrintScreen => "PrintScreen",
+                                HotkeyEvent::F12 => "F12",
+                            };
+                            let total_start = Instant::now();
                             println!("[热键] 检测到{}按键!", key_name);
-                            
+
+                            let t = Instant::now();
                             let shutter_sound = {
                                 let conn = db_for_hotkey.lock().unwrap();
                                 db::get_shutter_sound(&conn)
                             };
+                            println!("[耗时] 读取快门音效设置: {:.2}ms", t.elapsed().as_secs_f64() * 1000.0);
+
+                            let t = Instant::now();
                             let _ = play_shutter_sound_with_type(&shutter_sound);
-                            
+                            println!("[耗时] 播放快门音效: {:.2}ms", t.elapsed().as_secs_f64() * 1000.0);
+
+                            let t = Instant::now();
                             let process_info = get_foreground_process_info();
+                            println!("[耗时] 获取前台进程信息: {:.2}ms", t.elapsed().as_secs_f64() * 1000.0);
                             println!("[截图] 进程: {}, exe: {:?}", process_info.process_name, process_info.exe_path);
-                            
+
+                            let t = Instant::now();
                             let steam_appid = get_steam_running_appid();
+                            println!("[耗时] 获取Steam RunningAppID: {:.2}ms", t.elapsed().as_secs_f64() * 1000.0);
                             if let Some(appid) = steam_appid {
                                 println!("[Steam] 检测到Steam运行游戏, AppID: {}", appid);
                             }
-                            
+
+                            let t = Instant::now();
                             match capture_screenshot(false) {
                                 Ok(image) => {
-                                    println!("[截图] 屏幕捕获成功");
-                                    
+                                    println!("[耗时] 屏幕捕获: {:.2}ms", t.elapsed().as_secs_f64() * 1000.0);
+
                                     let task = ScreenshotTask {
                                         image,
                                         exe_path: process_info.exe_path,
                                         process_name: process_info.process_name,
                                         steam_appid,
                                     };
-                                    
+
                                     {
                                         let mut queue = queue_clone.lock().unwrap();
                                         queue.push_back(task);
                                         println!("[队列] 任务已加入队列，当前队列长度: {}", queue.len());
                                     }
-                                    
-                                    let app_h = app_handle.clone();
+
+                                    let app_h = app_handle_hotkey.clone();
                                     let db_h = db_for_hotkey.clone();
                                     let queue_h = queue_clone.clone();
                                     let processing_h = processing_clone.clone();
                                     let window_shown_h = window_shown_clone.clone();
                                     let unread_count_h = unread_count_clone.clone();
-                                    
+
                                     let mut processing = processing_h.lock().unwrap();
                                     if *processing {
                                         println!("[队列] 已有任务在处理中，跳过");
-                                        return;
+                                        continue;
                                     }
                                     *processing = true;
                                     drop(processing);
-                                    
+
                                     std::thread::spawn(move || {
                                         loop {
                                             let task = {
                                                 let mut q = queue_h.lock().unwrap();
                                                 q.pop_front()
                                             };
-                                            
+
                                             if let Some(task) = task {
                                                 println!("[队列] 处理任务: {}", task.process_name);
-                                                
+
                                                 let exe_path_ref = task.exe_path.as_deref();
-                                                
+
                                                 let db_clone_for_id = db_h.clone();
                                                 let conn_for_id = db_clone_for_id.lock().unwrap();
                                                 let (game_id, is_existing) = db::find_existing_game_id(&conn_for_id, &task.process_name, exe_path_ref, task.steam_appid);
                                                 drop(conn_for_id);
                                                 println!("[队列] 使用游戏ID: {} (进程名: {}, 已存在: {})", game_id, task.process_name, is_existing);
-                                                
+
                                                 let game_dir = db::get_game_dir(&game_id);
                                                 let thumbnails_dir = game_dir.join("thumbnails");
                                                 if !thumbnails_dir.exists() {
                                                     let _ = std::fs::create_dir_all(&thumbnails_dir);
                                                 }
-                                                
+
                                                 let db_for_settings = db_h.clone();
                                                 let conn_for_settings = db_for_settings.lock().unwrap();
                                                 let screenshot_format = db::get_setting(&conn_for_settings, "screenshot_format")
@@ -1867,33 +1949,33 @@ fn main() {
                                                 let screenshot_quality = db::get_setting(&conn_for_settings, "screenshot_quality")
                                                     .unwrap_or_else(|| "medium".to_string());
                                                 drop(conn_for_settings);
-                                                
+
                                                 let filename = generate_filename_with_format(&screenshot_format);
                                                 let thumbnail_filename = generate_thumbnail_filename();
-                                                
+
                                                 let filepath = game_dir.join(&filename);
                                                 let thumbnail_path = thumbnails_dir.join(&thumbnail_filename);
-                                                
+
                                                 match save_image(&task.image, &filepath, &screenshot_format, &screenshot_quality) {
                                                     Ok(_) => {
                                                         println!("[截图] 图片保存成功: {:?}", filepath);
                                                         println!("[截图] 文件大小: {} bytes", std::fs::metadata(&filepath).map(|m| m.len()).unwrap_or(0));
-                                                        
+
                                                         let thumbnail = create_thumbnail(&task.image, 320);
                                                         match save_as_webp(&thumbnail, &thumbnail_path, 70.0) {
                                                             Ok(_) => println!("[截图] 缩略图保存成功: {:?}", thumbnail_path),
                                                             Err(e) => println!("[截图] 缩略图保存失败: {}", e),
                                                         }
-                                                        
+
                                                         let timestamp = chrono::Utc::now().timestamp();
-                                                        
+
                                                         let db_clone = db_h.clone();
                                                         let conn = db_clone.lock().unwrap();
-                                                        
+
                                                         let cached_display_title = db::get_game_cache(&conn, &game_id)
                                                             .and_then(|c| c.display_title)
                                                             .filter(|t| !t.is_empty() && t != &game_id);
-                                                        
+
                                                         let display_title = if let Some(title) = cached_display_title {
                                                             title
                                                         } else if let Some(ref exe_path) = task.exe_path {
@@ -1907,33 +1989,32 @@ fn main() {
                                                         } else {
                                                             task.process_name.clone()
                                                         };
-                                                        
+
                                                         if let (Some(file_path_str), Some(thumb_path_str)) = (filepath.to_str(), thumbnail_path.to_str()) {
                                                             println!("[数据库] 准备插入截图记录: game_id={}, display_title={}", game_id, display_title);
                                                             match db::insert_screenshot(&conn, file_path_str, thumb_path_str, &game_id, &display_title, timestamp, None) {
                                                                 Ok(id) => {
                                                                     println!("[数据库] 截图记录插入成功: id={}, game_id={}", id, game_id);
-                                                                    
+
                                                                     let has_icon = db::get_game_cache(&conn, &game_id)
                                                                         .and_then(|c| c.icon_path)
                                                                         .map(|p| std::path::Path::new(&p).exists())
                                                                         .unwrap_or(false);
-                                                                    
+
                                                                     let has_steam_info = db::get_game_cache(&conn, &game_id)
                                                                         .and_then(|c| c.steam_match_status)
                                                                         .map(|s| s == "found" || s == "skipped" || s == "NotFound" || s == "manual")
                                                                         .unwrap_or(false);
                                                                     println!("[Steam] 检查Steam信息: game_id={}, has_steam_info={}", game_id, has_steam_info);
-                                                                    
+
                                                                     drop(conn);
-                                                                    
-                                                                    // 更新未读数量和托盘图标
-                                                                     {
+
+                                                                    {
                                                                          let mut count = unread_count_h.lock().unwrap();
                                                                          *count += 1;
                                                                          let current_count = *count;
                                                                          println!("[托盘] 未读数量更新: {}", current_count);
-                                                                         
+
                                                                          let icon_bytes = include_bytes!("../icons/32x32.png");
                                                                          match generate_badge_icon(current_count, icon_bytes) {
                                                                              Ok(badge_icon) => {
@@ -1949,8 +2030,7 @@ fn main() {
                                                                              Err(e) => println!("[托盘] 生成徽章图标失败: {}", e),
                                                                          }
                                                                      }
-                                                                    
-                                                                    // 发送系统原生通知（不受窗口可见性限制）
+
                                                                     {
                                                                         let notify_enabled = {
                                                                             let conn = db_clone.lock().unwrap();
@@ -1966,7 +2046,6 @@ fn main() {
                                                                         }
                                                                     }
 
-                                                                    // 窗口可见时发送前端刷新事件
                                                                     let is_window_shown = {
                                                                         let shown = window_shown_h.lock().unwrap();
                                                                         *shown
@@ -1983,7 +2062,7 @@ fn main() {
                                                                     } else {
                                                                         println!("[事件] 窗口未显示，跳过前端事件发送");
                                                                     }
-                                                                    
+
                                                                     if !has_icon {
                                                                         let db_for_icon = db_clone.clone();
                                                                         let exe_path_for_icon = task.exe_path.clone();
@@ -1992,7 +2071,7 @@ fn main() {
                                                                             if let Some(exe_path) = exe_path_for_icon {
                                                                                 let icons_dir = db::get_icons_dir();
                                                                                 let icon_path = icons_dir.join(format!("{}.png", game_id_for_icon));
-                                                                                
+
                                                                                 if let Ok(_) = extract_icon_from_exe(&exe_path, &icon_path) {
                                                                                     let icon_path_str = icon_path.to_string_lossy().to_string();
                                                                                     let conn = db_for_icon.lock().unwrap();
@@ -2013,7 +2092,7 @@ fn main() {
                                                                             }
                                                                         });
                                                                     }
-                                                                    
+
                                                                     if !has_steam_info {
                                                                         let db_for_steam = db_clone.clone();
                                                                         let game_id_for_steam = game_id.clone();
@@ -2028,11 +2107,11 @@ fn main() {
                                                                                         let logos_dir = steam::get_steam_logos_dir();
                                                                                         let logo_filename = format!("steam_{}.jpg", info.appid);
                                                                                         let logo_path = logos_dir.join(&logo_filename);
-                                                                                        
+
                                                                                         let logo_url = info.header_image.as_ref()
                                                                                             .or(info.capsule_image.as_ref())
                                                                                             .map(|s| s.as_str());
-                                                                                        
+
                                                                                         let mut logo_path_str = None;
                                                                                         if let Some(url) = logo_url {
                                                                                             if let Err(e) = steam::download_steam_image(url, &logo_path) {
@@ -2041,7 +2120,7 @@ fn main() {
                                                                                                 logo_path_str = Some(logo_path.to_string_lossy().to_string());
                                                                                             }
                                                                                         }
-                                                                                        
+
                                                                                         let conn = db_for_steam.lock().unwrap();
                                                                                         let mut cache = db::get_game_cache(&conn, &game_id_for_steam).unwrap_or(GameCache {
                                                                                             game_id: game_id_for_steam.clone(),
@@ -2054,22 +2133,22 @@ fn main() {
                                                                                             steam_logo_path: logo_path_str.clone(),
                                                                                             steam_match_status: Some("found".to_string()),
                                                                                         });
-                                                                                        
+
                                                                                         cache.display_title = Some(info.name.clone());
                                                                                         cache.steam_appid = Some(info.appid);
                                                                                         cache.steam_name = Some(info.name.clone());
                                                                                         cache.steam_logo_path = logo_path_str;
                                                                                         cache.steam_match_status = Some("found".to_string());
                                                                                         cache.last_updated = chrono::Utc::now().timestamp();
-                                                                                        
+
                                                                                         if let Err(e) = db::set_game_cache(&conn, &cache) {
                                                                                             println!("[Steam] 自动保存缓存失败: {}", e);
                                                                                         }
-                                                                                        
+
                                                                                         if let Err(e) = db::update_game_display_title(&conn, &game_id_for_steam, &info.name) {
                                                                                             println!("[Steam] 自动更新显示标题失败: {}", e);
                                                                                         }
-                                                                                        
+
                                                                                         println!("[Steam] 阶段A匹配成功: AppID={} -> {}", appid, info.name);
                                                                                         return;
                                                                                     }
@@ -2079,20 +2158,20 @@ fn main() {
                                                                                 }
                                                                             }
                                                                         }
-                                                                        
+
                                                                         println!("[Steam] 阶段B: 进程名匹配: {}", process_name_for_steam);
                                                                         let result = steam::match_game_name(&process_name_for_steam, "schinese");
-                                                                        
+
                                                                         if result.status == SteamMatchStatus::Found {
                                                                             if let Some(ref info) = result.game_info {
                                                                                 let logos_dir = steam::get_steam_logos_dir();
                                                                                 let logo_filename = format!("steam_{}.jpg", info.appid);
                                                                                 let logo_path = logos_dir.join(&logo_filename);
-                                                                                
+
                                                                                 let logo_url = info.header_image.as_ref()
                                                                                     .or(info.capsule_image.as_ref())
                                                                                     .map(|s| s.as_str());
-                                                                                
+
                                                                                 let mut logo_path_str = None;
                                                                                 if let Some(url) = logo_url {
                                                                                     if let Err(e) = steam::download_steam_image(url, &logo_path) {
@@ -2101,7 +2180,7 @@ fn main() {
                                                                                         logo_path_str = Some(logo_path.to_string_lossy().to_string());
                                                                                     }
                                                                                 }
-                                                                                
+
                                                                                 let conn = db_for_steam.lock().unwrap();
                                                                                 let mut cache = db::get_game_cache(&conn, &game_id_for_steam).unwrap_or(GameCache {
                                                                                     game_id: game_id_for_steam.clone(),
@@ -2114,22 +2193,22 @@ fn main() {
                                                                                     steam_logo_path: logo_path_str.clone(),
                                                                                     steam_match_status: Some("found".to_string()),
                                                                                 });
-                                                                                
+
                                                                                 cache.display_title = Some(info.name.clone());
                                                                                 cache.steam_appid = Some(info.appid);
                                                                                 cache.steam_name = Some(info.name.clone());
                                                                                 cache.steam_logo_path = logo_path_str;
                                                                                 cache.steam_match_status = Some("found".to_string());
                                                                                 cache.last_updated = chrono::Utc::now().timestamp();
-                                                                                
+
                                                                                 if let Err(e) = db::set_game_cache(&conn, &cache) {
                                                                                     println!("[Steam] 自动保存缓存失败: {}", e);
                                                                                 }
-                                                                                
+
                                                                                 if let Err(e) = db::update_game_display_title(&conn, &game_id_for_steam, &info.name) {
                                                                                     println!("[Steam] 自动更新显示标题失败: {}", e);
                                                                                 }
-                                                                                
+
                                                                                 println!("[Steam] 阶段B匹配成功: {} -> {}", process_name_for_steam, info.name);
                                                                             }
                                                                         } else {
@@ -2145,19 +2224,19 @@ fn main() {
                                                                                 steam_logo_path: None,
                                                                                 steam_match_status: Some("NotFound".to_string()),
                                                                             });
-                                                                            
+
                                                                             cache.display_title = Some(process_name_for_steam.clone());
                                                                             cache.steam_match_status = Some("NotFound".to_string());
                                                                             cache.last_updated = chrono::Utc::now().timestamp();
-                                                                            
+
                                                                             if let Err(e) = db::set_game_cache(&conn, &cache) {
                                                                                 println!("[Steam] 保存状态失败: {}", e);
                                                                             }
-                                                                            
+
                                                                             if let Err(e) = db::update_game_display_title(&conn, &game_id_for_steam, &process_name_for_steam) {
                                                                                 println!("[Steam] 更新显示标题失败: {}", e);
                                                                             }
-                                                                            
+
                                                                             println!("[Steam] 阶段B匹配结果: {} -> NotFound (使用进程名作为标题)", process_name_for_steam);
                                                                         }
                                                                     });
@@ -2177,7 +2256,7 @@ fn main() {
                                                 break;
                                             }
                                         }
-                                        
+
                                         let mut processing = processing_h.lock().unwrap();
                                         *processing = false;
                                         println!("[队列] 处理完成");
@@ -2187,13 +2266,16 @@ fn main() {
                                     println!("[截图] 屏幕捕获失败: {}", e);
                                 }
                             }
+
+                            println!("[耗时] 本次热键处理总耗时: {:.2}ms", total_start.elapsed().as_secs_f64() * 1000.0);
+                        }
+                        Err(e) => {
+                            eprintln!("[热键] 处理通道断开: {:?}", e);
+                            break;
                         }
                     }
-                };
-                
-                if let Err(e) = listen(callback) {
-                    eprintln!("[错误] 热键监听失败: {:?}", e);
                 }
+                println!("[热键] 处理线程退出");
             });
 
             println!("[启动] 应用设置完成!");
@@ -2204,6 +2286,7 @@ fn main() {
             get_screenshots_with_pagination,
             get_games,
             get_games_with_pagination,
+            search_all_games,
             delete_screenshot,
             delete_screenshots,
             update_note,
@@ -2258,7 +2341,9 @@ fn main() {
             get_deleted_screenshots_count,
             get_screenshot_notification,
             set_screenshot_notification,
-            generate_thumbnails
+            generate_thumbnails,
+            resume_thumbnail_generation,
+            get_all_deleted_screenshot_ids
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

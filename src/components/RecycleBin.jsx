@@ -232,6 +232,7 @@ export function RecycleBin({
                 )}
                 <div style={{ width: '100%', aspectRatio: '16 / 9', overflow: 'hidden', position: 'relative' }}>
                   <ThumbnailImage 
+                    key={ss._thumbVersion || 0}
                     thumbnailPath={ss.thumbnail_path}
                     theme={theme}
                   />

@@ -2,9 +2,10 @@ use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use std::path::PathBuf;
 use chrono::Utc;
 use webp::PixelLayout;
-use winapi::um::winuser::{GetForegroundWindow, GetWindowRect, GetClientRect, GetDC, ReleaseDC, GetDesktopWindow, GetCursorInfo, CURSORINFO, DrawIconEx, GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+use winapi::um::winuser::{GetForegroundWindow, GetClientRect, GetWindowRect, GetDC, ReleaseDC, GetDesktopWindow, GetCursorInfo, CURSORINFO, DrawIconEx, GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN, ClientToScreen, GetClassNameW, GetWindowLongW, GWL_STYLE, WS_OVERLAPPEDWINDOW};
 use winapi::um::wingdi::{BitBlt, SRCCOPY, CreateCompatibleDC, CreateCompatibleBitmap, SelectObject, DeleteDC, DeleteObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, GetDIBits};
 use winapi::shared::minwindef::UINT;
+use winapi::shared::windef::POINT;
 use std::mem::size_of;
 
 const DI_NORMAL: UINT = 0x0001;
@@ -28,13 +29,29 @@ pub fn capture_window(capture_mouse: bool) -> Result<DynamicImage, Box<dyn std::
             return Err("Window has zero size".into());
         }
 
-        let mut window_rect = std::mem::zeroed();
-        if GetWindowRect(hwnd, &mut window_rect) == 0 {
-            return Err("Failed to get window rect".into());
-        }
+        let mut client_origin = POINT { x: 0, y: 0 };
+        ClientToScreen(hwnd, &mut client_origin);
+        let client_left = client_origin.x;
+        let client_top = client_origin.y;
 
-        let client_left = window_rect.left + (window_rect.right - window_rect.left - client_rect.right + client_rect.left) / 2;
-        let client_top = window_rect.top + (window_rect.bottom - window_rect.top - client_rect.bottom + client_rect.top) - ((window_rect.right - window_rect.left - client_rect.right + client_rect.left) / 2);
+        let mut class_name: [u16; 256] = [0; 256];
+        let class_name_len = GetClassNameW(hwnd, class_name.as_mut_ptr(), 256);
+        let class_name_str = if class_name_len > 0 {
+            String::from_utf16_lossy(&class_name[..class_name_len as usize])
+        } else {
+            "Unknown".to_string()
+        };
+
+        let mut window_rect = std::mem::zeroed();
+        GetWindowRect(hwnd, &mut window_rect);
+
+        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+        let has_frame = (style & WS_OVERLAPPEDWINDOW) == WS_OVERLAPPEDWINDOW;
+
+        println!("[截图] 窗口类: {}, 有标准边框: {}", class_name_str, has_frame);
+        println!("[截图] 窗口矩形: ({}, {}) - ({}, {}), 客户区: {}x{}, 客户区起点: ({}, {})",
+            window_rect.left, window_rect.top, window_rect.right, window_rect.bottom,
+            width, height, client_left, client_top);
 
         let desktop_hwnd = GetDesktopWindow();
         let screen_dc = GetDC(desktop_hwnd);

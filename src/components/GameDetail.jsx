@@ -404,6 +404,7 @@ export function GameDetail({
                   overflow: 'hidden'
                 }}>
                   <ThumbnailImage 
+                    key={ss._thumbVersion || 0}
                     thumbnailPath={ss.thumbnail_path}
                     theme={theme}
                   />

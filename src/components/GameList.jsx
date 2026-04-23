@@ -1,5 +1,6 @@
-import { useRef, useEffect, useState, useMemo } from 'react'
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { invoke } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 import { Pagination } from './Pagination'
 import { NavDropdown } from './NavDropdown'
@@ -15,6 +16,7 @@ function getImageSrc(path) {
 }
 
 function formatDate(timestamp) {
+  if (!timestamp || timestamp === 0) return ''
   const date = new Date(timestamp * 1000)
   return date.toLocaleString()
 }
@@ -42,18 +44,34 @@ export function GameList({
   onLoadPage,
   currentView,
   onNavigate,
+  onSearchGames,
+  onClearSearch,
 }) {
   const scrollContainerRef = useRef(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [searchResults, setSearchResults] = useState(null)
+  const searchTimerRef = useRef(null)
   
-  const filteredGames = useMemo(() => {
-    if (!searchTerm.trim()) return games
-    const term = searchTerm.toLowerCase()
-    return games.filter(game => {
-      const title = (game.display_title || game.game_title || '').toLowerCase()
-      return title.includes(term)
-    })
-  }, [games, searchTerm])
+  const handleSearch = useCallback((term) => {
+    setSearchTerm(term)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    if (!term.trim()) {
+      setSearchResults(null)
+      onClearSearch && onClearSearch()
+      return
+    }
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const results = await invoke('search_all_games', { searchTerm: term })
+        setSearchResults(results)
+        onSearchGames && onSearchGames(results)
+      } catch (e) {
+        console.error('搜索游戏失败:', e)
+      }
+    }, 300)
+  }, [onSearchGames, onClearSearch])
+  
+  const displayGames = searchResults !== null ? searchResults : games
   
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -120,7 +138,7 @@ export function GameList({
                   type="text"
                   placeholder={t.header.search_game}
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => handleSearch(e.target.value)}
                   style={{
                     padding: '8px 12px 8px 32px',
                     background: theme.accent,
@@ -145,7 +163,7 @@ export function GameList({
                       display: 'flex',
                       alignItems: 'center'
                     }}
-                    onClick={() => setSearchTerm('')}
+                    onClick={() => handleSearch('')}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <line x1="18" y1="6" x2="6" y2="18"/>
@@ -287,7 +305,7 @@ export function GameList({
       </div>
       
       <div style={{ flex: 1, overflow: 'auto' }} ref={scrollContainerRef}>
-      {filteredGames.length === 0 ? (
+      {displayGames.length === 0 ? (
         <div style={styles.empty}>
           {searchTerm ? (
             <>
@@ -311,11 +329,11 @@ export function GameList({
               fontSize: 13,
               color: theme.textMuted
             }}>
-              {t.header.search_result_for} "{searchTerm}" ({filteredGames.length})
+              {t.header.search_result_for} "{searchTerm}" ({displayGames.length})
             </div>
           )}
           <div style={styles.grid}>
-            {filteredGames.map((game, index) => {
+            {displayGames.map((game, index) => {
               const hasSteamLogo = !!game.steam_logo_path;
               const iconSrc = game.steam_logo_path || game.game_icon_path;
               return (
@@ -412,7 +430,7 @@ export function GameList({
                 <div style={styles.gameTitle}>{game.display_title || game.game_title}</div>
                 <div style={styles.gameCount}>{game.count} {t.game.screenshots}</div>
                 <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>
-                  {t.game.last_updated} {formatDate(game.last_timestamp)}
+                  {formatDate(game.last_timestamp) ? `${t.game.last_updated} ${formatDate(game.last_timestamp)}` : ''}
                 </div>
               </div>
             );})}
@@ -425,7 +443,7 @@ export function GameList({
       )}
       </div>
       
-      {totalPages > 1 && onLoadPage && (
+      {!searchTerm && totalPages > 1 && onLoadPage && (
         <Pagination
           theme={theme}
           currentPage={currentPage}
