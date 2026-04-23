@@ -16,6 +16,24 @@ pub struct ForegroundProcessInfo {
     pub exe_path: Option<String>,
 }
 
+pub fn get_steam_running_appid() -> Option<u32> {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
+    use winreg::RegKey;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let steam_key = hkcu
+        .open_subkey_with_flags(r"Software\Valve\Steam", KEY_READ)
+        .ok()?;
+
+    let appid: u32 = steam_key.get_value("RunningAppID").ok()?;
+
+    if appid > 0 {
+        Some(appid)
+    } else {
+        None
+    }
+}
+
 pub fn get_foreground_process_info() -> ForegroundProcessInfo {
     unsafe {
         let hwnd = GetForegroundWindow();

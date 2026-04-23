@@ -31,6 +31,7 @@ struct ScreenshotTask {
     image: DynamicImage,
     exe_path: Option<String>,
     process_name: String,
+    steam_appid: Option<u32>,
 }
 
 struct AppState {
@@ -1798,6 +1799,11 @@ fn main() {
                             let process_info = get_foreground_process_info();
                             println!("[截图] 进程: {}, exe: {:?}", process_info.process_name, process_info.exe_path);
                             
+                            let steam_appid = get_steam_running_appid();
+                            if let Some(appid) = steam_appid {
+                                println!("[Steam] 检测到Steam运行游戏, AppID: {}", appid);
+                            }
+                            
                             match capture_screenshot(false) {
                                 Ok(image) => {
                                     println!("[截图] 屏幕捕获成功");
@@ -1806,6 +1812,7 @@ fn main() {
                                         image,
                                         exe_path: process_info.exe_path,
                                         process_name: process_info.process_name,
+                                        steam_appid,
                                     };
                                     
                                     {
@@ -1843,7 +1850,7 @@ fn main() {
                                                 
                                                 let db_clone_for_id = db_h.clone();
                                                 let conn_for_id = db_clone_for_id.lock().unwrap();
-                                                let (game_id, is_existing) = db::find_existing_game_id(&conn_for_id, &task.process_name, exe_path_ref);
+                                                let (game_id, is_existing) = db::find_existing_game_id(&conn_for_id, &task.process_name, exe_path_ref, task.steam_appid);
                                                 drop(conn_for_id);
                                                 println!("[队列] 使用游戏ID: {} (进程名: {}, 已存在: {})", game_id, task.process_name, is_existing);
                                                 
@@ -2011,8 +2018,69 @@ fn main() {
                                                                         let db_for_steam = db_clone.clone();
                                                                         let game_id_for_steam = game_id.clone();
                                                                         let process_name_for_steam = task.process_name.clone();
+                                                                        let steam_appid_for_steam = task.steam_appid;
                                                                         std::thread::spawn(move || {
-                                                                        println!("[Steam] 自动匹配游戏信息: {}", process_name_for_steam);
+                                                                        if let Some(appid) = steam_appid_for_steam {
+                                                                            if appid > 0 {
+                                                                                println!("[Steam] 阶段A: 通过RunningAppID直接匹配, AppID={}", appid);
+                                                                                match steam::get_steam_app_details(appid, "schinese") {
+                                                                                    Ok(Some(info)) => {
+                                                                                        let logos_dir = steam::get_steam_logos_dir();
+                                                                                        let logo_filename = format!("steam_{}.jpg", info.appid);
+                                                                                        let logo_path = logos_dir.join(&logo_filename);
+                                                                                        
+                                                                                        let logo_url = info.header_image.as_ref()
+                                                                                            .or(info.capsule_image.as_ref())
+                                                                                            .map(|s| s.as_str());
+                                                                                        
+                                                                                        let mut logo_path_str = None;
+                                                                                        if let Some(url) = logo_url {
+                                                                                            if let Err(e) = steam::download_steam_image(url, &logo_path) {
+                                                                                                println!("[Steam] 自动下载logo失败: {}", e);
+                                                                                            } else {
+                                                                                                logo_path_str = Some(logo_path.to_string_lossy().to_string());
+                                                                                            }
+                                                                                        }
+                                                                                        
+                                                                                        let conn = db_for_steam.lock().unwrap();
+                                                                                        let mut cache = db::get_game_cache(&conn, &game_id_for_steam).unwrap_or(GameCache {
+                                                                                            game_id: game_id_for_steam.clone(),
+                                                                                            exe_path: None,
+                                                                                            icon_path: None,
+                                                                                            display_title: Some(info.name.clone()),
+                                                                                            last_updated: chrono::Utc::now().timestamp(),
+                                                                                            steam_appid: Some(info.appid),
+                                                                                            steam_name: Some(info.name.clone()),
+                                                                                            steam_logo_path: logo_path_str.clone(),
+                                                                                            steam_match_status: Some("found".to_string()),
+                                                                                        });
+                                                                                        
+                                                                                        cache.display_title = Some(info.name.clone());
+                                                                                        cache.steam_appid = Some(info.appid);
+                                                                                        cache.steam_name = Some(info.name.clone());
+                                                                                        cache.steam_logo_path = logo_path_str;
+                                                                                        cache.steam_match_status = Some("found".to_string());
+                                                                                        cache.last_updated = chrono::Utc::now().timestamp();
+                                                                                        
+                                                                                        if let Err(e) = db::set_game_cache(&conn, &cache) {
+                                                                                            println!("[Steam] 自动保存缓存失败: {}", e);
+                                                                                        }
+                                                                                        
+                                                                                        if let Err(e) = db::update_game_display_title(&conn, &game_id_for_steam, &info.name) {
+                                                                                            println!("[Steam] 自动更新显示标题失败: {}", e);
+                                                                                        }
+                                                                                        
+                                                                                        println!("[Steam] 阶段A匹配成功: AppID={} -> {}", appid, info.name);
+                                                                                        return;
+                                                                                    }
+                                                                                    _ => {
+                                                                                        println!("[Steam] 阶段A: RunningAppID={} 但API未找到详情，回退到阶段B", appid);
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        println!("[Steam] 阶段B: 进程名匹配: {}", process_name_for_steam);
                                                                         let result = steam::match_game_name(&process_name_for_steam, "schinese");
                                                                         
                                                                         if result.status == SteamMatchStatus::Found {
@@ -2062,7 +2130,7 @@ fn main() {
                                                                                     println!("[Steam] 自动更新显示标题失败: {}", e);
                                                                                 }
                                                                                 
-                                                                                println!("[Steam] 自动匹配成功: {} -> {}", process_name_for_steam, info.name);
+                                                                                println!("[Steam] 阶段B匹配成功: {} -> {}", process_name_for_steam, info.name);
                                                                             }
                                                                         } else {
                                                                             let conn = db_for_steam.lock().unwrap();
@@ -2090,7 +2158,7 @@ fn main() {
                                                                                 println!("[Steam] 更新显示标题失败: {}", e);
                                                                             }
                                                                             
-                                                                            println!("[Steam] 自动匹配结果: {} -> NotFound (使用进程名作为标题)", process_name_for_steam);
+                                                                            println!("[Steam] 阶段B匹配结果: {} -> NotFound (使用进程名作为标题)", process_name_for_steam);
                                                                         }
                                                                     });
                                                                     }

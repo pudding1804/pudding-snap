@@ -95,11 +95,19 @@ pub fn get_storage_path() -> String {
     get_data_dir().to_string_lossy().to_string()
 }
 
-pub fn generate_game_id(process_name: &str, exe_path: Option<&str>) -> String {
+pub fn generate_game_id(process_name: &str, exe_path: Option<&str>, steam_appid: Option<u32>) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     
     let mut hasher = DefaultHasher::new();
+    
+    if let Some(appid) = steam_appid {
+        if appid > 0 {
+            let unique_key = format!("steam_{}", appid);
+            unique_key.hash(&mut hasher);
+            return format!("{:x}", hasher.finish());
+        }
+    }
     
     if let Some(exe) = exe_path {
         if let Some(rpg_title) = crate::windows_utils::get_rpg_maker_game_title(exe) {
@@ -121,8 +129,8 @@ pub fn generate_game_id(process_name: &str, exe_path: Option<&str>) -> String {
     format!("{:x}", hasher.finish())
 }
 
-pub fn find_existing_game_id(conn: &Connection, process_name: &str, exe_path: Option<&str>) -> (String, bool) {
-    let game_id = generate_game_id(process_name, exe_path);
+pub fn find_existing_game_id(conn: &Connection, process_name: &str, exe_path: Option<&str>, steam_appid: Option<u32>) -> (String, bool) {
+    let game_id = generate_game_id(process_name, exe_path, steam_appid);
     
     let mut stmt = match conn.prepare("SELECT game_id FROM screenshots WHERE game_id = ?1 LIMIT 1") {
         Ok(s) => s,
@@ -140,6 +148,17 @@ pub fn find_existing_game_id(conn: &Connection, process_name: &str, exe_path: Op
     
     if let Some(existing_id) = stmt.query_row(params![process_name], |row| row.get(0)).ok() {
         return (existing_id, true);
+    }
+    
+    if let Some(appid) = steam_appid {
+        if appid > 0 {
+            if let Ok(mut stmt) = conn.prepare("SELECT game_id FROM game_cache WHERE steam_appid = ?1 LIMIT 1") {
+                if let Some(existing_id) = stmt.query_row(params![appid], |row| row.get::<_, String>(0)).ok() {
+                    println!("[匹配] 通过steam_appid={}找到已有游戏: {}", appid, existing_id);
+                    return (existing_id, true);
+                }
+            }
+        }
     }
     
     (game_id, false)
