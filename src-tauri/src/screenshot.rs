@@ -1,4 +1,4 @@
-use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
+use image::{DynamicImage, GenericImageView, ImageBuffer};
 use std::path::PathBuf;
 use chrono::Utc;
 use webp::PixelLayout;
@@ -134,18 +134,12 @@ pub fn capture_window(capture_mouse: bool) -> Result<DynamicImage, Box<dyn std::
             return Err("GetDIBits failed".into());
         }
 
-        let mut img_buffer = ImageBuffer::new(width, height);
-        for y in 0..height as usize {
-            for x in 0..width as usize {
-                let idx = (y * width as usize + x) * 4;
-                img_buffer.put_pixel(x as u32, y as u32, Rgba([
-                    pixels[idx + 2],
-                    pixels[idx + 1],
-                    pixels[idx],
-                    255
-                ]));
-            }
+        for chunk in pixels.chunks_exact_mut(4) {
+            chunk.swap(0, 2);
+            chunk[3] = 255;
         }
+        let img_buffer = ImageBuffer::from_raw(width, height, pixels)
+            .ok_or("Failed to create image buffer")?;
 
         println!("[截图] 窗口截图成功: {}x{}", width, height);
         Ok(DynamicImage::ImageRgba8(img_buffer))
@@ -255,18 +249,12 @@ pub fn capture_fullscreen(capture_mouse: bool) -> Result<DynamicImage, Box<dyn s
             return Err("GetDIBits failed".into());
         }
 
-        let mut img_buffer = ImageBuffer::new(width, height);
-        for y in 0..height as usize {
-            for x in 0..width as usize {
-                let idx = (y * width as usize + x) * 4;
-                img_buffer.put_pixel(x as u32, y as u32, Rgba([
-                    pixels[idx + 2],
-                    pixels[idx + 1],
-                    pixels[idx],
-                    255
-                ]));
-            }
+        for chunk in pixels.chunks_exact_mut(4) {
+            chunk.swap(0, 2);
+            chunk[3] = 255;
         }
+        let img_buffer = ImageBuffer::from_raw(width, height, pixels)
+            .ok_or("Failed to create image buffer")?;
 
         println!("[截图] 全屏截图成功: {}x{}", width, height);
         Ok(DynamicImage::ImageRgba8(img_buffer))

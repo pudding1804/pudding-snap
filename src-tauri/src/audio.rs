@@ -9,12 +9,6 @@ pub fn play_shutter_sound_with_type(sound_type: &str) -> Result<(), String> {
         return Ok(());
     }
     
-    let (_stream, stream_handle) = rodio::OutputStream::try_default()
-        .map_err(|e| format!("无法获取音频输出: {}", e))?;
-    
-    let sink = Sink::try_new(&stream_handle)
-        .map_err(|e| format!("无法创建音频Sink: {}", e))?;
-    
     let sample_rate = 44100u32;
     let samples: Vec<i16> = match sound_type {
         "default" => generate_default_sound(sample_rate),
@@ -26,9 +20,17 @@ pub fn play_shutter_sound_with_type(sound_type: &str) -> Result<(), String> {
         _ => generate_default_sound(sample_rate),
     };
     
-    let source = rodio::buffer::SamplesBuffer::new(1, sample_rate, samples);
-    sink.append(source);
-    sink.sleep_until_end();
+    std::thread::spawn(move || {
+        if let Ok((stream, stream_handle)) = rodio::OutputStream::try_default() {
+            if let Ok(sink) = Sink::try_new(&stream_handle) {
+                let source = rodio::buffer::SamplesBuffer::new(1, sample_rate, samples);
+                sink.append(source);
+                sink.sleep_until_end();
+                drop(sink);
+            }
+            drop(stream);
+        }
+    });
     
     Ok(())
 }

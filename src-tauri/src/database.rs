@@ -95,19 +95,11 @@ pub fn get_storage_path() -> String {
     get_data_dir().to_string_lossy().to_string()
 }
 
-pub fn generate_game_id(process_name: &str, exe_path: Option<&str>, steam_appid: Option<u32>) -> String {
+pub fn generate_game_id(process_name: &str, exe_path: Option<&str>) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     
     let mut hasher = DefaultHasher::new();
-    
-    if let Some(appid) = steam_appid {
-        if appid > 0 {
-            let unique_key = format!("steam_{}", appid);
-            unique_key.hash(&mut hasher);
-            return format!("{:x}", hasher.finish());
-        }
-    }
     
     if let Some(exe) = exe_path {
         if let Some(rpg_title) = crate::windows_utils::get_rpg_maker_game_title(exe) {
@@ -129,38 +121,31 @@ pub fn generate_game_id(process_name: &str, exe_path: Option<&str>, steam_appid:
     format!("{:x}", hasher.finish())
 }
 
-pub fn find_existing_game_id(conn: &Connection, process_name: &str, exe_path: Option<&str>, steam_appid: Option<u32>) -> (String, bool) {
-    let game_id = generate_game_id(process_name, exe_path, steam_appid);
+pub fn find_existing_game_id(conn: &Connection, process_name: &str, exe_path: Option<&str>, _steam_appid: Option<u32>) -> (String, bool) {
+    let game_id = generate_game_id(process_name, exe_path);
     
-    let mut stmt = match conn.prepare("SELECT game_id FROM screenshots WHERE game_id = ?1 LIMIT 1") {
-        Ok(s) => s,
-        Err(_) => return (game_id, false),
-    };
-    
-    if stmt.query_row(params![&game_id], |row| row.get::<_, String>(0)).ok().is_some() {
-        return (game_id, true);
-    }
-    
-    let mut stmt = match conn.prepare("SELECT game_id FROM screenshots WHERE game_title = ?1 LIMIT 1") {
-        Ok(s) => s,
-        Err(_) => return (game_id, false),
-    };
-    
-    if let Some(existing_id) = stmt.query_row(params![process_name], |row| row.get(0)).ok() {
-        return (existing_id, true);
-    }
-    
-    if let Some(appid) = steam_appid {
-        if appid > 0 {
-            if let Ok(mut stmt) = conn.prepare("SELECT game_id FROM game_cache WHERE steam_appid = ?1 LIMIT 1") {
-                if let Some(existing_id) = stmt.query_row(params![appid], |row| row.get::<_, String>(0)).ok() {
-                    println!("[匹配] 通过steam_appid={}找到已有游戏: {}", appid, existing_id);
-                    return (existing_id, true);
-                }
-            }
+    if let Ok(mut stmt) = conn.prepare("SELECT game_id FROM game_cache WHERE game_id = ?1 LIMIT 1") {
+        if stmt.query_row(params![&game_id], |row| row.get::<_, String>(0)).ok().is_some() {
+            println!("[匹配] 通过game_id精确匹配找到已有游戏: {}", game_id);
+            return (game_id, true);
         }
     }
     
+    if let Ok(mut stmt) = conn.prepare("SELECT game_id FROM screenshots WHERE game_id = ?1 LIMIT 1") {
+        if stmt.query_row(params![&game_id], |row| row.get::<_, String>(0)).ok().is_some() {
+            println!("[匹配] 通过screenshots表精确匹配找到已有游戏: {}", game_id);
+            return (game_id, true);
+        }
+    }
+    
+    if let Ok(mut stmt) = conn.prepare("SELECT game_id FROM screenshots WHERE game_title = ?1 LIMIT 1") {
+        if let Some(existing_id) = stmt.query_row(params![process_name], |row| row.get(0)).ok() {
+            println!("[匹配] 通过进程名'{}'匹配找到已有游戏: {}", process_name, existing_id);
+            return (existing_id, true);
+        }
+    }
+    
+    println!("[匹配] 未找到已有游戏，将创建新游戏: {} (进程名: {})", game_id, process_name);
     (game_id, false)
 }
 
@@ -335,8 +320,16 @@ pub fn init_db() -> Result<Connection> {
 
     println!("[数据库] 数据库初始化成功");
     
-    fix_paths_on_startup(&conn)?;
-    verify_and_fix_paths(&conn)?;
+    let current_dir_str = get_data_dir().to_string_lossy().to_string();
+    let stored_dir = get_setting(&conn, "data_dir");
+    
+    if stored_dir.as_deref() != Some(&current_dir_str) {
+        println!("[路径验证] 数据目录已变更或首次启动，执行路径修复");
+        fix_paths_on_startup(&conn)?;
+        let _ = set_setting(&conn, "data_dir", &current_dir_str);
+    } else {
+        println!("[路径验证] 数据目录未变更，跳过全量验证");
+    }
     
     Ok(conn)
 }

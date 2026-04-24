@@ -21,7 +21,6 @@ image = "0.25"
 imageproc = "0.24"
 ab_glyph = "0.2"
 webp = "0.3"
-rdev = "0.5"
 rusqlite = { version = "0.32", features = ["chrono", "bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5.0"

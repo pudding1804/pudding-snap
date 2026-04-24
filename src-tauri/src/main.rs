@@ -8,12 +8,14 @@ mod audio;
 mod steam;
 mod bangumi;
 
-use std::sync::{Arc, Mutex, mpsc};
-use std::collections::VecDeque;
+mod raw_input;
+mod keyboard_hook;
+
+use std::sync::{Arc, Mutex, mpsc, RwLock};
+use std::collections::{VecDeque, HashMap};
 use std::time::Instant;
 use image::DynamicImage;
 use tauri::{Manager, State, Emitter, AppHandle, menu::{Menu, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState}};
-use rdev::{listen, Event, EventType, Key};
 use rusqlite::params;
 use database as db;
 use models::*;
@@ -35,6 +37,7 @@ struct ScreenshotTask {
     steam_appid: Option<u32>,
 }
 
+#[derive(Debug)]
 enum HotkeyEvent {
     PrintScreen,
     F12,
@@ -42,6 +45,7 @@ enum HotkeyEvent {
 
 struct AppState {
     db: Arc<Mutex<rusqlite::Connection>>,
+    settings_cache: Arc<RwLock<HashMap<String, String>>>,
     window_shown: Arc<Mutex<bool>>,
     screenshot_queue: Arc<Mutex<VecDeque<ScreenshotTask>>>,
     is_processing: Arc<Mutex<bool>>,
@@ -436,7 +440,13 @@ fn get_setting(key: String, state: State<AppState>) -> Result<Option<String>, St
 fn set_setting(key: String, value: String, state: State<AppState>) -> Result<(), String> {
     println!("[设置] 保存设置: {} = {}", key, value);
     let conn = state.db.lock().unwrap();
-    db::set_setting(&conn, &key, &value).map_err(|e| e.to_string())
+    db::set_setting(&conn, &key, &value).map_err(|e| e.to_string())?;
+    drop(conn);
+    {
+        let mut cache = state.settings_cache.write().unwrap();
+        cache.insert(key, value);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1684,6 +1694,16 @@ fn main() {
     };
     
     let db_arc = Arc::new(Mutex::new(db_conn));
+    let settings_cache = {
+        let conn = db_arc.lock().unwrap();
+        let mut cache = HashMap::new();
+        for key in &["shutter_sound", "screenshot_format", "screenshot_quality", "screenshot_notification", "theme", "sort_order", "game_sort_order", "backup_enabled", "data_dir"] {
+            if let Some(value) = db::get_setting(&conn, key) {
+                cache.insert(key.to_string(), value);
+            }
+        }
+        Arc::new(RwLock::new(cache))
+    };
     let window_shown = Arc::new(Mutex::new(false));
     let screenshot_queue = Arc::new(Mutex::new(VecDeque::new()));
     let is_processing = Arc::new(Mutex::new(false));
@@ -1707,6 +1727,7 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .manage(AppState { 
             db: db_arc, 
+            settings_cache,
             window_shown,
             screenshot_queue,
             is_processing,
@@ -1818,43 +1839,45 @@ fn main() {
             let db_for_hotkey = state.db.clone();
             let window_shown_clone = state.window_shown.clone();
             let unread_count_clone = state.unread_count.clone();
+            let settings_cache_for_hotkey = state.settings_cache.clone();
 
             let (hotkey_tx, hotkey_rx) = mpsc::channel::<HotkeyEvent>();
 
-            std::thread::spawn(move || {
-                println!("[启动] 热键监听线程启动");
+            {
+                let tx = hotkey_tx.clone();
+                raw_input::start_raw_input_listener(move |event| {
+                    let hotkey = match event {
+                        raw_input::RawHotkeyEvent::PrintScreen => HotkeyEvent::PrintScreen,
+                        raw_input::RawHotkeyEvent::F12 => HotkeyEvent::F12,
+                    };
+                    let _ = tx.send(hotkey);
+                });
+            }
 
-                let tx = hotkey_tx;
-                let callback = move |event: Event| {
-                    if let EventType::KeyPress(key) = event.event_type {
-                        let hotkey = match key {
-                            Key::PrintScreen => Some(HotkeyEvent::PrintScreen),
-                            Key::F12 => Some(HotkeyEvent::F12),
-                            _ => None,
-                        };
-                        if let Some(hotkey) = hotkey {
-                            let t = Instant::now();
-                            match tx.send(hotkey) {
-                                Ok(_) => println!("[热键] 信号发送成功, 耗时: {:.2}ms", t.elapsed().as_secs_f64() * 1000.0),
-                                Err(e) => eprintln!("[热键] 信号发送失败: {:?}", e),
-                            }
-                        }
-                    }
-                };
-
-                if let Err(e) = listen(callback) {
-                    eprintln!("[错误] 热键监听失败: {:?}", e);
-                }
-                println!("[热键] 监听线程退出，钩子可能已被系统移除!");
-            });
+            {
+                let tx = hotkey_tx.clone();
+                keyboard_hook::start_keyboard_hook(move || {
+                    let _ = tx.send(HotkeyEvent::PrintScreen);
+                });
+            }
 
             let app_handle_hotkey = app_handle.clone();
+            let last_hotkey_time = Arc::new(Mutex::new(Instant::now()));
             std::thread::spawn(move || {
                 println!("[启动] 热键处理线程启动");
 
                 loop {
                     match hotkey_rx.recv() {
                         Ok(hotkey) => {
+                            {
+                                let mut last = last_hotkey_time.lock().unwrap();
+                                if last.elapsed().as_millis() < 100 {
+                                    println!("[去重] 忽略重复热键事件 ({:?})", hotkey);
+                                    continue;
+                                }
+                                *last = Instant::now();
+                            }
+
                             let key_name = match hotkey {
                                 HotkeyEvent::PrintScreen => "PrintScreen",
                                 HotkeyEvent::F12 => "F12",
@@ -1864,8 +1887,8 @@ fn main() {
 
                             let t = Instant::now();
                             let shutter_sound = {
-                                let conn = db_for_hotkey.lock().unwrap();
-                                db::get_shutter_sound(&conn)
+                                let cache = settings_cache_for_hotkey.read().unwrap();
+                                cache.get("shutter_sound").cloned().unwrap_or_else(|| "default".to_string())
                             };
                             println!("[耗时] 读取快门音效设置: {:.2}ms", t.elapsed().as_secs_f64() * 1000.0);
 
@@ -1909,6 +1932,8 @@ fn main() {
                                     let processing_h = processing_clone.clone();
                                     let window_shown_h = window_shown_clone.clone();
                                     let unread_count_h = unread_count_clone.clone();
+                                    let settings_cache_h = settings_cache_for_hotkey.clone();
+                                    let settings_cache_for_notify = settings_cache_for_hotkey.clone();
 
                                     let mut processing = processing_h.lock().unwrap();
                                     if *processing {
@@ -1942,13 +1967,14 @@ fn main() {
                                                     let _ = std::fs::create_dir_all(&thumbnails_dir);
                                                 }
 
-                                                let db_for_settings = db_h.clone();
-                                                let conn_for_settings = db_for_settings.lock().unwrap();
-                                                let screenshot_format = db::get_setting(&conn_for_settings, "screenshot_format")
-                                                    .unwrap_or_else(|| "webp".to_string());
-                                                let screenshot_quality = db::get_setting(&conn_for_settings, "screenshot_quality")
-                                                    .unwrap_or_else(|| "medium".to_string());
-                                                drop(conn_for_settings);
+                                                let screenshot_format = {
+                                                    let cache = settings_cache_h.read().unwrap();
+                                                    cache.get("screenshot_format").cloned().unwrap_or_else(|| "webp".to_string())
+                                                };
+                                                let screenshot_quality = {
+                                                    let cache = settings_cache_h.read().unwrap();
+                                                    cache.get("screenshot_quality").cloned().unwrap_or_else(|| "medium".to_string())
+                                                };
 
                                                 let filename = generate_filename_with_format(&screenshot_format);
                                                 let thumbnail_filename = generate_thumbnail_filename();
@@ -2001,12 +2027,6 @@ fn main() {
                                                                         .map(|p| std::path::Path::new(&p).exists())
                                                                         .unwrap_or(false);
 
-                                                                    let has_steam_info = db::get_game_cache(&conn, &game_id)
-                                                                        .and_then(|c| c.steam_match_status)
-                                                                        .map(|s| s == "found" || s == "skipped" || s == "NotFound" || s == "manual")
-                                                                        .unwrap_or(false);
-                                                                    println!("[Steam] 检查Steam信息: game_id={}, has_steam_info={}", game_id, has_steam_info);
-
                                                                     drop(conn);
 
                                                                     {
@@ -2033,8 +2053,10 @@ fn main() {
 
                                                                     {
                                                                         let notify_enabled = {
-                                                                            let conn = db_clone.lock().unwrap();
-                                                                            db::get_screenshot_notification(&conn)
+                                                                            let cache = settings_cache_for_notify.read().unwrap();
+                                                                            cache.get("screenshot_notification")
+                                                                                .and_then(|v| v.parse::<bool>().ok())
+                                                                                .unwrap_or(true)
                                                                         };
                                                                         if notify_enabled {
                                                                             use tauri_plugin_notification::NotificationExt;
@@ -2097,7 +2119,7 @@ fn main() {
                                                                         });
                                                                     }
 
-                                                                    if !has_steam_info {
+                                                                    if !is_existing {
                                                                         let db_for_steam = db_clone.clone();
                                                                         let game_id_for_steam = game_id.clone();
                                                                         let process_name_for_steam = task.process_name.clone();
