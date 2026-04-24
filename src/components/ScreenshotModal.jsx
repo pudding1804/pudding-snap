@@ -244,6 +244,10 @@ export function ScreenshotModal({
             <span style={{ fontSize: 12, color: theme.textMuted }}>
               {selectedScreenshot.display_title || selectedScreenshot.game_title}
             </span>
+            <span style={{ fontSize: 12, color: theme.textMuted }}>|</span>
+            <span style={{ fontSize: 12, color: theme.textMuted }}>
+              {imageDimensions.width} × {imageDimensions.height}
+            </span>
           </div>
           <button style={styles.closeBtn} onClick={onClose}>×</button>
         </div>

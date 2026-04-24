@@ -1065,6 +1065,32 @@ function App() {
     setShowScreenshotDeleteConfirm(true)
   }, [selectedScreenshots])
 
+  useEffect(() => {
+    if (!showScreenshotDeleteConfirm) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        setShowScreenshotDeleteConfirm(false)
+        setScreenshotToDelete(null)
+        setMultiDeleteCount(0)
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        e.stopPropagation()
+        setShowScreenshotDeleteConfirm(false)
+        if (multiDeleteCount > 0) {
+          doDeleteSelectedScreenshots()
+        } else if (screenshotToDelete) {
+          doDeleteScreenshot(screenshotToDelete)
+        }
+        setScreenshotToDelete(null)
+        setMultiDeleteCount(0)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [showScreenshotDeleteConfirm, screenshotToDelete, multiDeleteCount, doDeleteScreenshot, doDeleteSelectedScreenshots])
+
   const openInExplorer = useCallback(async (filePath) => {
     try {
       await invoke('open_in_explorer', { filePath })
