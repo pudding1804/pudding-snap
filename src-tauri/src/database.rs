@@ -417,6 +417,10 @@ pub fn verify_and_fix_paths(conn: &Connection) -> Result<()> {
                 let thumb_exists = std::path::Path::new(&thumb_path).exists();
                 
                 if !file_exists || !thumb_exists {
+                    println!("[路径验证] 损坏记录: id={}, game_id={}, 文件存在={}, 缩略图存在={}", 
+                        id, game_id, file_exists, thumb_exists);
+                    println!("[路径验证]   文件路径: {}", file_path);
+                    println!("[路径验证]   缩略图路径: {}", thumb_path);
                     broken_paths.push((id, file_path, thumb_path, game_id));
                 }
             }
@@ -430,9 +434,14 @@ pub fn verify_and_fix_paths(conn: &Connection) -> Result<()> {
     
     println!("[路径验证] 发现 {} 条损坏路径，尝试修复...", broken_paths.len());
     
+    let mut fixed_count = 0;
+    let mut unfixable_count = 0;
+    
     for (id, file_path, thumb_path, game_id) in broken_paths {
         let mut new_file_path = file_path.clone();
         let mut new_thumb_path = thumb_path.clone();
+        let mut file_fixed = false;
+        let mut thumb_fixed = false;
         
         let game_dir = data_dir.join(&game_id);
         
@@ -442,8 +451,11 @@ pub fn verify_and_fix_paths(conn: &Connection) -> Result<()> {
                 if correct_path.exists() {
                     new_file_path = correct_path.to_string_lossy().to_string();
                     println!("[路径修复] 截图: {} -> {}", file_path, new_file_path);
+                    file_fixed = true;
                 }
             }
+        } else {
+            file_fixed = true;
         }
         
         if !std::path::Path::new(&thumb_path).exists() {
@@ -453,8 +465,11 @@ pub fn verify_and_fix_paths(conn: &Connection) -> Result<()> {
                 if correct_path.exists() {
                     new_thumb_path = correct_path.to_string_lossy().to_string();
                     println!("[路径修复] 缩略图: {} -> {}", thumb_path, new_thumb_path);
+                    thumb_fixed = true;
                 }
             }
+        } else {
+            thumb_fixed = true;
         }
         
         if new_file_path != file_path || new_thumb_path != thumb_path {
@@ -462,10 +477,22 @@ pub fn verify_and_fix_paths(conn: &Connection) -> Result<()> {
                 "UPDATE screenshots SET file_path = ?1, thumbnail_path = ?2 WHERE id = ?3",
                 params![&new_file_path, &new_thumb_path, id],
             )?;
+            fixed_count += 1;
+        }
+        
+        if !file_fixed || !thumb_fixed {
+            unfixable_count += 1;
+            println!("[路径验证] 无法修复记录: id={}, game_id={}, 文件修复={}, 缩略图修复={}", 
+                id, game_id, file_fixed, thumb_fixed);
+            
+            let trash_dir = get_trash_dir();
+            let trash_file = trash_dir.join(std::path::Path::new(&file_path).file_name().unwrap_or_default());
+            let trash_thumb = trash_dir.join("thumbnails").join(std::path::Path::new(&thumb_path).file_name().unwrap_or_default());
+            println!("[路径验证]   检查回收站: 文件={}, 缩略图={}", trash_file.exists(), trash_thumb.exists());
         }
     }
     
-    println!("[路径验证] 修复完成");
+    println!("[路径验证] 修复完成: 成功={}, 无法修复={}", fixed_count, unfixable_count);
     Ok(())
 }
 
@@ -1093,18 +1120,46 @@ pub fn soft_delete_screenshot(conn: &Connection, id: i32) -> std::result::Result
     let original_file_path = file_path.clone();
     let original_thumbnail_path = thumbnail_path.clone();
 
-    let new_file_path = move_file_to_trash(&file_path)?;
-    let new_thumbnail_path = move_thumbnail_to_trash(&thumbnail_path)?;
+    let new_file_path = move_file_to_trash(&file_path).unwrap_or_else(|e| {
+        println!("[软删除] 移动文件失败: {} - {}", file_path, e);
+        file_path.clone()
+    });
+    let new_thumbnail_path = move_thumbnail_to_trash(&thumbnail_path).unwrap_or_else(|e| {
+        println!("[软删除] 移动缩略图失败: {} - {}", thumbnail_path, e);
+        thumbnail_path.clone()
+    });
+    println!("[软删除] 文件路径: {} -> {}", file_path, new_file_path);
+    println!("[软删除] 缩略图路径: {} -> {}", thumbnail_path, new_thumbnail_path);
 
     let now = chrono::Utc::now().timestamp();
 
-    conn.execute(
-        "INSERT INTO deleted_screenshots (original_id, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-        params![id, new_file_path, new_thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, now],
-    ).map_err(|e| format!("插入回收站记录失败: {}", e))?;
+    // 查找所有指向同一文件的记录
+    let mut same_file_stmt = conn.prepare("SELECT id FROM screenshots WHERE file_path = ?1 OR thumbnail_path = ?2")
+        .map_err(|e| format!("查询重复记录失败: {}", e))?;
+    let same_file_ids: Vec<i32> = same_file_stmt.query_map(params![file_path, thumbnail_path], |row| row.get(0))
+        .map_err(|e| format!("查询重复记录失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("解析重复记录失败: {}", e))?;
+    
+    if same_file_ids.len() > 1 {
+        println!("[软删除] 发现 {} 条记录指向同一文件: {:?}", same_file_ids.len(), same_file_ids);
+    }
 
-    conn.execute("DELETE FROM screenshots WHERE id = ?1", params![id])
-        .map_err(|e| format!("删除原记录失败: {}", e))?;
+    conn.execute_batch("BEGIN TRANSACTION").map_err(|e| format!("开启事务失败: {}", e))?;
+
+    // 处理所有指向同一文件的记录
+    for same_id in &same_file_ids {
+        conn.execute(
+            "INSERT INTO deleted_screenshots (original_id, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            params![same_id, new_file_path, new_thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, now],
+        ).map_err(|e| format!("插入回收站记录失败: {}", e))?;
+
+        conn.execute("DELETE FROM screenshots WHERE id = ?1", params![same_id])
+            .map_err(|e| format!("删除原记录失败: {}", e))?;
+        println!("[软删除] 已删除截图记录: id={}", same_id);
+    }
+
+    conn.execute_batch("COMMIT").map_err(|e| format!("提交事务失败: {}", e))?;
 
     Ok(())
 }
@@ -1113,6 +1168,8 @@ pub fn soft_delete_screenshots(conn: &Connection, ids: &[i32]) -> std::result::R
     if ids.is_empty() {
         return Ok(());
     }
+    
+    println!("[软删除] 开始批量删除 {} 个截图: {:?}", ids.len(), ids);
 
     let placeholders: String = (0..ids.len()).map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
@@ -1144,13 +1201,33 @@ pub fn soft_delete_screenshots(conn: &Connection, ids: &[i32]) -> std::result::R
         .map_err(|e| format!("批量查询截图失败: {}", e))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("解析截图数据失败: {}", e))?;
+    
+    println!("[软删除] 查询到 {} 条记录 (请求 {} 条)", records.len(), ids.len());
+    
+    if records.len() != ids.len() {
+        let found_ids: std::collections::HashSet<i32> = records.iter().map(|r| r.0).collect();
+        let missing_ids: Vec<i32> = ids.iter().filter(|id| !found_ids.contains(id)).copied().collect();
+        println!("[软删除] 警告: 以下ID在数据库中未找到: {:?}", missing_ids);
+    }
 
     let file_ops: Vec<(String, String)> = records.iter().map(|r| (r.1.clone(), r.2.clone())).collect();
 
     let mut new_paths: Vec<(String, String)> = Vec::with_capacity(records.len());
-    for (file_path, thumbnail_path) in &file_ops {
-        let new_file_path = move_file_to_trash(file_path)?;
-        let new_thumbnail_path = move_thumbnail_to_trash(thumbnail_path)?;
+    for (i, (file_path, thumbnail_path)) in file_ops.iter().enumerate() {
+        let file_exists = std::path::Path::new(file_path).exists();
+        let thumb_exists = std::path::Path::new(thumbnail_path).exists();
+        println!("[软删除] 记录 {}: 文件存在={}, 缩略图存在={}", records[i].0, file_exists, thumb_exists);
+        
+        let new_file_path = move_file_to_trash(file_path).unwrap_or_else(|e| {
+            println!("[软删除] 移动文件失败: {} - {}", file_path, e);
+            file_path.clone()
+        });
+        let new_thumbnail_path = move_thumbnail_to_trash(thumbnail_path).unwrap_or_else(|e| {
+            println!("[软删除] 移动缩略图失败: {} - {}", thumbnail_path, e);
+            thumbnail_path.clone()
+        });
+        println!("[软删除] 文件路径: {} -> {}", file_path, new_file_path);
+        println!("[软删除] 缩略图路径: {} -> {}", thumbnail_path, new_thumbnail_path);
         new_paths.push((new_file_path, new_thumbnail_path));
     }
 
@@ -1158,21 +1235,39 @@ pub fn soft_delete_screenshots(conn: &Connection, ids: &[i32]) -> std::result::R
 
     let now = chrono::Utc::now().timestamp();
     for (i, record) in records.iter().enumerate() {
-        let (id, _, _, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash) = record;
+        let (id, file_path, _, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash) = record;
         let (new_file_path, new_thumbnail_path) = &new_paths[i];
         let original_file_path = &file_ops[i].0;
         let original_thumbnail_path = &file_ops[i].1;
 
-        conn.execute(
-            "INSERT INTO deleted_screenshots (original_id, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-            params![id, new_file_path, new_thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, now],
-        ).map_err(|e| format!("插入回收站记录失败: {}", e))?;
+        // 查找所有指向同一文件的记录
+        let mut same_file_stmt = conn.prepare("SELECT id FROM screenshots WHERE file_path = ?1 OR thumbnail_path = ?2")
+            .map_err(|e| format!("查询重复记录失败: {}", e))?;
+        let same_file_ids: Vec<i32> = same_file_stmt.query_map(params![file_path, original_thumbnail_path], |row| row.get(0))
+            .map_err(|e| format!("查询重复记录失败: {}", e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("解析重复记录失败: {}", e))?;
+        
+        if same_file_ids.len() > 1 {
+            println!("[软删除] 发现 {} 条记录指向同一文件: {:?}", same_file_ids.len(), same_file_ids);
+        }
 
-        conn.execute("DELETE FROM screenshots WHERE id = ?1", params![id])
-            .map_err(|e| format!("删除原记录失败: {}", e))?;
+        // 处理所有指向同一文件的记录
+        for same_id in &same_file_ids {
+            conn.execute(
+                "INSERT INTO deleted_screenshots (original_id, file_path, thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                params![same_id, new_file_path, new_thumbnail_path, original_file_path, original_thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash, now],
+            ).map_err(|e| format!("插入回收站记录失败: {}", e))?;
+
+            conn.execute("DELETE FROM screenshots WHERE id = ?1", params![same_id])
+                .map_err(|e| format!("删除原记录失败: {}", e))?;
+            println!("[软删除] 已删除截图记录: id={}", same_id);
+        }
     }
 
     conn.execute_batch("COMMIT").map_err(|e| format!("提交事务失败: {}", e))?;
+    
+    println!("[软删除] 批量删除完成，共处理 {} 条记录", records.len());
 
     Ok(())
 }
@@ -1931,6 +2026,33 @@ pub fn update_game_cache(conn: &Connection, game_id: &str, steam_appid: Option<u
         params![steam_appid, steam_name, steam_logo_path, timestamp, game_id],
     )?;
     println!("[数据库] 更新游戏 {} 的Steam信息", game_id);
+    Ok(())
+}
+
+pub fn update_game_icon(conn: &Connection, game_id: &str, exe_path: Option<&str>, icon_path: Option<&str>) -> Result<()> {
+    let timestamp = chrono::Utc::now().timestamp();
+    conn.execute(
+        "UPDATE game_cache SET exe_path = ?1, icon_path = ?2, last_updated = ?3 WHERE game_id = ?4",
+        params![exe_path, icon_path, timestamp, game_id],
+    )?;
+    println!("[数据库] 更新游戏 {} 的图标信息", game_id);
+    Ok(())
+}
+
+pub fn update_game_steam_info_auto(conn: &Connection, game_id: &str, steam_appid: Option<u32>, steam_name: Option<&str>, steam_logo_path: Option<&str>, steam_match_status: Option<&str>, display_title: Option<&str>) -> Result<()> {
+    let timestamp = chrono::Utc::now().timestamp();
+    if let Some(title) = display_title {
+        conn.execute(
+            "UPDATE game_cache SET steam_appid = ?1, steam_name = ?2, steam_logo_path = ?3, steam_match_status = ?4, display_title = ?5, last_updated = ?6 WHERE game_id = ?7",
+            params![steam_appid, steam_name, steam_logo_path, steam_match_status, title, timestamp, game_id],
+        )?;
+    } else {
+        conn.execute(
+            "UPDATE game_cache SET steam_appid = ?1, steam_name = ?2, steam_logo_path = ?3, steam_match_status = ?4, last_updated = ?5 WHERE game_id = ?6",
+            params![steam_appid, steam_name, steam_logo_path, steam_match_status, timestamp, game_id],
+        )?;
+    }
+    println!("[数据库] 自动更新游戏 {} 的Steam信息", game_id);
     Ok(())
 }
 

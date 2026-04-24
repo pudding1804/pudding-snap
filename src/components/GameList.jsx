@@ -85,7 +85,7 @@ export function GameList({
   }
   
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="game-list" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ 
         ...styles.header, 
         flexShrink: 0,

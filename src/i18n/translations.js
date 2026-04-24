@@ -4,7 +4,8 @@ export const translations = {
       time: '按时间浏览',
       games: '按游戏浏览',
       recycle_bin: '回收站',
-      settings: '设置'
+      settings: '设置',
+      back: '返回'
     },
     batch: {
       deleting: '正在删除截图...',
@@ -286,7 +287,8 @@ export const translations = {
       time: 'Browse by Time',
       games: 'Browse by Game',
       recycle_bin: 'Recycle Bin',
-      settings: 'Settings'
+      settings: 'Settings',
+      back: 'Back'
     },
     batch: {
       deleting: 'Deleting screenshots...',
@@ -568,7 +570,8 @@ export const translations = {
       time: '時間で参照',
       games: 'ゲームで参照',
       recycle_bin: 'ゴミ箱',
-      settings: '設定'
+      settings: '設定',
+      back: '戻る'
     },
     batch: {
       deleting: 'スクリーンショットを削除中...',

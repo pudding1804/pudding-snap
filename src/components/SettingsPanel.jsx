@@ -52,8 +52,8 @@ export function SettingsPanel({
         <button 
           style={{ ...styles.btn, padding: '8px 12px' }} 
           {...btnEvents}
-          onClick={() => onNavigate && onNavigate('time')}
-          title={t.nav.time}
+          onClick={() => onNavigate && onNavigate('back')}
+          title={t.nav.back || '返回'}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 19l-7-7 7-7"/>

@@ -95,7 +95,7 @@ export function ScreenshotGrid({
   })
   
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="screenshot-grid" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ 
         ...styles.header, 
         flexShrink: 0,

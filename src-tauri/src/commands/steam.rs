@@ -5,15 +5,13 @@ use database as db;
 use steam::{SteamMatchStatus, SteamMatchResult, SteamGameInfo, SteamSearchResult};
 
 #[tauri::command]
-pub fn search_steam_game_info(game_id: String, game_title: String, language: String, state: State<AppState>) -> Result<SteamMatchResult, String> {
+pub async fn search_steam_game_info(game_id: String, game_title: String, language: String, state: State<'_, AppState>) -> Result<SteamMatchResult, String> {
     println!("[Steam] 搜索游戏信息: {} ({}) (语言: {})", game_title, game_id, language);
     
-    let result = steam::match_game_name(&game_title, &language);
+    let result = steam::match_game_name_async(&game_title, &language).await;
     
     if result.status == SteamMatchStatus::Found {
         if let Some(ref info) = result.game_info {
-            let conn = state.db.lock().unwrap();
-            
             let logos_dir = steam::get_steam_logos_dir();
             let logo_filename = format!("steam_{}.jpg", info.appid);
             let logo_path = logos_dir.join(&logo_filename);
@@ -24,13 +22,14 @@ pub fn search_steam_game_info(game_id: String, game_title: String, language: Str
             
             let mut logo_path_str = None;
             if let Some(url) = logo_url {
-                if let Err(e) = steam::download_steam_image(url, &logo_path) {
+                if let Err(e) = steam::download_steam_image_async(url, &logo_path).await {
                     println!("[Steam] 下载logo失败: {}", e);
                 } else {
                     logo_path_str = Some(logo_path.to_string_lossy().to_string());
                 }
             }
             
+            let conn = state.db.lock().unwrap();
             let mut cache = db::get_game_cache(&conn, &game_id).unwrap_or_else(|| GameCache {
                 game_id: game_id.clone(),
                 exe_path: None,
@@ -98,19 +97,17 @@ pub fn search_steam_game_info(game_id: String, game_title: String, language: Str
 }
 
 #[tauri::command]
-pub fn search_steam_games(search_term: String, language: String) -> Result<Vec<SteamSearchResult>, String> {
+pub async fn search_steam_games(search_term: String, language: String) -> Result<Vec<SteamSearchResult>, String> {
     println!("[Steam] 手动搜索游戏: {} (语言: {})", search_term, language);
-    steam::search_steam_games_with_images(&search_term, &language)
+    steam::search_steam_games_with_images_async(&search_term, &language).await
 }
 
 #[tauri::command]
-pub fn apply_steam_game_info(game_id: String, appid: u32, language: String, state: State<AppState>) -> Result<SteamGameInfo, String> {
+pub async fn apply_steam_game_info(game_id: String, appid: u32, language: String, state: State<'_, AppState>) -> Result<SteamGameInfo, String> {
     println!("[Steam] 应用游戏信息: {} -> {} (语言: {})", game_id, appid, language);
     
-    let info = steam::get_steam_app_details(appid, &language)?
+    let info = steam::get_steam_app_details_async(appid, &language).await?
         .ok_or_else(|| format!("未找到 Steam 游戏: {}", appid))?;
-    
-    let conn = state.db.lock().unwrap();
     
     let logos_dir = steam::get_steam_logos_dir();
     let logo_filename = format!("steam_{}.jpg", info.appid);
@@ -122,13 +119,14 @@ pub fn apply_steam_game_info(game_id: String, appid: u32, language: String, stat
     
     let mut logo_path_str = None;
     if let Some(url) = logo_url {
-        if let Err(e) = steam::download_steam_image(url, &logo_path) {
+        if let Err(e) = steam::download_steam_image_async(url, &logo_path).await {
             println!("[Steam] 下载logo失败: {}", e);
         } else {
             logo_path_str = Some(logo_path.to_string_lossy().to_string());
         }
     }
     
+    let conn = state.db.lock().unwrap();
     let mut cache = db::get_game_cache(&conn, &game_id).unwrap_or_else(|| GameCache {
         game_id: game_id.clone(),
         exe_path: None,

@@ -218,12 +218,27 @@ pub fn match_game_name(process_name: &str, language: &str) -> SteamMatchResult {
                 let game = &games[0];
                 println!("[Steam] 唯一结果自动匹配: {} -> {}", clean_name, game.name);
                 
-                if let Ok(Some(info)) = get_steam_app_details(game.appid, language) {
-                    return SteamMatchResult {
-                        status: SteamMatchStatus::Found,
-                        game_info: Some(info),
-                        searched_name: clean_name,
-                    };
+                match get_steam_app_details(game.appid, language) {
+                    Ok(Some(info)) => {
+                        return SteamMatchResult {
+                            status: SteamMatchStatus::Found,
+                            game_info: Some(info),
+                            searched_name: clean_name,
+                        };
+                    }
+                    _ => {
+                        println!("[Steam] 唯一结果获取详情失败，使用搜索结果基本信息: {} -> {}", clean_name, game.name);
+                        return SteamMatchResult {
+                            status: SteamMatchStatus::Found,
+                            game_info: Some(SteamGameInfo {
+                                appid: game.appid,
+                                name: game.name.clone(),
+                                header_image: game.tiny_image.clone(),
+                                capsule_image: None,
+                            }),
+                            searched_name: clean_name,
+                        };
+                    }
                 }
             }
             
@@ -321,5 +336,262 @@ pub fn get_steam_logos_dir() -> PathBuf {
 mod urlencoding {
     pub fn encode(s: &str) -> String {
         url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
+    }
+}
+
+async fn wait_for_rate_limit_async() {
+    let sleep_duration = {
+        let mut last_time = LAST_REQUEST_TIME.lock().unwrap();
+        let elapsed = last_time.elapsed();
+        let sleep_dur = if elapsed < REQUEST_INTERVAL {
+            REQUEST_INTERVAL - elapsed
+        } else {
+            Duration::ZERO
+        };
+        *last_time = Instant::now();
+        sleep_dur
+    };
+    if sleep_duration > Duration::ZERO {
+        tokio::time::sleep(sleep_duration).await;
+    }
+}
+
+fn build_async_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .user_agent("PuddingSnapper/1.0")
+        .build()
+        .map_err(|e| format!("创建HTTP客户端失败: {}", e))
+}
+
+pub async fn search_steam_game_async(game_name: &str, language: &str) -> Result<Vec<SteamGame>, String> {
+    wait_for_rate_limit_async().await;
+
+    let client = build_async_client()?;
+
+    let url = format!(
+        "https://store.steampowered.com/api/storesearch/?term={}&cc=CN&l={}",
+        urlencoding::encode(game_name),
+        language
+    );
+
+    println!("[Steam] 搜索游戏(异步): {}", game_name);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Steam API请求失败: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Steam API返回错误状态: {}", response.status()));
+    }
+
+    let text = response.text()
+        .await
+        .map_err(|e| format!("读取响应失败: {}", e))?;
+
+    let search_result: SteamSearchResponse = serde_json::from_str(&text)
+        .map_err(|e| {
+            println!("[Steam] 响应内容: {}", &text[..text.len().min(500)]);
+            format!("解析Steam响应失败: {}", e)
+        })?;
+
+    let games = search_result.items.unwrap_or_default();
+    println!("[Steam] 找到 {} 个结果", games.len());
+
+    Ok(games)
+}
+
+pub async fn search_steam_games_with_images_async(game_name: &str, language: &str) -> Result<Vec<SteamSearchResult>, String> {
+    let games = search_steam_game_async(game_name, language).await?;
+
+    let results: Vec<SteamSearchResult> = games.into_iter().map(|game| {
+        SteamSearchResult {
+            appid: game.appid,
+            name: game.name,
+            tiny_image: game.tiny_image,
+        }
+    }).collect();
+
+    Ok(results)
+}
+
+pub async fn get_steam_app_details_async(appid: u32, language: &str) -> Result<Option<SteamGameInfo>, String> {
+    wait_for_rate_limit_async().await;
+
+    let client = build_async_client()?;
+
+    let url = format!(
+        "https://store.steampowered.com/api/appdetails?appids={}&cc=CN&l={}",
+        appid,
+        language
+    );
+
+    println!("[Steam] 获取游戏详情(异步): {}", appid);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Steam API请求失败: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Steam API返回错误状态: {}", response.status()));
+    }
+
+    let details_response: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("解析Steam响应失败: {}", e))?;
+
+    if let Some(app_data) = details_response.get(&appid.to_string()) {
+        if app_data.get("success").and_then(|s| s.as_bool()).unwrap_or(false) {
+            if let Some(data) = app_data.get("data") {
+                let info = SteamGameInfo {
+                    appid: data.get("steam_appid").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                    name: data.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    header_image: data.get("header_image").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    capsule_image: data.get("capsule_image").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                };
+                return Ok(Some(info));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+pub async fn download_steam_image_async(url: &str, save_path: &PathBuf) -> Result<(), String> {
+    if save_path.exists() {
+        println!("[Steam] 图片已存在: {:?}", save_path);
+        return Ok(());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent("PuddingSnapper/1.0")
+        .build()
+        .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
+
+    println!("[Steam] 下载图片(异步): {}", url);
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("下载图片失败: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("下载图片失败，状态码: {}", response.status()));
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("读取图片数据失败: {}", e))?;
+
+    if let Some(parent) = save_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+
+    fs::write(save_path, &bytes)
+        .map_err(|e| format!("保存图片失败: {}", e))?;
+
+    println!("[Steam] 图片已保存: {:?}", save_path);
+    Ok(())
+}
+
+pub async fn match_game_name_async(process_name: &str, language: &str) -> SteamMatchResult {
+    let clean_name = clean_process_name(process_name);
+
+    match search_steam_game_async(&clean_name, language).await {
+        Ok(games) => {
+            if games.is_empty() {
+                return SteamMatchResult {
+                    status: SteamMatchStatus::NotFound,
+                    game_info: None,
+                    searched_name: clean_name,
+                };
+            }
+
+            let search_name_lower = clean_name.to_lowercase();
+
+            for game in &games {
+                let game_name_lower = game.name.to_lowercase();
+
+                if game_name_lower == search_name_lower {
+                    println!("[Steam] 完全匹配: {} -> {}", clean_name, game.name);
+
+                    match get_steam_app_details_async(game.appid, language).await {
+                        Ok(Some(info)) => {
+                            return SteamMatchResult {
+                                status: SteamMatchStatus::Found,
+                                game_info: Some(info),
+                                searched_name: clean_name,
+                            };
+                        }
+                        _ => {
+                            println!("[Steam] 完全匹配获取详情失败，使用搜索结果基本信息: {} -> {}", clean_name, game.name);
+                            return SteamMatchResult {
+                                status: SteamMatchStatus::Found,
+                                game_info: Some(SteamGameInfo {
+                                    appid: game.appid,
+                                    name: game.name.clone(),
+                                    header_image: game.tiny_image.clone(),
+                                    capsule_image: None,
+                                }),
+                                searched_name: clean_name,
+                            };
+                        }
+                    }
+                }
+            }
+
+            if games.len() == 1 {
+                let game = &games[0];
+                println!("[Steam] 唯一结果自动匹配: {} -> {}", clean_name, game.name);
+
+                match get_steam_app_details_async(game.appid, language).await {
+                    Ok(Some(info)) => {
+                        return SteamMatchResult {
+                            status: SteamMatchStatus::Found,
+                            game_info: Some(info),
+                            searched_name: clean_name,
+                        };
+                    }
+                    _ => {
+                        println!("[Steam] 唯一结果获取详情失败，使用搜索结果基本信息: {} -> {}", clean_name, game.name);
+                        return SteamMatchResult {
+                            status: SteamMatchStatus::Found,
+                            game_info: Some(SteamGameInfo {
+                                appid: game.appid,
+                                name: game.name.clone(),
+                                header_image: game.tiny_image.clone(),
+                                capsule_image: None,
+                            }),
+                            searched_name: clean_name,
+                        };
+                    }
+                }
+            }
+
+            println!("[Steam] 无完全匹配: {} (找到{}个结果)", clean_name, games.len());
+
+            SteamMatchResult {
+                status: SteamMatchStatus::Mismatch,
+                game_info: None,
+                searched_name: clean_name,
+            }
+        }
+        Err(e) => {
+            println!("[Steam] 搜索失败: {}", e);
+            SteamMatchResult {
+                status: SteamMatchStatus::NotFound,
+                game_info: None,
+                searched_name: clean_name,
+            }
+        }
     }
 }

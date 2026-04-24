@@ -8,6 +8,7 @@ import { themes } from './styles/themes'
 import { getTranslation } from './i18n/translations'
 import { createStyles, btnEvents, modalKeyframes } from './styles/sharedStyles'
 import { useWindowSize } from './hooks/useWindowSize'
+import { useNavigationHistory } from './hooks/useNavigationHistory'
 import { 
   ScreenshotGrid, 
   ScreenshotModal,
@@ -155,6 +156,14 @@ function App() {
   const [isGameMultiSelectMode, setIsGameMultiSelectMode] = useState(false)
   const [selectedGames, setSelectedGames] = useState([])
   
+  const setView = useCallback((view) => {
+    setCurrentView(view)
+    setIsMultiSelectMode(false)
+    setSelectedScreenshots([])
+    setIsGameMultiSelectMode(false)
+    setSelectedGames([])
+  }, [])
+  
   const [showDeleteGameConfirm, setShowDeleteGameConfirm] = useState(false)
   const [deleteGameCallback, setDeleteGameCallback] = useState(null)
   const [deleteConfirmMode, setDeleteConfirmMode] = useState('last_screenshot')
@@ -189,6 +198,11 @@ function App() {
   const sortOrderRef = useRef(sortOrder)
   const gridRef = useRef(null)
   const selectedScreenshotRef = useRef(null)
+  const isRestoringRef = useRef(false)
+
+  const { pushHistory, goBack, goForward, canGoBack, canGoForward, isNavigatingRef } = useNavigationHistory()
+
+  const navStateRef = useRef({})
 
   const theme = themes[currentTheme].colors
   const t = getTranslation(language)
@@ -207,6 +221,50 @@ function App() {
   useEffect(() => {
     selectedScreenshotRef.current = selectedScreenshot
   }, [selectedScreenshot])
+
+  useEffect(() => {
+    navStateRef.current = {
+      view: currentView,
+      page: currentPage,
+      gamePage: gameCurrentPage,
+      selectedGame,
+      recycleBinPage,
+      sortOrder,
+      gameSortOrder,
+      recycleBinSortOrder,
+      dateFilterStart,
+      dateFilterEnd,
+      noteSearch,
+      scrollTop: gridRef.current?.scrollTop || 0,
+    }
+  }, [currentView, currentPage, gameCurrentPage, selectedGame, recycleBinPage, sortOrder, gameSortOrder, recycleBinSortOrder, dateFilterStart, dateFilterEnd, noteSearch])
+
+  useEffect(() => {
+    const getCurrentScrollContainer = () => {
+      const activeView = document.querySelector('.screenshot-grid, .game-list, .game-detail, .recycle-bin')
+      if (activeView) {
+        const scrollContainer = activeView.querySelector('[style*="overflow: auto"], [style*="overflow:auto"]')
+        return scrollContainer || activeView
+      }
+      return null
+    }
+
+    const handleScroll = () => {
+      const container = getCurrentScrollContainer()
+      if (container) {
+        navStateRef.current.scrollTop = container.scrollTop
+      }
+    }
+
+    const container = getCurrentScrollContainer()
+    if (container) {
+      container.addEventListener('scroll', handleScroll, { passive: true })
+      return () => {
+        container.removeEventListener('scroll', handleScroll)
+      }
+    }
+    return () => {}
+  }, [currentView])
 
 
 
@@ -256,7 +314,7 @@ function App() {
     }
   }, [addLog, gameSortOrder, gamePageSize, gameCurrentPage])
 
-  const loadGamesWithPage = useCallback(async (page) => {
+  const loadGamesWithPage = useCallback(async (page, sortOverride = null, resetScroll = true) => {
     const validPage = (typeof page === 'number' && !isNaN(page) && page > 0) ? page : 1
     try {
       setIsGamesLoading(true)
@@ -268,7 +326,7 @@ function App() {
       addLog(`游戏数据: ${result.games ? result.games.length : 0} 条`)
       
       let sortedGames = result.games || []
-      const currentSort = gameSortOrder
+      const currentSort = sortOverride || gameSortOrder
       
       if (currentSort === 'alpha_asc') {
         sortedGames.sort((a, b) => (a.display_title || a.game_title).localeCompare(b.display_title || b.game_title, 'zh-CN'))
@@ -283,6 +341,11 @@ function App() {
       setGames(sortedGames)
       setGameTotalPages(result.total_pages)
       setGameCurrentPage(result.page)
+      
+      if (resetScroll && gridRef.current) {
+        gridRef.current.scrollTop = 0
+      }
+      
       addLog(`游戏加载完成: 总页数=${result.total_pages}`)
     } catch (e) {
       addLog(`游戏加载失败: ${e}`)
@@ -291,29 +354,34 @@ function App() {
     }
   }, [addLog, gameSortOrder, gamePageSize])
 
-  const loadScreenshotsWithPagination = useCallback(async (page, gameId = null) => {
+  const loadScreenshotsWithPagination = useCallback(async (page, gameId = null, filters = null, resetScroll = true) => {
     const validPage = (typeof page === 'number' && !isNaN(page) && page > 0) ? page : 1
     try {
       addLog(`加载截图: 页码=${validPage}, 游戏ID=${gameId || '全部'}`)
       
+      const dfs = filters?.dateFilterStart !== undefined ? filters.dateFilterStart : dateFilterStart
+      const dfe = filters?.dateFilterEnd !== undefined ? filters.dateFilterEnd : dateFilterEnd
+      const ns = filters?.noteSearch !== undefined ? filters.noteSearch : noteSearch
+      const so = filters?.sortOrder !== undefined ? filters.sortOrder : sortOrderRef.current
+
       let dateStart = null
       let dateEnd = null
       
-      if (dateFilterStart) {
-        dateStart = Math.floor(new Date(dateFilterStart).setHours(0, 0, 0, 0) / 1000)
+      if (dfs) {
+        dateStart = Math.floor(new Date(dfs).setHours(0, 0, 0, 0) / 1000)
       }
-      if (dateFilterEnd) {
-        dateEnd = Math.floor(new Date(dateFilterEnd).setHours(23, 59, 59, 999) / 1000)
+      if (dfe) {
+        dateEnd = Math.floor(new Date(dfe).setHours(23, 59, 59, 999) / 1000)
       }
       
       const result = await invoke('get_screenshots_with_pagination', {
         gameId: gameId,
-        sortOrder: sortOrderRef.current,
+        sortOrder: so,
         page: validPage,
         pageSize: pageSize,
         dateStart: dateStart,
         dateEnd: dateEnd,
-        noteSearch: noteSearch || null
+        noteSearch: ns || null
       })
       
       console.log(`[DEBUG] loadScreenshotsWithPagination 返回:`, {
@@ -326,7 +394,7 @@ function App() {
       setCurrentPage(result.page)
       setTotalPages(result.total_pages)
       
-      if (gridRef.current) {
+      if (resetScroll && gridRef.current) {
         gridRef.current.scrollTop = 0
       }
       
@@ -699,7 +767,8 @@ function App() {
 
   const switchToTimeView = useCallback(() => {
     console.log('[DEBUG] switchToTimeView called, resetting menus')
-    setCurrentView('time')
+    pushHistory(navStateRef.current)
+    setView('time')
     setSelectedGame(null)
     setShowGameListMenu(false)
     setShowGameDetailMenu(false)
@@ -707,11 +776,12 @@ function App() {
     setGameSearchTerm('')
     setNoteSearch(null)
     loadScreenshotsWithPagination(1, null)
-  }, [loadScreenshotsWithPagination])
+  }, [loadScreenshotsWithPagination, pushHistory])
 
   const switchToGames = useCallback(() => {
     console.log('[DEBUG] switchToGames called, resetting menus')
-    setCurrentView('games')
+    pushHistory(navStateRef.current)
+    setView('games')
     setSelectedGame(null)
     setShowGameListMenu(false)
     setShowGameDetailMenu(false)
@@ -720,10 +790,11 @@ function App() {
     setDateFilterEnd(null)
     setNoteSearch(null)
     loadGames()
-  }, [loadGames])
+  }, [loadGames, pushHistory])
 
   const switchToRecycleBin = useCallback(() => {
-    setCurrentView('recycle-bin')
+    pushHistory(navStateRef.current)
+    setView('recycle-bin')
     setSelectedGame(null)
     setShowGameListMenu(false)
     setShowGameDetailMenu(false)
@@ -733,58 +804,139 @@ function App() {
     setGameSearchTerm('')
     setNoteSearch(null)
     loadRecycleBin(1, recycleBinSortOrder)
-  }, [loadRecycleBin, recycleBinSortOrder])
+  }, [loadRecycleBin, recycleBinSortOrder, pushHistory])
 
   const selectGame = useCallback(async (game) => {
     console.log('[DEBUG] selectGame called, resetting menus')
+    pushHistory(navStateRef.current)
     setSelectedGame(game)
     setScreenshots([])
-    setCurrentView('game-detail')
+    setView('game-detail')
     setShowGameListMenu(false)
     setShowGameDetailMenu(false)
     setShowSortMenu(false)
     setDateFilterStart(null)
     setDateFilterEnd(null)
     await loadScreenshotsWithPagination(1, game.game_id)
-  }, [loadScreenshotsWithPagination])
+  }, [loadScreenshotsWithPagination, pushHistory])
 
   const backToGames = useCallback(() => {
     console.log('[DEBUG] backToGames called, resetting menus')
-    setCurrentView('games')
+    pushHistory(navStateRef.current)
+    setView('games')
     setSelectedGame(null)
     setScreenshots([])
     setShowGameListMenu(false)
     setShowGameDetailMenu(false)
     setShowSortMenu(false)
     loadGames(null, false)
-  }, [loadGames])
+  }, [loadGames, pushHistory])
 
   useEffect(() => {
+    if (isRestoringRef.current) return
     if (currentView === 'time') {
       loadScreenshotsWithPagination(1, null)
     }
   }, [dateFilterStart, dateFilterEnd, noteSearch, currentView, loadScreenshotsWithPagination])
 
+  const restoreNavState = useCallback(async (state) => {
+    isNavigatingRef.current = true
+    isRestoringRef.current = true
+
+    setView(state.view)
+    setSelectedGame(state.selectedGame || null)
+    setSortOrder(state.sortOrder || 'desc')
+    setGameSortOrder(state.gameSortOrder || 'time_desc')
+    setDateFilterStart(state.dateFilterStart || null)
+    setDateFilterEnd(state.dateFilterEnd || null)
+    setNoteSearch(state.noteSearch || null)
+    setShowGameListMenu(false)
+    setShowGameDetailMenu(false)
+    setShowSortMenu(false)
+    setGameSearchTerm('')
+
+    if (state.view === 'time') {
+      await loadScreenshotsWithPagination(state.page || 1, null, {
+        dateFilterStart: state.dateFilterStart,
+        dateFilterEnd: state.dateFilterEnd,
+        noteSearch: state.noteSearch,
+        sortOrder: state.sortOrder,
+      }, false)
+    } else if (state.view === 'games') {
+      await loadGamesWithPage(state.gamePage || 1, state.gameSortOrder, false)
+    } else if (state.view === 'game-detail' && state.selectedGame) {
+      selectedGameRef.current = state.selectedGame
+      await loadScreenshotsWithPagination(state.page || 1, state.selectedGame.game_id, {
+        sortOrder: state.sortOrder,
+      }, false)
+    } else if (state.view === 'recycle-bin') {
+      setRecycleBinSortOrder(state.recycleBinSortOrder || 'desc')
+      await loadRecycleBin(state.recycleBinPage || 1, state.recycleBinSortOrder || 'desc')
+    }
+
+    setTimeout(() => {
+      isRestoringRef.current = false
+      isNavigatingRef.current = false
+      if (state.scrollTop) {
+        const getCurrentScrollContainer = () => {
+          const activeView = document.querySelector('.screenshot-grid, .game-list, .game-detail, .recycle-bin')
+          if (activeView) {
+            const scrollContainer = activeView.querySelector('[style*="overflow: auto"], [style*="overflow:auto"]')
+            return scrollContainer || activeView
+          }
+          return null
+        }
+        const container = getCurrentScrollContainer()
+        if (container) {
+          container.scrollTop = state.scrollTop
+        }
+      }
+    }, 50)
+  }, [loadScreenshotsWithPagination, loadGamesWithPage, loadRecycleBin])
+
+  const handleHistoryBack = useCallback(() => {
+    if (selectedScreenshotRef.current) return
+    const prevState = goBack(navStateRef.current)
+    if (prevState) {
+      restoreNavState(prevState)
+    } else {
+      const cv = navStateRef.current.view
+      if (cv === 'settings' || cv === 'recycle-bin') {
+        switchToTimeView()
+      }
+    }
+  }, [goBack, restoreNavState, switchToTimeView])
+
+  const handleHistoryForward = useCallback(() => {
+    if (selectedScreenshotRef.current) return
+    const nextState = goForward(navStateRef.current)
+    if (nextState) {
+      restoreNavState(nextState)
+    }
+  }, [goForward, restoreNavState])
+
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (currentView === 'game-detail' && e.key === 'Backspace') {
-        if (selectedScreenshotRef.current) {
-          return
-        }
-        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.isContentEditable) {
-          e.preventDefault()
-          backToGames()
-        }
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return
+      if (selectedScreenshotRef.current) return
+
+      if (e.key === 'Backspace' || (e.altKey && e.key === 'ArrowLeft')) {
+        e.preventDefault()
+        handleHistoryBack()
+      } else if (e.altKey && e.key === 'ArrowRight') {
+        e.preventDefault()
+        handleHistoryForward()
       }
     }
     
     const handleMouseDown = (e) => {
-      if (currentView === 'game-detail' && (e.button === 3 || e.button === 4)) {
-        if (selectedScreenshotRef.current) {
-          return
-        }
+      if (selectedScreenshotRef.current) return
+      if (e.button === 3) {
         e.preventDefault()
-        backToGames()
+        handleHistoryBack()
+      } else if (e.button === 4) {
+        e.preventDefault()
+        handleHistoryForward()
       }
     }
     
@@ -795,7 +947,7 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('mousedown', handleMouseDown)
     }
-  }, [currentView, backToGames])
+  }, [handleHistoryBack, handleHistoryForward])
 
   const handleSortChange = useCallback(async (newOrder) => {
     await saveSortOrder(newOrder)
@@ -1395,7 +1547,8 @@ function App() {
       
       const unlistenNavigateSettings = await listen('navigate-to-settings', () => {
         addLog('[导航] 切换到设置页面')
-        setCurrentView('settings')
+        pushHistory(navStateRef.current)
+        setView('settings')
       })
       
       let thumbnailDebounce = null
@@ -1469,7 +1622,10 @@ function App() {
             if (view === 'time') switchToTimeView()
             else if (view === 'games') switchToGames()
             else if (view === 'recycle-bin') switchToRecycleBin()
-            else if (view === 'settings') setCurrentView('settings')
+            else if (view === 'settings') {
+              pushHistory(navStateRef.current)
+              setView('settings')
+            }
           }}
           recycleBinCount={recycleBinCount}
         />
@@ -1513,7 +1669,7 @@ function App() {
                   setNoteText(screenshots[index].note || '')
                 }
               }}
-              onLoadPage={(page) => loadScreenshotsWithPagination(page, null)}
+              onLoadPage={(page) => { pushHistory(navStateRef.current); loadScreenshotsWithPagination(page, null) }}
               onDateFilterChange={(start, end) => {
                 setDateFilterStart(start)
                 setDateFilterEnd(end)
@@ -1526,7 +1682,7 @@ function App() {
                 if (view === 'time') switchToTimeView()
                 else if (view === 'games') switchToGames()
                 else if (view === 'recycle-bin') switchToRecycleBin()
-                else setCurrentView(view)
+                else { pushHistory(navStateRef.current); setView(view) }
               }}
             />
           ) : currentView === 'games' ? (
@@ -1595,13 +1751,13 @@ function App() {
                 console.log('[DEBUG] GameList onToggleMenu:', show)
                 setShowGameListMenu(show)
               }}
-              onLoadPage={(page) => loadGamesWithPage(page)}
+              onLoadPage={(page) => { pushHistory(navStateRef.current); loadGamesWithPage(page) }}
               currentView={currentView}
               onNavigate={(view) => {
                 if (view === 'time') switchToTimeView()
                 else if (view === 'games') switchToGames()
                 else if (view === 'recycle-bin') switchToRecycleBin()
-                else setCurrentView(view)
+                else { pushHistory(navStateRef.current); setView(view) }
               }}
             />
           ) : currentView === 'game-detail' ? (
@@ -1619,7 +1775,7 @@ function App() {
               showSortMenu={showSortMenu}
               currentPage={currentPage}
               totalPages={totalPages}
-              onBack={backToGames}
+              onBack={handleHistoryBack}
               onSortChange={handleSortChange}
               onIconSizeChange={handleIconSizeChange}
               onToggleMultiSelect={handleToggleMultiSelectMode}
@@ -1650,7 +1806,7 @@ function App() {
                 setShowGameDetailMenu(show)
               }}
               onToggleSortMenu={setShowSortMenu}
-              onLoadPage={(page) => loadScreenshotsWithPagination(page, selectedGame?.game_id)}
+              onLoadPage={(page) => { pushHistory(navStateRef.current); loadScreenshotsWithPagination(page, selectedGame?.game_id) }}
             />
           ) : currentView === 'recycle-bin' ? (
             <RecycleBin
@@ -1665,14 +1821,15 @@ function App() {
                 setRecycleBinSortOrder(order)
                 loadRecycleBin(1, order)
               }}
-              onLoadPage={(page) => loadRecycleBin(page, recycleBinSortOrder)}
+              onLoadPage={(page) => { pushHistory(navStateRef.current); loadRecycleBin(page, recycleBinSortOrder) }}
               onRestore={handleRestoreScreenshot}
               onRestoreSelected={handleRestoreScreenshots}
               onPermanentDelete={handlePermanentDelete}
               onPermanentDeleteSelected={handlePermanentDeleteScreenshots}
               onEmptyAll={handleEmptyRecycleBin}
               onNavigate={(view) => {
-                if (view === 'time') switchToTimeView()
+                if (view === 'back') handleHistoryBack()
+                else if (view === 'time') switchToTimeView()
               }}
             />
           ) : (
@@ -1712,7 +1869,8 @@ function App() {
               screenshotNotificationEnabled={screenshotNotificationEnabled}
               onScreenshotNotificationChange={handleScreenshotNotificationChange}
               onNavigate={(view) => {
-                if (view === 'time') switchToTimeView()
+                if (view === 'back') handleHistoryBack()
+                else if (view === 'time') switchToTimeView()
               }}
             />
           )}
@@ -2043,7 +2201,8 @@ function App() {
                                 setSteamSearchTerm('')
                                 setSteamSearchResults([])
                                 setSelectedGame(updatedGame)
-                                setCurrentView('game-detail')
+                                pushHistory(navStateRef.current)
+                                setView('game-detail')
                                 await loadGames()
                                 await loadScreenshotsWithPagination(1, updatedGame.game_id)
                               } catch (err) {

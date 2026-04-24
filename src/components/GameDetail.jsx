@@ -66,7 +66,7 @@ export function GameDetail({
   }
   
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="game-detail" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ 
         ...styles.header, 
         position: 'relative',
