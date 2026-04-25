@@ -200,7 +200,7 @@ function App() {
   const selectedScreenshotRef = useRef(null)
   const isRestoringRef = useRef(false)
 
-  const { pushHistory, goBack, goForward, canGoBack, canGoForward, isNavigatingRef } = useNavigationHistory()
+  const { pushHistory, replaceTop, goBack, goForward, canGoBack, canGoForward, isNavigatingRef } = useNavigationHistory()
 
   const navStateRef = useRef({})
 
@@ -2227,7 +2227,6 @@ function App() {
                                 setSteamSearchTerm('')
                                 setSteamSearchResults([])
                                 setSelectedGame(updatedGame)
-                                pushHistory(navStateRef.current)
                                 setView('game-detail')
                                 await loadGames()
                                 await loadScreenshotsWithPagination(1, updatedGame.game_id)

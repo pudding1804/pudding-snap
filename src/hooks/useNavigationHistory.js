@@ -14,6 +14,13 @@ export function useNavigationHistory() {
     forwardStackRef.current = []
   }, [])
 
+  const replaceTop = useCallback((state) => {
+    if (isNavigatingRef.current) return
+    if (backStackRef.current.length > 0) {
+      backStackRef.current[backStackRef.current.length - 1] = state
+    }
+  }, [])
+
   const goBack = useCallback((currentState) => {
     if (backStackRef.current.length === 0) return null
     forwardStackRef.current.push(currentState)
@@ -36,6 +43,7 @@ export function useNavigationHistory() {
 
   return {
     pushHistory,
+    replaceTop,
     goBack,
     goForward,
     canGoBack,
