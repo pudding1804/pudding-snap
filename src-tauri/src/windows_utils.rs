@@ -1,4 +1,4 @@
-use winapi::um::winuser::{GetForegroundWindow, GetWindowThreadProcessId, GetDC, ReleaseDC};
+use winapi::um::winuser::{GetForegroundWindow, GetWindowThreadProcessId, GetDC, ReleaseDC, GetWindowTextW, GetWindowTextLengthW};
 use winapi::um::processthreadsapi::OpenProcess;
 use winapi::um::psapi::{GetModuleBaseNameW, GetModuleFileNameExW};
 use winapi::um::winnt::PROCESS_QUERY_INFORMATION;
@@ -343,4 +343,202 @@ pub fn clean_game_name(folder_name: &str) -> String {
     }).collect();
     
     result.join(" ")
+}
+
+pub fn get_foreground_window_title() -> Option<String> {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_null() {
+            return None;
+        }
+
+        let length = GetWindowTextLengthW(hwnd);
+        if length == 0 {
+            return None;
+        }
+
+        let mut buffer: Vec<u16> = vec![0; (length as usize) + 1];
+        let copied = GetWindowTextW(hwnd, buffer.as_mut_ptr(), buffer.len() as i32);
+        
+        if copied > 0 {
+            let title = String::from_utf16_lossy(&buffer[..copied as usize]);
+            let trimmed = title.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        } else {
+            None
+        }
+    }
+}
+
+const EMULATOR_PROCESS_NAMES: &[&str] = &[
+    "dosbox", "dosbox-x", "dosbox-staging",
+    "retroarch",
+    "pcsx2", "pcsx2-qt",
+    "rpcs3",
+    "cemu",
+    "yuzu", "suyu",
+    "ryujinx",
+    "dolphin",
+    "ppsspp", "ppssppwindows",
+    "mame", "mame64", "mameui",
+    "snes9x", "snes9x-x64",
+    "fusion", "kega-fusion", "kega",
+    "mednafen",
+    "flycast",
+    "melonds", "melonds",
+    "desmume",
+    "vba", "visualboyadvance", "visualboyadvance-m", "vbam",
+    "citra",
+    "xemu",
+    "project64", "project64c",
+    "bsnes",
+    "mesen",
+    "nestopia",
+    "fceux",
+    "gens",
+    "nullDC", "nulldc",
+    "redream",
+];
+
+use std::sync::RwLock;
+static CUSTOM_EMULATOR_NAMES: RwLock<Vec<String>> = RwLock::new(Vec::new());
+
+pub fn set_custom_emulator_names(names: Vec<String>) {
+    if let Ok(mut custom) = CUSTOM_EMULATOR_NAMES.write() {
+        *custom = names;
+        println!("[模拟器] 自定义模拟器列表已更新: {:?}", custom);
+    }
+}
+
+pub fn get_custom_emulator_names() -> Vec<String> {
+    CUSTOM_EMULATOR_NAMES.read().map(|c| c.clone()).unwrap_or_default()
+}
+
+fn is_emulator_by_name(name_lower: &str, emu: &str) -> bool {
+    name_lower == emu || name_lower.starts_with(&format!("{}-", emu)) || name_lower.starts_with(&format!("{}_", emu))
+}
+
+pub fn is_emulator_process(process_name: &str) -> bool {
+    let name_lower = process_name.to_lowercase();
+    
+    if EMULATOR_PROCESS_NAMES.iter().any(|&emu| is_emulator_by_name(&name_lower, emu)) {
+        return true;
+    }
+    
+    if let Ok(custom) = CUSTOM_EMULATOR_NAMES.read() {
+        if custom.iter().any(|emu| is_emulator_by_name(&name_lower, emu)) {
+            return true;
+        }
+    }
+    
+    false
+}
+
+pub fn extract_game_name_from_title(title: &str, process_name: &str) -> String {
+    let mut name = title.to_string();
+    
+    let mut emulator_to_check: Vec<String> = EMULATOR_PROCESS_NAMES.iter()
+        .filter(|&&emu| is_emulator_by_name(&process_name.to_lowercase(), emu))
+        .map(|&s| s.to_string())
+        .collect();
+    
+    if let Ok(custom) = CUSTOM_EMULATOR_NAMES.read() {
+        for emu in custom.iter() {
+            if is_emulator_by_name(&process_name.to_lowercase(), emu) {
+                emulator_to_check.push(emu.clone());
+            }
+        }
+    }
+    
+    let emulator_suffixes: Vec<String> = emulator_to_check.iter()
+        .flat_map(|emu| {
+            let emu_str = emu.as_str();
+            vec![
+                format!(" - {}", emu_str),
+                format!(" — {}", emu_str),
+                format!(" | {}", emu_str),
+                format!(" [{}]", emu_str),
+                format!("({})", emu_str),
+                format!(" - {}", emu_str.to_uppercase()),
+                format!(" — {}", emu_str.to_uppercase()),
+                format!(" | {}", emu_str.to_uppercase()),
+                format!(" - {}", capitalize_first(emu_str)),
+                format!(" — {}", capitalize_first(emu_str)),
+                format!(" | {}", capitalize_first(emu_str)),
+            ]
+        }).collect();
+
+    for suffix in &emulator_suffixes {
+        if let Some(pos) = name.to_lowercase().find(&suffix.to_lowercase()) {
+            let candidate = name[..pos].trim();
+            if !candidate.is_empty() {
+                name = candidate.to_string();
+                break;
+            }
+        }
+    }
+
+    let generic_suffixes = [
+        " - Emulator", " — Emulator", " | Emulator",
+        " - ROM", " — ROM",
+    ];
+    for suffix in &generic_suffixes {
+        if let Some(pos) = name.find(suffix) {
+            let candidate = name[..pos].trim();
+            if !candidate.is_empty() {
+                name = candidate.to_string();
+                break;
+            }
+        }
+    }
+
+    clean_window_title(&name)
+}
+
+fn capitalize_first(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
+pub fn clean_window_title(title: &str) -> String {
+    let mut name = title.to_string();
+    
+    let remove_patterns = [
+        r"\s*-\s*加载中\.+$",
+        r"\s*-\s*Loading\.+$",
+        r"\s*\[加载中\]$",
+        r"\s*\[Loading\]$",
+        r"\s*\[暂停\]$",
+        r"\s*\[Paused\]$",
+        r"\s*-\s*暂停$",
+        r"\s*-\s*Paused$",
+        r"\s*\[已暂停\]$",
+        r"\s*\(Paused\)$",
+        r"\s*\[\d+x\d+\]$",
+        r"\s*\(\d+x\d+\)$",
+        r"\s*\(Steam\)$",
+        r"\s*\[Steam\]$",
+        r"\s*\(GOG\)$",
+        r"\s*\[GOG\]$",
+        r"\s*\(Epic\)$",
+        r"\s*\[Epic\]$",
+        r"\s*v\d+\.\d+.*$",
+        r"\s*Build\s*\d+.*$",
+        r"\s*64-bit$",
+        r"\s*32-bit$",
+    ];
+    
+    for pattern in &remove_patterns {
+        let re = regex::Regex::new(pattern).unwrap();
+        name = re.replace(&name, "").to_string();
+    }
+    
+    name.trim().to_string()
 }

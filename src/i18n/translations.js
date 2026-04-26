@@ -65,7 +65,18 @@ export const translations = {
       network_error: '网络异常，请检查网络连接后重试',
       applying: '拉取信息中...',
       apply_success: '信息已拉取完成',
-      confirm: '确认'
+      confirm: '确认',
+      manual_input: '手动输入',
+      manual_input_title: '手动输入游戏信息',
+      game_name: '游戏名称',
+      game_thumbnail: '游戏缩略图',
+      select_local_image: '选择本地图片',
+      paste_clipboard: '粘贴剪贴板图片',
+      paste_hint: '也可按 Ctrl+V 粘贴图片',
+      drag_drop_hint: '拖放图片到此处',
+      no_image_selected: '未选择图片（可选）',
+      save: '保存',
+      save_success: '游戏信息已保存'
     },
     empty: {
       no_screenshots: '还没有截图',
@@ -150,7 +161,13 @@ export const translations = {
       format_jpg: 'JPG',
       format_png: 'PNG',
       format_webp: 'WebP',
-      quality_hint: '设置导入截图时的格式和质量。质量越高文件越大，但图片越清晰。'
+      quality_hint: '设置导入截图时的格式和质量。质量越高文件越大，但图片越清晰。',
+      window_title_match: '用窗口标题匹配游戏信息',
+      window_title_match_hint: '开启后使用窗口标题而非进程名来匹配游戏信息，对模拟器游戏识别更准确',
+      emulator_keywords: '模拟器关键字',
+      emulator_keywords_hint: '逗号分隔的模拟器进程名，用于识别模拟器窗口。修改后点击保存即可生效',
+      emulator_keywords_save: '保存',
+      emulator_keywords_saved: '已保存'
     },
     game: {
       last_updated: '最后更新于',
@@ -348,7 +365,18 @@ export const translations = {
       network_error: 'Network error, please check your connection and try again',
       applying: 'Applying info...',
       apply_success: 'Info applied successfully',
-      confirm: 'Confirm'
+      confirm: 'Confirm',
+      manual_input: 'Manual Input',
+      manual_input_title: 'Manual Game Info Input',
+      game_name: 'Game Name',
+      game_thumbnail: 'Game Thumbnail',
+      select_local_image: 'Select Local Image',
+      paste_clipboard: 'Paste from Clipboard',
+      paste_hint: 'You can also press Ctrl+V to paste',
+      drag_drop_hint: 'Drop image here',
+      no_image_selected: 'No image selected (optional)',
+      save: 'Save',
+      save_success: 'Game info saved'
     },
     empty: {
       no_screenshots: 'No screenshots yet',
@@ -433,7 +461,13 @@ export const translations = {
       format_jpg: 'JPG',
       format_png: 'PNG',
       format_webp: 'WebP',
-      quality_hint: 'Set the format and quality for importing screenshots. Higher quality means larger files but clearer images.'
+      quality_hint: 'Set the format and quality for importing screenshots. Higher quality means larger files but clearer images.',
+      window_title_match: 'Match Game Info by Window Title',
+      window_title_match_hint: 'Use window title instead of process name to match game info. More accurate for emulator games',
+      emulator_keywords: 'Emulator Keywords',
+      emulator_keywords_hint: 'Comma-separated emulator process names for identifying emulator windows. Click Save to apply',
+      emulator_keywords_save: 'Save',
+      emulator_keywords_saved: 'Saved'
     },
     game: {
       last_updated: 'Last updated',
@@ -619,7 +653,18 @@ export const translations = {
       network_error: 'ネットワークエラー、接続を確認して再試行してください',
       applying: '情報を取得中...',
       apply_success: '情報の取得が完了しました',
-      confirm: '確認'
+      confirm: '確認',
+      manual_input: '手動入力',
+      manual_input_title: 'ゲーム情報の手動入力',
+      game_name: 'ゲーム名',
+      game_thumbnail: 'ゲームサムネイル',
+      select_local_image: 'ローカル画像を選択',
+      paste_clipboard: 'クリップボードから貼り付け',
+      paste_hint: 'Ctrl+Vで画像を貼り付けることもできます',
+      drag_drop_hint: 'ここに画像をドロップ',
+      no_image_selected: '画像未選択（オプション）',
+      save: '保存',
+      save_success: 'ゲーム情報を保存しました'
     },
     empty: {
       no_screenshots: 'まだスクリーンショットはありません',
@@ -704,7 +749,13 @@ export const translations = {
       format_jpg: 'JPG',
       format_png: 'PNG',
       format_webp: 'WebP',
-      quality_hint: 'スクリーンショットのインポート時のフォーマットと品質を設定します。品質が高いほどファイルサイズが大きくなりますが、画像がより鮮明になります。'
+      quality_hint: 'スクリーンショットのインポート時のフォーマットと品質を設定します。品質が高いほどファイルサイズが大きくなりますが、画像がより鮮明になります。',
+      window_title_match: 'ウィンドウタイトルでゲーム情報を照合',
+      window_title_match_hint: 'プロセス名の代わりにウィンドウタイトルを使用してゲーム情報を照合します。エミュレータゲームの認識がより正確です',
+      emulator_keywords: 'エミュレータキーワード',
+      emulator_keywords_hint: 'エミュレータウィンドウを識別するためのプロセス名をカンマ区切りで入力します。「保存」をクリックして適用',
+      emulator_keywords_save: '保存',
+      emulator_keywords_saved: '保存済み'
     },
     game: {
       last_updated: '最終更新',

@@ -17,6 +17,7 @@ import {
   SettingsPanel,
   AddGameModal,
   ImportModal,
+  ManualInfoModal,
   RecycleBin,
   ErrorBoundary,
   ShareModal,
@@ -144,7 +145,13 @@ function App() {
   const [isApplyingInfo, setIsApplyingInfo] = useState(false)
   const [showApplySuccess, setShowApplySuccess] = useState(false)
   const [appliedGameName, setAppliedGameName] = useState('')
+  const [showManualInfoModal, setShowManualInfoModal] = useState(false)
   const [screenshotNotificationEnabled, setScreenshotNotificationEnabled] = useState(true)
+  const [windowTitleMatchEnabled, setWindowTitleMatchEnabled] = useState(false)
+  const DEFAULT_EMULATOR_KEYWORDS = 'dosbox, dosbox-x, dosbox-staging, retroarch, pcsx2, pcsx2-qt, rpcs3, cemu, yuzu, suyu, ryujinx, dolphin, ppsspp, ppssppwindows, mame, mame64, mameui, snes9x, snes9x-x64, fusion, kega-fusion, kega, mednafen, flycast, melonds, desmume, vba, visualboyadvance, visualboyadvance-m, vbam, citra, xemu, project64, project64c, bsnes, mesen, nestopia, fceux, gens, nullDC, nulldc, redream'
+  const [emulatorKeywords, setEmulatorKeywords] = useState(DEFAULT_EMULATOR_KEYWORDS)
+  const [emulatorKeywordsSaved, setEmulatorKeywordsSaved] = useState(false)
+  const [emulatorKeywordsTimer, setEmulatorKeywordsTimer] = useState(null)
   
   const [showAddGameModal, setShowAddGameModal] = useState(false)
   const [addGameStep, setAddGameStep] = useState('platform')
@@ -195,6 +202,8 @@ function App() {
   const refreshDebounceRef = useRef(null)
   const isRefreshingRef = useRef(false)
   const selectedGameRef = useRef(null)
+  const isModalOpenRef = useRef(false)
+  const overlayMousedownRef = useRef(false)
   const sortOrderRef = useRef(sortOrder)
   const gridRef = useRef(null)
   const selectedScreenshotRef = useRef(null)
@@ -212,6 +221,10 @@ function App() {
     selectedGameRef.current = selectedGame
     console.log(`[DEBUG] selectedGameRef 更新: ${selectedGame?.game_id || 'null'}`)
   }, [selectedGame])
+
+  useEffect(() => {
+    isModalOpenRef.current = !!(showSearchModal || showDeleteConfirm || showDeleteGameConfirm || showManualInfoModal || showImportModal)
+  }, [showSearchModal, showDeleteConfirm, showDeleteGameConfirm, showManualInfoModal, showImportModal])
 
   useEffect(() => {
     sortOrderRef.current = sortOrder
@@ -624,6 +637,60 @@ function App() {
     }
   }, [addLog])
 
+  const loadWindowTitleMatch = useCallback(async () => {
+    try {
+      const value = await invoke('get_setting', { key: 'window_title_match' })
+      if (value !== null && value !== undefined) {
+        setWindowTitleMatchEnabled(value === 'true')
+      }
+    } catch (e) {
+      addLog(`加载窗口标题匹配设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const handleWindowTitleMatchChange = useCallback(async (enabled) => {
+    try {
+      await invoke('set_setting', { key: 'window_title_match', value: enabled.toString() })
+      setWindowTitleMatchEnabled(enabled)
+      addLog(`窗口标题匹配已${enabled ? '启用' : '禁用'}`)
+    } catch (e) {
+      addLog(`保存窗口标题匹配设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const loadEmulatorKeywords = useCallback(async () => {
+    try {
+      const value = await invoke('get_setting', { key: 'emulator_keywords' })
+      if (value !== null && value !== undefined && value.trim() !== '') {
+        setEmulatorKeywords(value)
+      } else {
+        setEmulatorKeywords(DEFAULT_EMULATOR_KEYWORDS)
+      }
+    } catch (e) {
+      addLog(`加载模拟器关键字设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const handleSaveEmulatorKeywords = useCallback(async () => {
+    try {
+      const trimmed = emulatorKeywords.split(',').map(s => s.trim()).filter(s => s !== '').join(', ')
+      await invoke('set_setting', { key: 'emulator_keywords', value: trimmed })
+      setEmulatorKeywords(trimmed)
+      setEmulatorKeywordsSaved(true)
+      if (emulatorKeywordsTimer) clearTimeout(emulatorKeywordsTimer)
+      const timer = setTimeout(() => setEmulatorKeywordsSaved(false), 2000)
+      setEmulatorKeywordsTimer(timer)
+      addLog('模拟器关键字已保存')
+    } catch (e) {
+      addLog(`保存模拟器关键字失败: ${e}`)
+    }
+  }, [emulatorKeywords, emulatorKeywordsTimer, addLog])
+
+  const handleEmulatorKeywordsChange = useCallback((value) => {
+    setEmulatorKeywords(value)
+    setEmulatorKeywordsSaved(false)
+  }, [])
+
   const playSoundPreview = useCallback(async (soundType) => {
     try {
       await invoke('play_sound_preview', { soundType })
@@ -922,7 +989,15 @@ function App() {
 
       if (e.key === 'Backspace' || (e.altKey && e.key === 'ArrowLeft')) {
         e.preventDefault()
-        handleHistoryBack()
+        if (isModalOpenRef.current) {
+          setShowSearchModal(false)
+          setShowDeleteConfirm(false)
+          setShowDeleteGameConfirm(false)
+          setShowManualInfoModal(false)
+          setShowImportModal(false)
+        } else {
+          handleHistoryBack()
+        }
       } else if (e.altKey && e.key === 'ArrowRight') {
         e.preventDefault()
         handleHistoryForward()
@@ -933,9 +1008,18 @@ function App() {
       if (selectedScreenshotRef.current) return
       if (e.button === 3) {
         e.preventDefault()
-        handleHistoryBack()
+        if (isModalOpenRef.current) {
+          setShowSearchModal(false)
+          setShowDeleteConfirm(false)
+          setShowDeleteGameConfirm(false)
+          setShowManualInfoModal(false)
+          setShowImportModal(false)
+        } else {
+          handleHistoryBack()
+        }
       } else if (e.button === 4) {
         e.preventDefault()
+        if (isModalOpenRef.current) return
         handleHistoryForward()
       }
     }
@@ -1333,18 +1417,9 @@ function App() {
 
       if (result.imported_count > 0) {
         try {
-          const screenshots = await invoke('get_screenshots_with_pagination', {
-            gameId: currentGameId,
-            sortOrder: 'desc',
-            page: 1,
-            pageSize: result.imported_count,
-            dateStart: null,
-            dateEnd: null,
-            noteSearch: null,
-          })
-          const newIds = screenshots.screenshots.map(ss => ss.id)
-          if (newIds.length > 0) {
-            invoke('generate_thumbnails', { screenshotIds: newIds })
+          const ids = result.imported_ids || []
+          if (ids.length > 0) {
+            invoke('generate_thumbnails', { screenshotIds: ids })
           }
         } catch (thumbErr) {
           addLog(`启动缩略图生成失败: ${thumbErr}`)
@@ -1383,6 +1458,8 @@ function App() {
         }
         
         await loadScreenshotNotification()
+        await loadWindowTitleMatch()
+        await loadEmulatorKeywords()
         
         await loadScreenshotsWithPagination(1, null)
         
@@ -1894,6 +1971,12 @@ function App() {
               onManualBackup={handleManualBackup}
               screenshotNotificationEnabled={screenshotNotificationEnabled}
               onScreenshotNotificationChange={handleScreenshotNotificationChange}
+              windowTitleMatchEnabled={windowTitleMatchEnabled}
+              onWindowTitleMatchChange={handleWindowTitleMatchChange}
+              emulatorKeywords={emulatorKeywords}
+              onEmulatorKeywordsChange={handleEmulatorKeywordsChange}
+              onSaveEmulatorKeywords={handleSaveEmulatorKeywords}
+              emulatorKeywordsSaved={emulatorKeywordsSaved}
               onNavigate={(view) => {
                 if (view === 'back') handleHistoryBack()
                 else if (view === 'time') switchToTimeView()
@@ -2004,7 +2087,10 @@ function App() {
         />
 
         {showSearchModal && (
-          <div style={styles.modalOverlay} onClick={() => setShowSearchModal(false)}>
+          <div style={styles.modalOverlay}
+            onMouseDown={(e) => { overlayMousedownRef.current = (e.target === e.currentTarget) }}
+            onClick={() => { if (overlayMousedownRef.current) setShowSearchModal(false) }}
+          >
             <div style={{ ...styles.modalContent, maxWidth: 500 }} onClick={e => e.stopPropagation()}>
               {searchModalStep === 'source' && (
                 <div style={{ padding: 24 }}>
@@ -2054,6 +2140,28 @@ function App() {
                         <line x1="15" y1="9" x2="15.01" y2="9"/>
                       </svg>
                       {t.add_game.bangumi}
+                    </button>
+                    <button
+                      style={{ 
+                        ...styles.btn, 
+                        padding: '16px 24px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        gap: 12,
+                        fontSize: 16
+                      }}
+                      {...btnEvents}
+                      onClick={() => {
+                        setShowSearchModal(false)
+                        setShowManualInfoModal(true)
+                      }}
+                    >
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                      {t.search.manual_input}
                     </button>
                   </div>
                 </div>
@@ -2277,6 +2385,26 @@ function App() {
           onImport={handleImport}
         />
 
+        <ManualInfoModal
+          theme={theme}
+          styles={styles}
+          t={t}
+          show={showManualInfoModal}
+          gameId={selectedGame?.game_id || ''}
+          currentTitle={selectedGame?.display_title || selectedGame?.game_title || ''}
+          currentLogoPath={selectedGame?.steam_logo_path || null}
+          onClose={() => setShowManualInfoModal(false)}
+          onSaved={async (updatedGame) => {
+            setAppliedGameName(updatedGame.display_title)
+            setShowApplySuccess(true)
+            setTimeout(() => setShowApplySuccess(false), 2000)
+            setSelectedGame(updatedGame)
+            setView('game-detail')
+            await loadGames()
+            await loadScreenshotsWithPagination(1, updatedGame.game_id)
+          }}
+        />
+
         {importProgress && (
           <div style={styles.modalOverlay}>
             <div style={{ ...styles.modalContent, maxWidth: 400 }} onClick={e => e.stopPropagation()}>
@@ -2387,7 +2515,10 @@ function App() {
         )}
 
         {showDeleteConfirm && (
-          <div style={styles.modalOverlay} onClick={() => setShowDeleteConfirm(false)}>
+          <div style={styles.modalOverlay}
+            onMouseDown={(e) => { overlayMousedownRef.current = (e.target === e.currentTarget) }}
+            onClick={() => { if (overlayMousedownRef.current) setShowDeleteConfirm(false) }}
+          >
             <div style={{ ...styles.modalContent, maxWidth: 450 }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: 32, textAlign: 'center' }}>
                 <div style={{ 
@@ -2445,12 +2576,15 @@ function App() {
         )}
 
         {showDeleteGameConfirm && (
-          <div style={styles.modalOverlay} onClick={() => {
-            setShowDeleteGameConfirm(false)
-            if (deleteGameCallback) {
-              setDeleteGameCallback(null)
-            }
-          }}>
+          <div style={styles.modalOverlay}
+            onMouseDown={(e) => { overlayMousedownRef.current = (e.target === e.currentTarget) }}
+            onClick={() => { if (overlayMousedownRef.current) {
+              setShowDeleteGameConfirm(false)
+              if (deleteGameCallback) {
+                setDeleteGameCallback(null)
+              }
+            }}}
+          >
             <div style={{ ...styles.modalContent, maxWidth: 450 }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: 32, textAlign: 'center' }}>
                 <h3 style={{ marginBottom: 16, color: theme.text }}>

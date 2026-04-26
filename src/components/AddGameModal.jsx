@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 
@@ -18,10 +19,15 @@ export function AddGameModal({
   onAddGame,
   onNotification,
 }) {
+  const overlayMousedownRef = useRef(false)
+
   if (!show) return null
 
   return (
-    <div style={styles.modalOverlay} onClick={onClose}>
+    <div style={styles.modalOverlay}
+      onMouseDown={(e) => { overlayMousedownRef.current = (e.target === e.currentTarget) }}
+      onClick={() => { if (overlayMousedownRef.current) onClose() }}
+    >
       <div style={{ ...styles.modalContent, maxWidth: 500 }} onClick={e => e.stopPropagation()}>
         {step === 'platform' && (
           <div style={{ padding: 24 }}>

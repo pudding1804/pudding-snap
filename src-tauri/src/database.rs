@@ -95,34 +95,51 @@ pub fn get_storage_path() -> String {
     get_data_dir().to_string_lossy().to_string()
 }
 
-pub fn generate_game_id(process_name: &str, exe_path: Option<&str>) -> String {
+pub fn generate_game_id(process_name: &str, exe_path: Option<&str>, window_title: Option<&str>) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
+    
+    let is_emulator = crate::windows_utils::is_emulator_process(process_name);
+    let effective_name = if is_emulator {
+        if let Some(title) = window_title {
+            let extracted = crate::windows_utils::extract_game_name_from_title(title, process_name);
+            if !extracted.is_empty() {
+                println!("[game_id] 模拟器进程，使用窗口标题生成ID: {} -> {}", process_name, extracted);
+                extracted
+            } else {
+                process_name.to_string()
+            }
+        } else {
+            process_name.to_string()
+        }
+    } else {
+        process_name.to_string()
+    };
     
     let mut hasher = DefaultHasher::new();
     
     if let Some(exe) = exe_path {
         if let Some(rpg_title) = crate::windows_utils::get_rpg_maker_game_title(exe) {
             let folder_name = crate::windows_utils::get_game_folder_name(exe)
-                .unwrap_or_else(|| process_name.to_string());
+                .unwrap_or_else(|| effective_name.clone());
             let unique_key = format!("{}:{}", rpg_title, folder_name);
             unique_key.hash(&mut hasher);
             return format!("{:x}", hasher.finish());
         }
         
         if let Some(folder_name) = crate::windows_utils::get_game_folder_name(exe) {
-            let unique_key = format!("{}:{}", process_name, folder_name);
+            let unique_key = format!("{}:{}", effective_name, folder_name);
             unique_key.hash(&mut hasher);
             return format!("{:x}", hasher.finish());
         }
     }
     
-    process_name.hash(&mut hasher);
+    effective_name.hash(&mut hasher);
     format!("{:x}", hasher.finish())
 }
 
-pub fn find_existing_game_id(conn: &Connection, process_name: &str, exe_path: Option<&str>, _steam_appid: Option<u32>) -> (String, bool) {
-    let game_id = generate_game_id(process_name, exe_path);
+pub fn find_existing_game_id(conn: &Connection, process_name: &str, exe_path: Option<&str>, _steam_appid: Option<u32>, window_title: Option<&str>) -> (String, bool) {
+    let game_id = generate_game_id(process_name, exe_path, window_title);
     
     if let Ok(mut stmt) = conn.prepare("SELECT game_id FROM game_cache WHERE game_id = ?1 LIMIT 1") {
         if stmt.query_row(params![&game_id], |row| row.get::<_, String>(0)).ok().is_some() {
@@ -2029,6 +2046,23 @@ pub fn update_game_icon(conn: &Connection, game_id: &str, exe_path: Option<&str>
         params![exe_path, icon_path, timestamp, game_id],
     )?;
     println!("[数据库] 更新游戏 {} 的图标信息", game_id);
+    Ok(())
+}
+
+pub fn set_manual_game_info(conn: &Connection, game_id: &str, display_name: &str, logo_path: Option<&str>) -> Result<()> {
+    let timestamp = chrono::Utc::now().timestamp();
+    if logo_path.is_some() {
+        conn.execute(
+            "UPDATE game_cache SET display_title = ?1, steam_name = ?2, steam_logo_path = ?3, icon_path = ?4, steam_match_status = 'manual', last_updated = ?5 WHERE game_id = ?6",
+            params![display_name, display_name, logo_path, logo_path, timestamp, game_id],
+        )?;
+    } else {
+        conn.execute(
+            "UPDATE game_cache SET display_title = ?1, steam_name = ?2, steam_match_status = 'manual', last_updated = ?3 WHERE game_id = ?4",
+            params![display_name, display_name, timestamp, game_id],
+        )?;
+    }
+    println!("[数据库] 手动设置游戏 {} 信息: {}", game_id, display_name);
     Ok(())
 }
 

@@ -43,6 +43,12 @@ export function SettingsPanel({
   onManualBackup,
   screenshotNotificationEnabled,
   onScreenshotNotificationChange,
+  windowTitleMatchEnabled,
+  onWindowTitleMatchChange,
+  emulatorKeywords,
+  onEmulatorKeywordsChange,
+  onSaveEmulatorKeywords,
+  emulatorKeywordsSaved,
   onNavigate,
 }) {
   const [backupStatus, setBackupStatus] = useState('')
@@ -285,6 +291,63 @@ export function SettingsPanel({
             <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
               {t.settings.screenshot_notification_hint}
             </p>
+          </div>
+          
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <input
+                type="checkbox"
+                id="window_title_match"
+                checked={windowTitleMatchEnabled}
+                onChange={(e) => onWindowTitleMatchChange(e.target.checked)}
+                style={{ width: 18, height: 18, cursor: 'pointer' }}
+              />
+              <label htmlFor="window_title_match" style={{ cursor: 'pointer', color: theme.text, fontSize: 14 }}>
+                {t.settings.window_title_match}
+              </label>
+            </div>
+            <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
+              {t.settings.window_title_match_hint}
+            </p>
+          </div>
+          
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
+            <h4 style={{ marginBottom: 8, color: theme.text, fontSize: 14 }}>
+              {t.settings.emulator_keywords}
+            </h4>
+            <p style={{ color: theme.textMuted, fontSize: 12, marginBottom: 10 }}>
+              {t.settings.emulator_keywords_hint}
+            </p>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <input
+                type="text"
+                value={emulatorKeywords}
+                onChange={(e) => onEmulatorKeywordsChange(e.target.value)}
+                placeholder="dosbox, retroarch, pcsx2, ..."
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  background: theme.primary,
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: 6,
+                  color: theme.text,
+                  fontSize: 13,
+                  outline: 'none',
+                }}
+              />
+              <button
+                style={{
+                  ...styles.btn,
+                  padding: '8px 16px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+                {...btnEvents}
+                onClick={onSaveEmulatorKeywords}
+              >
+                {emulatorKeywordsSaved ? t.settings.emulator_keywords_saved : t.settings.emulator_keywords_save}
+              </button>
+            </div>
           </div>
           
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
