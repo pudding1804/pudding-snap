@@ -2049,12 +2049,20 @@ pub fn update_game_icon(conn: &Connection, game_id: &str, exe_path: Option<&str>
     Ok(())
 }
 
+pub fn get_game_icon_path(conn: &Connection, game_id: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT icon_path FROM game_cache WHERE game_id = ?1",
+        params![game_id],
+        |row| row.get::<_, Option<String>>(0),
+    ).ok().flatten()
+}
+
 pub fn set_manual_game_info(conn: &Connection, game_id: &str, display_name: &str, logo_path: Option<&str>) -> Result<()> {
     let timestamp = chrono::Utc::now().timestamp();
-    if logo_path.is_some() {
+    if let Some(logo) = logo_path {
         conn.execute(
-            "UPDATE game_cache SET display_title = ?1, steam_name = ?2, steam_logo_path = ?3, icon_path = ?4, steam_match_status = 'manual', last_updated = ?5 WHERE game_id = ?6",
-            params![display_name, display_name, logo_path, logo_path, timestamp, game_id],
+            "UPDATE game_cache SET display_title = ?1, steam_name = ?2, steam_logo_path = ?3, steam_match_status = 'manual', last_updated = ?4 WHERE game_id = ?5",
+            params![display_name, display_name, logo, timestamp, game_id],
         )?;
     } else {
         conn.execute(

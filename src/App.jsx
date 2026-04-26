@@ -2934,27 +2934,6 @@ function App() {
               <p style={{ margin: '0 0 20px 0', color: theme.textMuted, fontSize: 14, lineHeight: 1.5 }}>
                 {t.close_confirm?.message || '您想要关闭程序还是最小化到系统托盘？'}
               </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-                <input
-                  type="checkbox"
-                  id="rememberCloseAction"
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      localStorage.setItem('closeAction', 'ask')
-                    } else {
-                      localStorage.removeItem('closeAction')
-                    }
-                  }}
-                  style={{ width: 16, height: 16, cursor: 'pointer' }}
-                />
-                <label htmlFor="rememberCloseAction" style={{ 
-                  color: theme.textMuted,
-                  cursor: 'pointer',
-                  fontSize: 13
-                }}>
-                  {t.close_confirm?.remember || '记住我的选择'}
-                </label>
-              </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <button
                   style={{

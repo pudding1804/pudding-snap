@@ -36,6 +36,7 @@ struct ScreenshotTask {
     process_name: String,
     steam_appid: Option<u32>,
     window_title: Option<String>,
+    window_title_match_enabled: bool,
 }
 
 #[derive(Debug)]
@@ -2028,22 +2029,30 @@ fn main() {
                             println!("[耗时] 获取前台进程信息: {:.2}ms", t.elapsed().as_secs_f64() * 1000.0);
                             println!("[截图] 进程: {}, exe: {:?}", process_info.process_name, process_info.exe_path);
 
-                            let window_title = {
+                            let window_title_match_enabled = {
                                 let cache = settings_cache_for_hotkey.read().unwrap();
-                                let enabled = cache.get("window_title_match")
+                                cache.get("window_title_match")
                                     .and_then(|v| v.parse::<bool>().ok())
-                                    .unwrap_or(false);
+                                    .unwrap_or(false)
+                            };
+
+                            let window_title = {
                                 let title = windows_utils::get_foreground_window_title();
                                 if let Some(ref t) = title {
                                     println!("[截图] 窗口标题: {}", t);
                                 }
-                                if enabled {
+                                if window_title_match_enabled {
                                     title
                                 } else {
                                     if title.is_some() && windows_utils::is_emulator_process(&process_info.process_name) {
                                         title
                                     } else {
-                                        None
+                                        if title.is_some() {
+                                            println!("[截图] 窗口标题匹配未启用，继续捕获窗口标题(用于界面命名)");
+                                            title
+                                        } else {
+                                            None
+                                        }
                                     }
                                 }
                             };
@@ -2066,6 +2075,7 @@ fn main() {
                                         process_name: process_info.process_name,
                                         steam_appid,
                                         window_title,
+                                        window_title_match_enabled,
                                     };
 
                                     {
@@ -2292,6 +2302,7 @@ fn main() {
                                                                         let process_name_for_steam = task.process_name.clone();
                                                                         let steam_appid_for_steam = task.steam_appid;
                                                                         let window_title_for_steam = task.window_title.clone();
+                                                                        let window_title_match_for_steam = task.window_title_match_enabled;
                                                                         std::thread::spawn(move || {
                                                                         if let Some(appid) = steam_appid_for_steam {
                                                                             if appid > 0 {
@@ -2324,10 +2335,11 @@ fn main() {
                                                                                                 Some(&info.name),
                                                                                             );
                                                                                         } else {
+                                                                                            let existing_icon = db::get_game_icon_path(&conn, &game_id_for_steam);
                                                                                             let cache = GameCache {
                                                                                                 game_id: game_id_for_steam.clone(),
                                                                                                 exe_path: None,
-                                                                                                icon_path: None,
+                                                                                                icon_path: existing_icon,
                                                                                                 display_title: Some(info.name.clone()),
                                                                                                 last_updated: chrono::Utc::now().timestamp(),
                                                                                                 steam_appid: Some(info.appid),
@@ -2357,7 +2369,7 @@ fn main() {
                                                                                 let extracted = windows_utils::extract_game_name_from_title(wt, &process_name_for_steam);
                                                                                 println!("[Steam] 阶段B: 模拟器窗口标题提取: {} -> {}", wt, extracted);
                                                                                 extracted
-                                                                            } else {
+                                                                            } else if window_title_match_for_steam {
                                                                                 let cleaned = windows_utils::clean_window_title(wt);
                                                                                 if cleaned.is_empty() {
                                                                                     println!("[Steam] 阶段B: 窗口标题清理后为空，使用进程名: {}", process_name_for_steam);
@@ -2366,6 +2378,9 @@ fn main() {
                                                                                     println!("[Steam] 阶段B: 窗口标题匹配: {} -> {}", wt, cleaned);
                                                                                     cleaned
                                                                                 }
+                                                                            } else {
+                                                                                println!("[Steam] 阶段B: 窗口标题匹配未启用，使用进程名: {}", process_name_for_steam);
+                                                                                process_name_for_steam.clone()
                                                                             }
                                                                         } else {
                                                                             process_name_for_steam.clone()
@@ -2405,10 +2420,11 @@ fn main() {
                                                                                             Some(&info.name),
                                                                                         );
                                                                                     } else {
+                                                                                        let existing_icon = db::get_game_icon_path(&conn, &game_id_for_steam);
                                                                                         let cache = GameCache {
                                                                                             game_id: game_id_for_steam.clone(),
                                                                                             exe_path: None,
-                                                                                            icon_path: None,
+                                                                                            icon_path: existing_icon,
                                                                                             display_title: Some(info.name.clone()),
                                                                                             last_updated: chrono::Utc::now().timestamp(),
                                                                                             steam_appid: Some(info.appid),
@@ -2457,10 +2473,11 @@ fn main() {
                                                                                         Some(&info.name),
                                                                                     );
                                                                                 } else {
+                                                                                    let existing_icon = db::get_game_icon_path(&conn, &game_id_for_steam);
                                                                                     let cache = GameCache {
                                                                                         game_id: game_id_for_steam.clone(),
                                                                                         exe_path: None,
-                                                                                        icon_path: None,
+                                                                                        icon_path: existing_icon,
                                                                                         display_title: Some(info.name.clone()),
                                                                                         last_updated: chrono::Utc::now().timestamp(),
                                                                                         steam_appid: Some(info.appid),
@@ -2494,10 +2511,11 @@ fn main() {
                                                                                     Some(&fallback_title),
                                                                                 );
                                                                             } else {
+                                                                                let existing_icon = db::get_game_icon_path(&conn, &game_id_for_steam);
                                                                                 let cache = GameCache {
                                                                                     game_id: game_id_for_steam.clone(),
                                                                                     exe_path: None,
-                                                                                    icon_path: None,
+                                                                                    icon_path: existing_icon,
                                                                                     display_title: Some(fallback_title.clone()),
                                                                                     last_updated: chrono::Utc::now().timestamp(),
                                                                                     steam_appid: None,
