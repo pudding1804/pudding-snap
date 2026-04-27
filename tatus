@@ -1,0 +1,95 @@
+[1mdiff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs[m
+[1mindex 3641643..1cd1059 100644[m
+[1m--- a/src-tauri/src/main.rs[m
+[1m+++ b/src-tauri/src/main.rs[m
+[36m@@ -38,6 +38,7 @@[m [mstruct ScreenshotTask {[m
+     steam_appid: Option<u32>,[m
+     window_title: Option<String>,[m
+     window_title_match_enabled: bool,[m
+[32m+[m[32m    retroarch_screenshot_path: Option<String>,[m
+ }[m
+ [m
+ #[derive(Debug)][m
+[36m@@ -2080,18 +2081,32 @@[m [mfn main() {[m
+ [m
+                             let t = Instant::now();[m
+                             let is_retroarch = retroarch::is_retroarch_process(&process_info.process_name);[m
+[31m-                            let capture_result = if is_retroarch {[m
+[32m+[m[32m                            let (capture_result, retroarch_screenshot_path, retroarch_game_title) = if is_retroarch {[m
+                                 if let Some(ref exe_path) = process_info.exe_path {[m
+                                     println!("[RetroArch] 检测到RetroArch进程，使用RetroArch自带截图 (PID: {})", process_info.pid);[m
+[31m-                                    retroarch::capture_retroarch_screenshot(exe_path, process_info.pid)[m
+[32m+[m[32m                                    match retroarch::capture_retroarch_screenshot(exe_path, process_info.pid) {[m
+[32m+[m[32m                                        Ok(result) => {[m
+[32m+[m[32m                                            let game_title = retroarch::parse_game_title_from_filename(&result.screenshot_path);[m
+[32m+[m[32m                                            (Ok(result.image), Some(result.screenshot_path.to_string_lossy().to_string()), game_title)[m
+[32m+[m[32m                                        }[m
+[32m+[m[32m                                        Err(e) => (Err(e), None, None),[m
+[32m+[m[32m                                    }[m
+                                 } else {[m
+                                     println!("[RetroArch] 检测到RetroArch进程但无法获取exe路径，回退到系统截图");[m
+[31m-                                    capture_screenshot(false).map_err(|e| e.to_string())[m
+[32m+[m[32m                                    (capture_screenshot(false).map_err(|e| e.to_string()), None, None)[m
+                                 }[m
+                             } else {[m
+[31m-                                capture_screenshot(false).map_err(|e| e.to_string())[m
+[32m+[m[32m                                (capture_screenshot(false).map_err(|e| e.to_string()), None, None)[m
+[32m+[m[32m                            };[m
+[32m+[m
+[32m+[m[32m                            let window_title = if is_retroarch {[m
+[32m+[m[32m                                retroarch_game_title.or(window_title)[m
+[32m+[m[32m                            } else {[m
+[32m+[m[32m                                window_title[m
+                             };[m
+ [m
+[32m+[m[32m                            let steam_appid = if is_retroarch { None } else { steam_appid };[m
+[32m+[m
+                             match capture_result {[m
+                                 Ok(image) => {[m
+                                     println!("[耗时] 屏幕捕获: {:.2}ms (RetroArch模式: {})", t.elapsed().as_secs_f64() * 1000.0, is_retroarch);[m
+[36m@@ -2103,6 +2118,7 @@[m [mfn main() {[m
+                                         steam_appid,[m
+                                         window_title,[m
+                                         window_title_match_enabled,[m
+[32m+[m[32m                                        retroarch_screenshot_path,[m
+                                     };[m
+ [m
+                                     {[m
+[36m@@ -2323,7 +2339,49 @@[m [mfn main() {[m
+                                                                         });[m
+                                                                     }[m
+ [m
+[31m-                                                                    if !is_existing && !should_skip_steam {[m
+[32m+[m[32m                                                                    if task.retroarch_screenshot_path.is_some() && !is_existing {[m
+[32m+[m[32m                                                                        let img = &task.image;[m
+[32m+[m[32m                                                                        let logos_dir = steam::get_steam_logos_dir();[m
+[32m+[m[32m                                                                        let logo_filename = format!("manual_{}.jpg", game_id);[m
+[32m+[m[32m                                                                        let logo_path = logos_dir.join(&logo_filename);[m
+[32m+[m
+[32m+[m[32m                                                                        let max_width = 460u32;[m
+[32m+[m[32m                                                                        let max_height = 215u32;[m
+[32m+[m[32m                                                                        let (width, height) = (img.width(), img.height());[m
+[32m+[m[32m                                                                        let resized = if width > max_width || height > max_height {[m
+[32m+[m[32m                                                                            let ratio = (max_width as f64 / width as f64)[m
+[32m+[m[32m                                                                                .min(max_height as f64 / height as f64);[m
+[32m+[m[32m                                                                            let new_w = (width as f64 * ratio) as u32;[m
+[32m+[m[32m                                                                            let new_h = (height as f64 * ratio) as u32;[m
+[32m+[m[32m                                                                            img.thumbnail(new_w, new_h)[m
+[32m+[m[32m                                                                        } else {[m
+[32m+[m[32m                                                                            img.clone()[m
+[32m+[m[32m                                                                        };[m
+[32m+[m
+[32m+[m[32m                                                                        if let Ok(_) = resized.save(&logo_path) {[m
+[32m+[m[32m                                                                            let logo_path_str = logo_path.to_string_lossy().to_string();[m
+[32m+[m[32m                                                                            let conn = db_clone.lock().unwrap();[m
+[32m+[m[32m                                                                            if db::get_game_cache(&conn, &game_id).is_some() {[m
+[32m+[m[32m                                                                                let _ = db::set_manual_game_info(&conn, &game_id, &display_title, Some(&logo_path_str));[m
+[32m+[m[32m                                                                            } else {[m
+[32m+[m[32m                                                                                let cache = GameCache {[m
+[32m+[m[32m                                                                                    game_id: game_id.clone(),[m
+[32m+[m[32m                                                                                    exe_path: task.exe_path.clone(),[m
+[32m+[m[32m                                                                                    icon_path: None,[m
+[32m+[m[32m                                                                                    display_title: Some(display_title.clone()),[m
+[32m+[m[32m                                                                                    last_updated: chrono::Utc::now().timestamp(),[m
+[32m+[m[32m                                                                                    steam_appid: None,[m
+[32m+[m[32m                                                                                    steam_name: Some(display_title.clone()),[m
