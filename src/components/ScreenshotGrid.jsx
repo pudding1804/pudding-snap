@@ -4,6 +4,7 @@ import { btnEvents } from '../styles/sharedStyles'
 import { Pagination } from './Pagination'
 import { NavDropdown } from './NavDropdown'
 import { ThumbnailImage } from './ThumbnailImage'
+import { formatGameTitle } from '../utils'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -308,7 +309,7 @@ export function ScreenshotGrid({
                   />
                 </div>
                 <div style={styles.cardInfo}>
-                  <div style={styles.cardTitle}>{ss.display_title || ss.game_title}</div>
+                  <div style={styles.cardTitle}>{formatGameTitle(ss.display_title, ss.game_title)}</div>
                   <div style={styles.cardDate}>{formatDate(ss.timestamp)}</div>
                   {ss.note && <div style={{ fontSize: 11, color: theme.text, marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.4' }}>{ss.note}</div>}
                 </div>

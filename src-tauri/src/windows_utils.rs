@@ -174,11 +174,30 @@ unsafe fn hicon_to_rgba(hicon: HICON) -> Result<(u32, u32, Vec<u8>), String> {
         return Err("GetIconInfo 失败".to_string());
     }
     
+    let hbmColor = icon_info.hbmColor;
+    let hbmMask = icon_info.hbmMask;
+    
+    if hbmColor.is_null() {
+        DeleteObject(hbmMask as *mut _);
+        return Err("hbmColor 为空".to_string());
+    }
+    
     let mut bm: BITMAP = std::mem::zeroed();
-    GetObjectW(icon_info.hbmColor as *mut _, size_of::<BITMAP>() as i32, &mut bm as *mut _ as *mut _);
+    let obj_result = GetObjectW(hbmColor as *mut _, size_of::<BITMAP>() as i32, &mut bm as *mut _ as *mut _);
+    if obj_result == 0 {
+        DeleteObject(hbmColor as *mut _);
+        DeleteObject(hbmMask as *mut _);
+        return Err("GetObjectW(hbmColor) 失败".to_string());
+    }
     
     let width = bm.bmWidth as u32;
     let height = bm.bmHeight as u32;
+    
+    if width == 0 || height == 0 {
+        DeleteObject(hbmColor as *mut _);
+        DeleteObject(hbmMask as *mut _);
+        return Err(format!("图标尺寸无效: {}x{}", width, height));
+    }
     
     let hdc = GetDC(ptr::null_mut());
     let mem_dc = CreateCompatibleDC(hdc);
@@ -195,7 +214,7 @@ unsafe fn hicon_to_rgba(hicon: HICON) -> Result<(u32, u32, Vec<u8>), String> {
     
     let result = GetDIBits(
         mem_dc,
-        icon_info.hbmColor,
+        hbmColor,
         0,
         height,
         pixels.as_mut_ptr() as *mut _,
@@ -203,27 +222,101 @@ unsafe fn hicon_to_rgba(hicon: HICON) -> Result<(u32, u32, Vec<u8>), String> {
         DIB_RGB_COLORS,
     );
     
+    let mask_bits = get_mask_bits(hbmMask as *mut _, width, height);
+
     DeleteDC(mem_dc);
     ReleaseDC(ptr::null_mut(), hdc);
-    DeleteObject(icon_info.hbmColor as *mut _);
-    DeleteObject(icon_info.hbmMask as *mut _);
+    DeleteObject(hbmColor as *mut _);
+    DeleteObject(hbmMask as *mut _);
     
     if result == 0 {
         return Err("GetDIBits 失败".to_string());
     }
     
-    let mut rgba: Vec<u8> = Vec::with_capacity((width * height * 4) as usize);
+    let total_pixels = (width * height) as usize;
+    let mut zero_alpha = 0u32;
+    
+    let mut rgba: Vec<u8> = Vec::with_capacity(total_pixels * 4);
     for y in 0..height as usize {
         for x in 0..width as usize {
             let idx = (y * width as usize + x) * 4;
             rgba.push(pixels[idx + 2]);
             rgba.push(pixels[idx + 1]);
             rgba.push(pixels[idx]);
+            if pixels[idx + 3] == 0 {
+                zero_alpha += 1;
+            }
             rgba.push(pixels[idx + 3]);
         }
     }
     
+    let all_alpha_zero = zero_alpha == total_pixels as u32;
+    
+    if all_alpha_zero {
+        println!("[图标] Alpha全部为0，从mask位图推导透明度 ({}x{})", width, height);
+        for y in 0..height as usize {
+            for x in 0..width as usize {
+                let idx = (y * width as usize + x) * 4;
+                let mask_visible = mask_bits.as_ref()
+                    .map(|mb| !is_masked(mb, x, y, width as usize))
+                    .unwrap_or(true);
+                rgba[idx + 3] = if mask_visible { 255 } else { 0 };
+            }
+        }
+    } else if zero_alpha > 0 {
+        println!("[图标] Alpha部分为0: {}/{} 像素", zero_alpha, total_pixels);
+    }
+    
+    println!("[图标] 图标提取: {}x{}, 尺寸={}bytes, alpha_zero={}/{}", width, height, pixels.len(), zero_alpha, total_pixels);
+    
     Ok((width, height, rgba))
+}
+
+unsafe fn get_mask_bits(hbmMask: *mut std::ffi::c_void, width: u32, height: u32) -> Option<Vec<u8>> {
+    if hbmMask.is_null() {
+        return None;
+    }
+    
+    let mask_hdc = CreateCompatibleDC(ptr::null_mut());
+    let mut mask_bmi: BITMAPINFO = std::mem::zeroed();
+    mask_bmi.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as u32;
+    mask_bmi.bmiHeader.biWidth = width as i32;
+    mask_bmi.bmiHeader.biHeight = -(height as i32);
+    mask_bmi.bmiHeader.biPlanes = 1;
+    mask_bmi.bmiHeader.biBitCount = 1;
+    mask_bmi.bmiHeader.biCompression = BI_RGB;
+    
+    let row_bytes = ((width + 31) / 32) as usize * 4;
+    let mut mask_pixels = vec![0u8; row_bytes * height as usize];
+    
+    let mr = GetDIBits(
+        mask_hdc,
+        hbmMask as *mut _,
+        0,
+        height,
+        mask_pixels.as_mut_ptr() as *mut _,
+        &mut mask_bmi,
+        DIB_RGB_COLORS,
+    );
+    
+    DeleteDC(mask_hdc);
+    
+    if mr == 0 {
+        return None;
+    }
+    
+    Some(mask_pixels)
+}
+
+fn is_masked(mask_bits: &[u8], x: usize, y: usize, width: usize) -> bool {
+    let row_bytes = ((width + 31) / 32) * 4;
+    let byte_idx = y * row_bytes + x / 8;
+    let bit_idx = 7 - (x % 8);
+    if byte_idx < mask_bits.len() {
+        (mask_bits[byte_idx] >> bit_idx) & 1 == 1
+    } else {
+        false
+    }
 }
 
 pub fn get_rpg_maker_game_title(exe_path: &str) -> Option<String> {
@@ -541,4 +634,77 @@ pub fn clean_window_title(title: &str) -> String {
     }
     
     name.trim().to_string()
+}
+
+pub fn verify_steam_appid_for_process(appid: u32, foreground_exe_path: &str) -> bool {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
+    use winreg::RegKey;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let steam_reg_key = match hkcu.open_subkey_with_flags(r"Software\Valve\Steam", KEY_READ) {
+        Ok(key) => key,
+        Err(_) => return true,
+    };
+
+    let steam_path: String = match steam_reg_key.get_value("SteamPath") {
+        Ok(p) => p,
+        Err(_) => return true,
+    };
+
+    let mut library_paths = vec![steam_path.clone()];
+    library_paths.extend(get_steam_library_folders(&steam_path));
+
+    for lib_path in &library_paths {
+        let acf_path = format!("{}\\steamapps\\appmanifest_{}.acf", lib_path, appid);
+        let content = match std::fs::read_to_string(&acf_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        if let Some(install_dir) = parse_acf_installdir(&content) {
+            let game_dir = format!("{}\\steamapps\\common\\{}", lib_path, install_dir);
+            if foreground_exe_path.to_lowercase().contains(&game_dir.to_lowercase()) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn get_steam_library_folders(steam_path: &str) -> Vec<String> {
+    let vdf_path = format!("{}\\steamapps\\libraryfolders.vdf", steam_path);
+    let content = match std::fs::read_to_string(&vdf_path) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut folders = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(path_str) = trimmed.strip_prefix("\"path\"") {
+            let path_val = path_str.trim();
+            if let Some(p) = path_val.strip_prefix('"') {
+                if let Some(end) = p.find('"') {
+                    let lib_path = &p[..end];
+                    let normalized = lib_path.replace("\\\\", "\\");
+                    if !folders.contains(&normalized) && normalized != steam_path {
+                        folders.push(normalized);
+                    }
+                }
+            }
+        }
+    }
+
+    folders
+}
+
+fn parse_acf_installdir(content: &str) -> Option<String> {
+    let marker = "\"installdir\"";
+    let pos = content.find(marker)?;
+    let rest = &content[pos + marker.len()..];
+    let quote_start = rest.find('"')?;
+    let after_quote = &rest[quote_start + 1..];
+    let quote_end = after_quote.find('"')?;
+    Some(after_quote[..quote_end].to_string())
 }

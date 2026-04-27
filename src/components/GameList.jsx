@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 import { Pagination } from './Pagination'
 import { NavDropdown } from './NavDropdown'
+import { formatGameTitle } from '../utils'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -382,11 +383,11 @@ export function GameList({
                     hasSteamLogo ? (
                       <img 
                         src={getImageSrc(iconSrc)} 
-                        alt={`${game.display_title || game.game_title} 图标`}
+                        alt={`${formatGameTitle(game.display_title, game.game_title)} 图标`}
                         style={styles.gameLogoImage}
                         onError={(e) => {
                           e.target.style.display = 'none';
-                          e.target.parentElement.innerHTML = game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?';
+                          e.target.parentElement.innerHTML = formatGameTitle(game.display_title, game.game_title)?.charAt(0) || '?';
                           e.target.parentElement.style.background = theme.accent;
                         }}
                       />
@@ -403,11 +404,11 @@ export function GameList({
                       }}>
                         <img 
                           src={getImageSrc(iconSrc)} 
-                          alt={`${game.display_title || game.game_title} 图标`}
+                          alt={`${formatGameTitle(game.display_title, game.game_title)} 图标`}
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           onError={(e) => {
                             e.target.style.display = 'none';
-                            e.target.parentElement.innerHTML = game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?';
+                            e.target.parentElement.innerHTML = formatGameTitle(game.display_title, game.game_title)?.charAt(0) || '?';
                           }}
                         />
                       </div>
@@ -422,12 +423,12 @@ export function GameList({
                       background: theme.accent,
                       borderRadius: 6
                     }}>
-                      {game.display_title?.charAt(0) || game.game_title?.charAt(0) || '?'}
+                      {formatGameTitle(game.display_title, game.game_title)?.charAt(0) || '?'}
                     </div>
                   )}
                   </div>
                 </div>
-                <div style={styles.gameTitle}>{game.display_title || game.game_title}</div>
+                <div style={styles.gameTitle}>{formatGameTitle(game.display_title, game.game_title)}</div>
                 <div style={styles.gameCount}>{game.count} {t.game.screenshots}</div>
                 <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>
                   {formatDate(game.last_timestamp) ? `${t.game.last_updated} ${formatDate(game.last_timestamp)}` : ''}

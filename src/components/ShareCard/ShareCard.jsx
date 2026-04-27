@@ -1,5 +1,6 @@
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { SHARE_CARD_STYLES } from './shareCardStyles'
+import { formatGameTitle } from '../../utils'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -239,7 +240,7 @@ export function ShareCard({
   layoutMode = 'landscape16x9'
 }) {
   const processName = screenshot?.game_id?.split('\\').pop().split('/').pop().replace('.exe', '') || '未知游戏'
-  const gameTitle = screenshot?.display_title || screenshot?.game_title || gameInfo?.display_title || gameInfo?.game_title || processName
+  const gameTitle = formatGameTitle(screenshot?.display_title || gameInfo?.display_title, screenshot?.game_title || gameInfo?.game_title) || processName
   const displayUsername = username || 'Player'
   const dateTime = formatDateTime(screenshot.timestamp)
   const imageSrc = getImageSrc(screenshot.file_path)

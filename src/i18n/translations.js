@@ -1,5 +1,8 @@
 export const translations = {
   zh: {
+    common: {
+      loading: '加载中...'
+    },
     nav: {
       time: '按时间浏览',
       games: '按游戏浏览',
@@ -300,6 +303,9 @@ export const translations = {
     }
   },
   en: {
+    common: {
+      loading: 'Loading...'
+    },
     nav: {
       time: 'Browse by Time',
       games: 'Browse by Game',
@@ -600,6 +606,9 @@ export const translations = {
     }
   },
   ja: {
+    common: {
+      loading: '読み込み中...'
+    },
     nav: {
       time: '時間で参照',
       games: 'ゲームで参照',

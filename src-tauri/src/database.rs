@@ -543,14 +543,14 @@ pub fn insert_screenshot(
     file_path: &str,
     thumbnail_path: &str,
     game_id: &str,
-    _game_title: &str,
+    display_title: &str,
     timestamp: i64,
     file_hash: Option<&str>,
 ) -> Result<i64> {
     conn.execute(
         "INSERT INTO screenshots (file_path, thumbnail_path, game_id, game_title, display_title, timestamp, note, game_banner_url, file_hash)
-         VALUES (?1, ?2, ?3, ?3, ?3, ?4, '', '', ?5)",
-        params![file_path, thumbnail_path, game_id, timestamp, file_hash],
+         VALUES (?1, ?2, ?3, ?4, ?4, ?5, '', '', ?6)",
+        params![file_path, thumbnail_path, game_id, display_title, timestamp, file_hash],
     )?;
     Ok(conn.last_insert_rowid())
 }

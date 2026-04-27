@@ -9,11 +9,11 @@ import { getTranslation } from './i18n/translations'
 import { createStyles, btnEvents, modalKeyframes } from './styles/sharedStyles'
 import { useWindowSize } from './hooks/useWindowSize'
 import { useNavigationHistory } from './hooks/useNavigationHistory'
-import { 
-  ScreenshotGrid, 
+import {
+  ScreenshotGrid,
   ScreenshotModal,
-  GameList, 
-  GameDetail, 
+  GameList,
+  GameDetail,
   SettingsPanel,
   AddGameModal,
   ImportModal,
@@ -21,8 +21,9 @@ import {
   RecycleBin,
   ErrorBoundary,
   ShareModal,
-  TitleBar 
+  TitleBar
 } from './components'
+import { formatGameTitle } from './utils'
 
 function getImageSrc(path) {
   if (!path) return ''

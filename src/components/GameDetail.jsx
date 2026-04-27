@@ -3,6 +3,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 import { Pagination } from './Pagination'
 import { ThumbnailImage } from './ThumbnailImage'
+import { formatGameTitle } from '../utils'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -99,7 +100,7 @@ export function GameDetail({
             {selectedGame?.game_icon_path ? (
               <img 
                 src={getImageSrc(selectedGame.game_icon_path)} 
-                alt={`${selectedGame.display_title || selectedGame.game_title} 图标`}
+                alt={`${formatGameTitle(selectedGame.display_title, selectedGame.game_title)} 图标`}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -108,7 +109,7 @@ export function GameDetail({
             ) : selectedGame?.steam_logo_path ? (
               <img 
                 src={getImageSrc(selectedGame.steam_logo_path)} 
-                alt={`${selectedGame.display_title || selectedGame.game_title} 图标`}
+                alt={`${formatGameTitle(selectedGame.display_title, selectedGame.game_title)} 图标`}
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -116,7 +117,7 @@ export function GameDetail({
               />
             ) : null}
           </div>
-          <h1 style={styles.title}>{selectedGame?.display_title || selectedGame?.game_title}</h1>
+          <h1 style={styles.title}>{formatGameTitle(selectedGame?.display_title, selectedGame?.game_title)}</h1>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
           {isMultiSelectMode ? (

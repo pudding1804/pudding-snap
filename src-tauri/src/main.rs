@@ -1821,7 +1821,7 @@ fn main() {
     let settings_cache = {
         let conn = db_arc.lock().unwrap();
         let mut cache = HashMap::new();
-        for key in &["shutter_sound", "screenshot_format", "screenshot_quality", "screenshot_notification", "theme", "sort_order", "game_sort_order", "backup_enabled", "data_dir", "emulator_keywords"] {
+        for key in &["shutter_sound", "screenshot_format", "screenshot_quality", "screenshot_notification", "theme", "sort_order", "game_sort_order", "backup_enabled", "data_dir", "emulator_keywords", "window_title_match"] {
             if let Some(value) = db::get_setting(&conn, key) {
                 if *key == "emulator_keywords" {
                     let emulator_names: Vec<String> = value.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
@@ -2060,9 +2060,22 @@ fn main() {
                             let t = Instant::now();
                             let steam_appid = get_steam_running_appid();
                             println!("[耗时] 获取Steam RunningAppID: {:.2}ms", t.elapsed().as_secs_f64() * 1000.0);
-                            if let Some(appid) = steam_appid {
-                                println!("[Steam] 检测到Steam运行游戏, AppID: {}", appid);
-                            }
+                            let steam_appid = if let Some(appid) = steam_appid {
+                                let matches = if let Some(ref exe_path) = process_info.exe_path {
+                                    windows_utils::verify_steam_appid_for_process(appid, exe_path)
+                                } else {
+                                    false
+                                };
+                                if matches {
+                                    println!("[Steam] 检测到Steam运行游戏, AppID: {}", appid);
+                                    Some(appid)
+                                } else {
+                                    println!("[Steam] 检测到Steam RunningAppID={} 但前台进程不匹配，忽略", appid);
+                                    None
+                                }
+                            } else {
+                                None
+                            };
 
                             let t = Instant::now();
                             match capture_screenshot(false) {

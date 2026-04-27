@@ -3,6 +3,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { btnEvents } from '../styles/sharedStyles'
 import { Pagination } from './Pagination'
 import { ThumbnailImage } from './ThumbnailImage'
+import { formatGameTitle } from '../utils'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -283,7 +284,7 @@ export function RecycleBin({
                   )}
                 </div>
                 <div style={styles.cardInfo}>
-                  <div style={styles.cardTitle}>{ss.display_title || ss.game_title}</div>
+                  <div style={styles.cardTitle}>{formatGameTitle(ss.display_title, ss.game_title)}</div>
                   <div style={{ ...styles.cardDate, color: theme.textMuted }}>
                     {t.recycle_bin.deleted_at} {formatDate(ss.timestamp)}
                   </div>

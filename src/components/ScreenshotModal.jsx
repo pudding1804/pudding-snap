@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { formatGameTitle } from '../utils'
 
 function getImageSrc(path) {
   if (!path) return ''
@@ -242,7 +243,7 @@ export function ScreenshotModal({
             </span>
             <span style={{ fontSize: 12, color: theme.textMuted }}>|</span>
             <span style={{ fontSize: 12, color: theme.textMuted }}>
-              {selectedScreenshot.display_title || selectedScreenshot.game_title}
+              {formatGameTitle(selectedScreenshot.display_title, selectedScreenshot.game_title)}
             </span>
             <span style={{ fontSize: 12, color: theme.textMuted }}>|</span>
             <span style={{ fontSize: 12, color: theme.textMuted }}>
