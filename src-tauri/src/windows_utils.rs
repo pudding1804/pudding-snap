@@ -14,6 +14,7 @@ use image::{ImageBuffer, Rgba};
 pub struct ForegroundProcessInfo {
     pub process_name: String,
     pub exe_path: Option<String>,
+    pub pid: u32,
 }
 
 pub fn get_steam_running_appid() -> Option<u32> {
@@ -41,6 +42,7 @@ pub fn get_foreground_process_info() -> ForegroundProcessInfo {
             return ForegroundProcessInfo {
                 process_name: "Unknown".to_string(),
                 exe_path: None,
+                pid: 0,
             };
         }
 
@@ -52,6 +54,7 @@ pub fn get_foreground_process_info() -> ForegroundProcessInfo {
             return ForegroundProcessInfo {
                 process_name: "Unknown".to_string(),
                 exe_path: None,
+                pid,
             };
         }
 
@@ -77,6 +80,7 @@ pub fn get_foreground_process_info() -> ForegroundProcessInfo {
         ForegroundProcessInfo {
             process_name,
             exe_path,
+            pid,
         }
     }
 }
@@ -532,6 +536,12 @@ pub fn is_emulator_process(process_name: &str) -> bool {
 }
 
 pub fn extract_game_name_from_title(title: &str, process_name: &str) -> String {
+    let name_lower = process_name.to_lowercase();
+    if (name_lower == "retroarch" || name_lower == "retroarch.exe")
+        && !title.contains("RetroArch") && !title.contains("retroarch") {
+        return title.to_string();
+    }
+
     let mut name = title.to_string();
     
     let mut emulator_to_check: Vec<String> = EMULATOR_PROCESS_NAMES.iter()

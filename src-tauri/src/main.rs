@@ -7,6 +7,7 @@ mod screenshot;
 mod audio;
 mod steam;
 mod bangumi;
+mod retroarch;
 
 mod raw_input;
 mod keyboard_hook;
@@ -37,6 +38,7 @@ struct ScreenshotTask {
     steam_appid: Option<u32>,
     window_title: Option<String>,
     window_title_match_enabled: bool,
+    retroarch_screenshot_path: Option<String>,
 }
 
 #[derive(Debug)]
@@ -2078,9 +2080,36 @@ fn main() {
                             };
 
                             let t = Instant::now();
-                            match capture_screenshot(false) {
+                            let is_retroarch = retroarch::is_retroarch_process(&process_info.process_name);
+                            let (capture_result, retroarch_screenshot_path, retroarch_game_title) = if is_retroarch {
+                                if let Some(ref exe_path) = process_info.exe_path {
+                                    println!("[RetroArch] 检测到RetroArch进程，使用RetroArch自带截图 (PID: {})", process_info.pid);
+                                    match retroarch::capture_retroarch_screenshot(exe_path, process_info.pid) {
+                                        Ok(result) => {
+                                            let game_title = retroarch::parse_game_title_from_filename(&result.screenshot_path);
+                                            (Ok(result.image), Some(result.screenshot_path.to_string_lossy().to_string()), game_title)
+                                        }
+                                        Err(e) => (Err(e), None, None),
+                                    }
+                                } else {
+                                    println!("[RetroArch] 检测到RetroArch进程但无法获取exe路径，回退到系统截图");
+                                    (capture_screenshot(false).map_err(|e| e.to_string()), None, None)
+                                }
+                            } else {
+                                (capture_screenshot(false).map_err(|e| e.to_string()), None, None)
+                            };
+
+                            let window_title = if is_retroarch {
+                                retroarch_game_title.or(window_title)
+                            } else {
+                                window_title
+                            };
+
+                            let steam_appid = if is_retroarch { None } else { steam_appid };
+
+                            match capture_result {
                                 Ok(image) => {
-                                    println!("[耗时] 屏幕捕获: {:.2}ms", t.elapsed().as_secs_f64() * 1000.0);
+                                    println!("[耗时] 屏幕捕获: {:.2}ms (RetroArch模式: {})", t.elapsed().as_secs_f64() * 1000.0, is_retroarch);
 
                                     let task = ScreenshotTask {
                                         image,
@@ -2089,6 +2118,7 @@ fn main() {
                                         steam_appid,
                                         window_title,
                                         window_title_match_enabled,
+                                        retroarch_screenshot_path,
                                     };
 
                                     {
@@ -2309,7 +2339,49 @@ fn main() {
                                                                         });
                                                                     }
 
-                                                                    if !is_existing && !should_skip_steam {
+                                                                    if task.retroarch_screenshot_path.is_some() && !is_existing {
+                                                                        let img = &task.image;
+                                                                        let logos_dir = steam::get_steam_logos_dir();
+                                                                        let logo_filename = format!("manual_{}.jpg", game_id);
+                                                                        let logo_path = logos_dir.join(&logo_filename);
+
+                                                                        let max_width = 460u32;
+                                                                        let max_height = 215u32;
+                                                                        let (width, height) = (img.width(), img.height());
+                                                                        let resized = if width > max_width || height > max_height {
+                                                                            let ratio = (max_width as f64 / width as f64)
+                                                                                .min(max_height as f64 / height as f64);
+                                                                            let new_w = (width as f64 * ratio) as u32;
+                                                                            let new_h = (height as f64 * ratio) as u32;
+                                                                            img.thumbnail(new_w, new_h)
+                                                                        } else {
+                                                                            img.clone()
+                                                                        };
+
+                                                                        if let Ok(_) = resized.save(&logo_path) {
+                                                                            let logo_path_str = logo_path.to_string_lossy().to_string();
+                                                                            let conn = db_clone.lock().unwrap();
+                                                                            if db::get_game_cache(&conn, &game_id).is_some() {
+                                                                                let _ = db::set_manual_game_info(&conn, &game_id, &display_title, Some(&logo_path_str));
+                                                                            } else {
+                                                                                let cache = GameCache {
+                                                                                    game_id: game_id.clone(),
+                                                                                    exe_path: task.exe_path.clone(),
+                                                                                    icon_path: None,
+                                                                                    display_title: Some(display_title.clone()),
+                                                                                    last_updated: chrono::Utc::now().timestamp(),
+                                                                                    steam_appid: None,
+                                                                                    steam_name: Some(display_title.clone()),
+                                                                                    steam_logo_path: Some(logo_path_str),
+                                                                                    steam_match_status: Some("manual".to_string()),
+                                                                                };
+                                                                                let _ = db::set_game_cache(&conn, &cache);
+                                                                            }
+                                                                            let _ = db::update_game_display_title(&conn, &game_id, &display_title);
+                                                                            drop(conn);
+                                                                            println!("[RetroArch] 截图缩略图已生成: {:?}", logo_path);
+                                                                        }
+                                                                    } else if !is_existing && !should_skip_steam {
                                                                         let db_for_steam = db_clone.clone();
                                                                         let game_id_for_steam = game_id.clone();
                                                                         let process_name_for_steam = task.process_name.clone();
@@ -2401,62 +2473,6 @@ fn main() {
 
                                                                         println!("[Steam] 阶段B: 匹配名称: {}", steam_search_name);
                                                                         let result = steam::match_game_name(&steam_search_name, "schinese");
-
-                                                                        if result.status != SteamMatchStatus::Found && window_title_for_steam.is_some() && steam_search_name != process_name_for_steam {
-                                                                            println!("[Steam] 阶段B: 窗口标题匹配失败，回退到进程名: {}", process_name_for_steam);
-                                                                            let fallback_result = steam::match_game_name(&process_name_for_steam, "schinese");
-                                                                            if fallback_result.status == SteamMatchStatus::Found {
-                                                                                if let Some(ref info) = fallback_result.game_info {
-                                                                                    let logos_dir = steam::get_steam_logos_dir();
-                                                                                    let logo_filename = format!("steam_{}.jpg", info.appid);
-                                                                                    let logo_path = logos_dir.join(&logo_filename);
-
-                                                                                    let logo_url = info.header_image.as_ref()
-                                                                                        .or(info.capsule_image.as_ref())
-                                                                                        .map(|s| s.as_str());
-
-                                                                                    let mut logo_path_str = None;
-                                                                                    if let Some(url) = logo_url {
-                                                                                        if let Err(e) = steam::download_steam_image(url, &logo_path) {
-                                                                                            println!("[Steam] 自动下载logo失败: {}", e);
-                                                                                        } else {
-                                                                                            logo_path_str = Some(logo_path.to_string_lossy().to_string());
-                                                                                        }
-                                                                                    }
-
-                                                                                    let conn = db_for_steam.lock().unwrap();
-                                                                                    if db::get_game_cache(&conn, &game_id_for_steam).is_some() {
-                                                                                        let _ = db::update_game_steam_info_auto(
-                                                                                            &conn, &game_id_for_steam,
-                                                                                            Some(info.appid), Some(&info.name),
-                                                                                            logo_path_str.as_deref(), Some("found"),
-                                                                                            Some(&info.name),
-                                                                                        );
-                                                                                    } else {
-                                                                                        let existing_icon = db::get_game_icon_path(&conn, &game_id_for_steam);
-                                                                                        let cache = GameCache {
-                                                                                            game_id: game_id_for_steam.clone(),
-                                                                                            exe_path: None,
-                                                                                            icon_path: existing_icon,
-                                                                                            display_title: Some(info.name.clone()),
-                                                                                            last_updated: chrono::Utc::now().timestamp(),
-                                                                                            steam_appid: Some(info.appid),
-                                                                                            steam_name: Some(info.name.clone()),
-                                                                                            steam_logo_path: logo_path_str.clone(),
-                                                                                            steam_match_status: Some("found".to_string()),
-                                                                                        };
-                                                                                        let _ = db::set_game_cache(&conn, &cache);
-                                                                                    }
-
-                                                                                    if let Err(e) = db::update_game_display_title(&conn, &game_id_for_steam, &info.name) {
-                                                                                        println!("[Steam] 自动更新显示标题失败: {}", e);
-                                                                                    }
-
-                                                                                    println!("[Steam] 阶段B回退匹配成功: {} -> {}", process_name_for_steam, info.name);
-                                                                                }
-                                                                                return;
-                                                                            }
-                                                                        }
 
                                                                         if result.status == SteamMatchStatus::Found {
                                                                             if let Some(ref info) = result.game_info {

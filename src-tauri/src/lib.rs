@@ -5,3 +5,4 @@ pub mod screenshot;
 pub mod audio;
 pub mod raw_input;
 pub mod keyboard_hook;
+pub mod retroarch;
