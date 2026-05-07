@@ -632,6 +632,7 @@ fn extract_game_icon(game_id: String, exe_path: String, state: State<AppState>) 
         steam_name: None,
         steam_logo_path: None,
         steam_match_status: None,
+        rating: Some(-1),
     };
     
     db::set_game_cache(&conn, &cache).map_err(|e| e.to_string())?;
@@ -729,6 +730,7 @@ async fn search_steam_game_info(game_id: String, game_title: String, language: S
                 steam_name: Some(info.name.clone()),
                 steam_logo_path: logo_path_str.clone(),
                 steam_match_status: Some("found".to_string()),
+                rating: Some(-1),
             });
             
             cache.display_title = Some(info.name.clone());
@@ -772,6 +774,7 @@ async fn search_steam_game_info(game_id: String, game_title: String, language: S
             steam_name: None,
             steam_logo_path: None,
             steam_match_status: Some(result.status.clone().to_string()),
+            rating: Some(-1),
         }
     };
     
@@ -826,6 +829,7 @@ async fn apply_steam_game_info(game_id: String, appid: u32, language: String, st
         steam_name: Some(info.name.clone()),
         steam_logo_path: logo_path_str.clone(),
         steam_match_status: Some("found".to_string()),
+        rating: Some(-1),
     });
     
     cache.display_title = Some(info.name.clone());
@@ -903,6 +907,7 @@ async fn create_game_from_steam(
         last_timestamp: chrono::Utc::now().timestamp(),
         game_icon_path: None,
         steam_logo_path: logo_path_str,
+        rating: Some(-1),
     })
 }
 
@@ -965,7 +970,14 @@ async fn update_game_steam_info(
         last_timestamp,
         game_icon_path: None,
         steam_logo_path: logo_path_str,
+        rating: db::get_game_cache(&conn, &game_id).and_then(|c| c.rating).or(Some(-1)),
     })
+}
+
+#[tauri::command]
+fn update_game_rating(game_id: String, rating: i32, state: State<AppState>) -> Result<(), String> {
+    let conn = state.db.lock().unwrap();
+    db::update_game_rating(&conn, &game_id, rating).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1058,6 +1070,7 @@ fn save_manual_game_info(
         last_timestamp,
         game_icon_path: final_logo.clone(),
         steam_logo_path: final_logo,
+        rating: db::get_game_cache(&conn, &game_id).and_then(|c| c.rating).or(Some(-1)),
     })
 }
 
@@ -1140,6 +1153,7 @@ async fn create_game_from_bangumi(
         last_timestamp: chrono::Utc::now().timestamp(),
         game_icon_path: None,
         steam_logo_path: logo_path_str,
+        rating: Some(-1),
     })
 }
 
@@ -1197,6 +1211,7 @@ async fn apply_bangumi_game_info(game_id: String, subject_id: u32, language: Str
         last_timestamp,
         game_icon_path: None,
         steam_logo_path: logo_path_str,
+        rating: db::get_game_cache(&conn, &game_id).and_then(|c| c.rating).or(Some(-1)),
     })
 }
 
@@ -1622,7 +1637,8 @@ fn get_all_games_with_empty(state: State<AppState>) -> Result<Vec<GameSummary>, 
         "SELECT gc.game_id, COALESCE(gc.display_title, gc.game_id) as display_title, 
                 gc.steam_logo_path, gc.icon_path,
                 COALESCE(s.count, 0) as count,
-                COALESCE(s.last_timestamp, gc.last_updated) as last_timestamp
+                COALESCE(s.last_timestamp, gc.last_updated) as last_timestamp,
+                COALESCE(gc.rating, -1) as rating
          FROM game_cache gc
          LEFT JOIN (
              SELECT game_id, COUNT(*) as count, MAX(timestamp) as last_timestamp
@@ -1641,6 +1657,7 @@ fn get_all_games_with_empty(state: State<AppState>) -> Result<Vec<GameSummary>, 
             last_timestamp: row.get(5)?,
             game_icon_path: row.get(3)?,
             steam_logo_path: row.get(2)?,
+            rating: row.get(6)?,
         })
     }).map_err(|e| e.to_string())?;
 
@@ -2330,6 +2347,7 @@ fn main() {
                                                                                             steam_name: None,
                                                                                             steam_logo_path: None,
                                                                                             steam_match_status: None,
+                                                                                            rating: Some(-1),
                                                                                         };
                                                                                         let _ = db::set_game_cache(&conn, &cache);
                                                                                     }
@@ -2374,6 +2392,7 @@ fn main() {
                                                                                     steam_name: Some(display_title.clone()),
                                                                                     steam_logo_path: Some(logo_path_str),
                                                                                     steam_match_status: Some("manual".to_string()),
+                                                                                    rating: Some(-1),
                                                                                 };
                                                                                 let _ = db::set_game_cache(&conn, &cache);
                                                                             }
@@ -2431,6 +2450,7 @@ fn main() {
                                                                                                 steam_name: Some(info.name.clone()),
                                                                                                 steam_logo_path: logo_path_str.clone(),
                                                                                                 steam_match_status: Some("found".to_string()),
+                                                                                                rating: Some(-1),
                                                                                             };
                                                                                             let _ = db::set_game_cache(&conn, &cache);
                                                                                         }
@@ -2513,6 +2533,7 @@ fn main() {
                                                                                         steam_name: Some(info.name.clone()),
                                                                                         steam_logo_path: logo_path_str.clone(),
                                                                                         steam_match_status: Some("found".to_string()),
+                                                                                        rating: Some(-1),
                                                                                     };
                                                                                     let _ = db::set_game_cache(&conn, &cache);
                                                                                 }
@@ -2551,6 +2572,7 @@ fn main() {
                                                                                     steam_name: None,
                                                                                     steam_logo_path: None,
                                                                                     steam_match_status: Some(match_status_str.clone()),
+                                                                                    rating: Some(-1),
                                                                                 };
                                                                                 let _ = db::set_game_cache(&conn, &cache);
                                                                             }
@@ -2639,6 +2661,7 @@ fn main() {
             create_game_from_steam,
             update_game_steam_info,
             save_manual_game_info,
+            update_game_rating,
             search_bangumi_games,
             create_game_from_bangumi,
             apply_bangumi_game_info,

@@ -273,7 +273,8 @@ pub fn init_db() -> Result<Connection> {
             steam_appid INTEGER,
             steam_name TEXT,
             steam_logo_path TEXT,
-            steam_match_status TEXT
+            steam_match_status TEXT,
+            rating INTEGER DEFAULT -1
         )",
         [],
     )?;
@@ -331,6 +332,17 @@ pub fn init_db() -> Result<Connection> {
         tx.execute("ALTER TABLE game_cache ADD COLUMN steam_name TEXT", [])?;
         tx.execute("ALTER TABLE game_cache ADD COLUMN steam_logo_path TEXT", [])?;
         tx.execute("ALTER TABLE game_cache ADD COLUMN steam_match_status TEXT", [])?;
+    }
+
+    let has_rating: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('game_cache') WHERE name='rating')",
+        [],
+        |row| row.get(0)
+    ).unwrap_or(false);
+
+    if !has_rating {
+        println!("[数据库] 添加评分字段...");
+        tx.execute("ALTER TABLE game_cache ADD COLUMN rating INTEGER DEFAULT -1", [])?;
     }
 
     tx.commit()?;
@@ -789,7 +801,8 @@ pub fn get_games(conn: &Connection) -> Result<Vec<GameSummary>> {
                 COALESCE(gc.display_title, s.game_id) as display_title, 
                 COALESCE(s.game_banner_url, '') as game_banner_url, 
                 COUNT(*) as count, MAX(s.timestamp) as last_timestamp,
-                gc.icon_path, gc.steam_logo_path
+                gc.icon_path, gc.steam_logo_path,
+                COALESCE(gc.rating, -1) as rating
          FROM screenshots s
          LEFT JOIN game_cache gc ON s.game_id = gc.game_id
          GROUP BY s.game_id ORDER BY last_timestamp DESC",
@@ -805,6 +818,7 @@ pub fn get_games(conn: &Connection) -> Result<Vec<GameSummary>> {
             last_timestamp: row.get(5)?,
             game_icon_path: row.get(6)?,
             steam_logo_path: row.get(7)?,
+            rating: row.get(8)?,
         })
     })?;
 
@@ -916,7 +930,7 @@ pub fn get_games_with_pagination(conn: &Connection, page: i32, page_size: i32) -
     let total_pages = if total == 0 { 1 } else { (total + page_size - 1) / page_size };
     
     let mut stmt = conn.prepare(
-        "SELECT game_id, game_title, display_title, game_banner_url, screenshot_count, last_timestamp, icon_path, steam_logo_path
+        "SELECT game_id, game_title, display_title, game_banner_url, screenshot_count, last_timestamp, icon_path, steam_logo_path, rating
          FROM (
              SELECT 
                  s.game_id, 
@@ -926,7 +940,8 @@ pub fn get_games_with_pagination(conn: &Connection, page: i32, page_size: i32) -
                  COUNT(*) as screenshot_count, 
                  MAX(s.timestamp) as last_timestamp,
                  gc.icon_path,
-                 gc.steam_logo_path
+                 gc.steam_logo_path,
+                 COALESCE(gc.rating, -1) as rating
              FROM screenshots s
              LEFT JOIN game_cache gc ON s.game_id = gc.game_id
              GROUP BY s.game_id
@@ -941,7 +956,8 @@ pub fn get_games_with_pagination(conn: &Connection, page: i32, page_size: i32) -
                  0 as screenshot_count, 
                  0 as last_timestamp,
                  gc.icon_path,
-                 gc.steam_logo_path
+                 gc.steam_logo_path,
+                 COALESCE(gc.rating, -1) as rating
              FROM game_cache gc
              WHERE gc.game_id NOT IN (SELECT DISTINCT game_id FROM screenshots)
          )
@@ -959,6 +975,7 @@ pub fn get_games_with_pagination(conn: &Connection, page: i32, page_size: i32) -
             last_timestamp: row.get(5)?,
             game_icon_path: row.get(6)?,
             steam_logo_path: row.get(7)?,
+            rating: row.get(8)?,
         })
     })?;
 
@@ -977,7 +994,7 @@ pub fn search_all_games(conn: &Connection, search_term: &str) -> Result<Vec<Game
     let pattern = format!("%{}%", search_term);
     
     let mut stmt = conn.prepare(
-        "SELECT game_id, game_title, display_title, game_banner_url, screenshot_count, last_timestamp, icon_path, steam_logo_path
+        "SELECT game_id, game_title, display_title, game_banner_url, screenshot_count, last_timestamp, icon_path, steam_logo_path, rating
          FROM (
              SELECT 
                  s.game_id, 
@@ -987,7 +1004,8 @@ pub fn search_all_games(conn: &Connection, search_term: &str) -> Result<Vec<Game
                  COUNT(*) as screenshot_count, 
                  MAX(s.timestamp) as last_timestamp,
                  gc.icon_path,
-                 gc.steam_logo_path
+                 gc.steam_logo_path,
+                 COALESCE(gc.rating, -1) as rating
              FROM screenshots s
              LEFT JOIN game_cache gc ON s.game_id = gc.game_id
              GROUP BY s.game_id
@@ -1002,7 +1020,8 @@ pub fn search_all_games(conn: &Connection, search_term: &str) -> Result<Vec<Game
                  0 as screenshot_count, 
                  0 as last_timestamp,
                  gc.icon_path,
-                 gc.steam_logo_path
+                 gc.steam_logo_path,
+                 COALESCE(gc.rating, -1) as rating
              FROM game_cache gc
              WHERE gc.game_id NOT IN (SELECT DISTINCT game_id FROM screenshots)
          )
@@ -1020,6 +1039,7 @@ pub fn search_all_games(conn: &Connection, search_term: &str) -> Result<Vec<Game
             last_timestamp: row.get(5)?,
             game_icon_path: row.get(6)?,
             steam_logo_path: row.get(7)?,
+            rating: row.get(8)?,
         })
     })?;
 
@@ -1993,7 +2013,7 @@ pub fn set_screenshot_notification(conn: &Connection, enabled: bool) -> Result<(
 
 pub fn get_game_cache(conn: &Connection, game_id: &str) -> Option<GameCache> {
     conn.query_row(
-        "SELECT exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status FROM game_cache WHERE game_id = ?1",
+        "SELECT exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status, COALESCE(rating, -1) FROM game_cache WHERE game_id = ?1",
         params![game_id],
         |row| {
             Ok(GameCache {
@@ -2006,6 +2026,7 @@ pub fn get_game_cache(conn: &Connection, game_id: &str) -> Option<GameCache> {
                 steam_name: row.get(5)?,
                 steam_logo_path: row.get(6)?,
                 steam_match_status: row.get(7)?,
+                rating: row.get(8)?,
             })
         },
     ).ok()
@@ -2013,9 +2034,9 @@ pub fn get_game_cache(conn: &Connection, game_id: &str) -> Option<GameCache> {
 
 pub fn set_game_cache(conn: &Connection, cache: &GameCache) -> Result<()> {
     conn.execute(
-        "INSERT OR REPLACE INTO game_cache (game_id, exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        params![cache.game_id, cache.exe_path, cache.icon_path, cache.display_title, cache.last_updated, cache.steam_appid, cache.steam_name, cache.steam_logo_path, cache.steam_match_status],
+        "INSERT OR REPLACE INTO game_cache (game_id, exe_path, icon_path, display_title, last_updated, steam_appid, steam_name, steam_logo_path, steam_match_status, rating)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![cache.game_id, cache.exe_path, cache.icon_path, cache.display_title, cache.last_updated, cache.steam_appid, cache.steam_name, cache.steam_logo_path, cache.steam_match_status, cache.rating],
     )?;
     Ok(())
 }
@@ -2046,6 +2067,15 @@ pub fn update_game_icon(conn: &Connection, game_id: &str, exe_path: Option<&str>
         params![exe_path, icon_path, timestamp, game_id],
     )?;
     println!("[数据库] 更新游戏 {} 的图标信息", game_id);
+    Ok(())
+}
+
+pub fn update_game_rating(conn: &Connection, game_id: &str, rating: i32) -> Result<()> {
+    conn.execute(
+        "UPDATE game_cache SET rating = ?1 WHERE game_id = ?2",
+        params![rating, game_id],
+    )?;
+    println!("[数据库] 更新游戏 {} 的评分为: {}", game_id, rating);
     Ok(())
 }
 
@@ -2139,6 +2169,7 @@ pub fn create_empty_game(conn: &Connection, game_id: &str, display_title: &str, 
         steam_name,
         steam_logo_path,
         steam_match_status: Some("manual".to_string()),
+        rating: Some(-1),
     };
     
     set_game_cache(conn, &cache)?;
@@ -2243,7 +2274,8 @@ pub fn import_screenshot(
 
 pub fn get_all_games(conn: &Connection) -> Result<Vec<GameSummary>> {
     let mut stmt = conn.prepare(
-        "SELECT gc.game_id, gc.display_title, gc.steam_logo_path, gc.icon_path
+        "SELECT gc.game_id, gc.display_title, gc.steam_logo_path, gc.icon_path,
+                COALESCE(gc.rating, -1) as rating
          FROM game_cache gc
          ORDER BY gc.last_updated DESC",
     )?;
@@ -2258,6 +2290,7 @@ pub fn get_all_games(conn: &Connection) -> Result<Vec<GameSummary>> {
             last_timestamp: 0,
             game_icon_path: row.get(3)?,
             steam_logo_path: row.get(2)?,
+            rating: row.get(4)?,
         })
     })?;
 

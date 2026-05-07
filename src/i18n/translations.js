@@ -176,6 +176,13 @@ export const translations = {
       last_updated: '最后更新于',
       screenshots: '张截图'
     },
+    rating: {
+      title: '评分',
+      confirm: '确认',
+      cancel: '取消',
+      not_rated: '未评分',
+      saved: '评分已保存'
+    },
     add_game: {
       title: '添加游戏',
       select_platform: '选择平台',
@@ -479,6 +486,13 @@ export const translations = {
       last_updated: 'Last updated',
       screenshots: 'screenshots'
     },
+    rating: {
+      title: 'Rating',
+      confirm: 'Confirm',
+      cancel: 'Cancel',
+      not_rated: 'Not rated',
+      saved: 'Rating saved'
+    },
     add_game: {
       title: 'Add Game',
       select_platform: 'Select Platform',
@@ -769,6 +783,13 @@ export const translations = {
     game: {
       last_updated: '最終更新',
       screenshots: '枚のスクリーンショット'
+    },
+    rating: {
+      title: '評価',
+      confirm: '確認',
+      cancel: 'キャンセル',
+      not_rated: '未評価',
+      saved: '評価を保存しました'
     },
     add_game: {
       title: 'ゲームを追加',

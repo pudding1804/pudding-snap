@@ -1911,6 +1911,17 @@ function App() {
               }}
               onToggleSortMenu={setShowSortMenu}
               onLoadPage={(page) => { pushHistory(navStateRef.current); loadScreenshotsWithPagination(page, selectedGame?.game_id) }}
+              onRateGame={async (gameId, rating) => {
+                try {
+                  await invoke('update_game_rating', { gameId, rating })
+                  addLog(`评分已保存: ${gameId} -> ${rating}`)
+                  showNotification(t.rating?.saved || '评分已保存')
+                  setSelectedGame(prev => prev ? { ...prev, rating } : prev)
+                  await loadGames()
+                } catch (e) {
+                  addLog(`评分保存失败: ${e}`)
+                }
+              }}
             />
           ) : currentView === 'recycle-bin' ? (
             <RecycleBin

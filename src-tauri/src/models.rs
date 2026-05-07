@@ -41,6 +41,7 @@ pub struct GameSummary {
     pub steam_logo_path: Option<String>,
     pub count: i32,
     pub last_timestamp: i64,
+    pub rating: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -89,4 +90,5 @@ pub struct GameCache {
     pub steam_name: Option<String>,
     pub steam_logo_path: Option<String>,
     pub steam_match_status: Option<String>,
+    pub rating: Option<i32>,
 }
