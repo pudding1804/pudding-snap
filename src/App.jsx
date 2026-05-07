@@ -69,28 +69,28 @@ function App() {
   const [showDebug, setShowDebug] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [currentTheme, setCurrentTheme] = useState('night')
-  
+
   const [showGuide, setShowGuide] = useState(false)
   const [guideStep, setGuideStep] = useState(0)
   const [dontShowAgain, setDontShowAgain] = useState(false)
-  
+
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [pageSize, setPageSize] = useState(50)
-  
+
   const [gameCurrentPage, setGameCurrentPage] = useState(1)
   const [gameTotalPages, setGameTotalPages] = useState(1)
   const [gamePageSize] = useState(20)
   const [isGamesLoading, setIsGamesLoading] = useState(false)
-  
+
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedScreenshots, setSelectedScreenshots] = useState([])
-  
+
   const [dateFilterStart, setDateFilterStart] = useState(null)
   const [dateFilterEnd, setDateFilterEnd] = useState(null)
   const [noteSearch, setNoteSearch] = useState(null)
   const [showDateFilterModal, setShowDateFilterModal] = useState(false)
-  
+
   const [gameSearchTerm, setGameSearchTerm] = useState('')
   const [backupEnabled, setBackupEnabled] = useState(false)
   const [recycleBinCount, setRecycleBinCount] = useState(0)
@@ -100,43 +100,47 @@ function App() {
   const [recycleBinSortOrder, setRecycleBinSortOrder] = useState('desc')
   const [batchProcessing, setBatchProcessing] = useState(false)
   const [batchProcessingText, setBatchProcessingText] = useState('')
-  
+
   const showNotification = useCallback((title, body = '', duration = 3000) => {
     setNotification({ title, body })
     setTimeout(() => setNotification(null), duration)
   }, [])
-  
+
   const addLog = useCallback((msg) => {
     const time = new Date().toLocaleTimeString()
     console.log(`[${time}] ${msg}`)
     setLogs(prev => [...prev.slice(-20), `[${time}] ${msg}`])
-    invoke('log_debug', { msg: `[${time}] ${msg}` }).catch(() => {})
+    invoke('log_debug', { msg: `[${time}] ${msg}` }).catch(() => { })
   }, [])
-  
+
   const { loadWindowState } = useWindowSize(addLog)
-  
+
   const [storagePath, setStoragePath] = useState('')
   const [isMigrating, setIsMigrating] = useState(false)
   const [migrationProgress, setMigrationProgress] = useState(0)
   const [migrationTotal, setMigrationTotal] = useState(0)
   const [migrationStatus, setMigrationStatus] = useState('')
   const [migrationStats, setMigrationStats] = useState(null)
-  
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showScreenshotDeleteConfirm, setShowScreenshotDeleteConfirm] = useState(false)
   const [screenshotToDelete, setScreenshotToDelete] = useState(null)
   const [multiDeleteCount, setMultiDeleteCount] = useState(0)
-  
+
   const [shutterSound, setShutterSound] = useState('default')
   const [autostart, setAutostart] = useState(false)
   const [language, setLanguage] = useState('zh')
   const [steamLanguage, setSteamLanguage] = useState('schinese')
   const [screenshotFormat, setScreenshotFormat] = useState('webp')
   const [screenshotQuality, setScreenshotQuality] = useState('medium')
-  
+  const [activeHotkeys, setActiveHotkeys] = useState(() => {
+    const saved = localStorage.getItem('activeHotkeys')
+    return saved ? JSON.parse(saved) : ['printscreen']
+  })
+
   const [bangumiAccessToken, setBangumiAccessToken] = useState('')
   const [bangumiCookie, setBangumiCookie] = useState('')
-  
+
   const [showSearchModal, setShowSearchModal] = useState(false)
   const [searchModalStep, setSearchModalStep] = useState('source')
   const [searchSource, setSearchSource] = useState('steam')
@@ -148,22 +152,22 @@ function App() {
   const [appliedGameName, setAppliedGameName] = useState('')
   const [showManualInfoModal, setShowManualInfoModal] = useState(false)
   const [screenshotNotificationEnabled, setScreenshotNotificationEnabled] = useState(true)
-  const [windowTitleMatchEnabled, setWindowTitleMatchEnabled] = useState(false)
+  const [windowTitleMatchEnabled, setWindowTitleMatchEnabled] = useState(true)
   const DEFAULT_EMULATOR_KEYWORDS = 'dosbox, dosbox-x, dosbox-staging, retroarch, pcsx2, pcsx2-qt, rpcs3, cemu, yuzu, suyu, ryujinx, dolphin, ppsspp, ppssppwindows, mame, mame64, mameui, snes9x, snes9x-x64, fusion, kega-fusion, kega, mednafen, flycast, melonds, desmume, vba, visualboyadvance, visualboyadvance-m, vbam, citra, xemu, project64, project64c, bsnes, mesen, nestopia, fceux, gens, nullDC, nulldc, redream'
   const [emulatorKeywords, setEmulatorKeywords] = useState(DEFAULT_EMULATOR_KEYWORDS)
   const [emulatorKeywordsSaved, setEmulatorKeywordsSaved] = useState(false)
   const [emulatorKeywordsTimer, setEmulatorKeywordsTimer] = useState(null)
-  
+
   const [showAddGameModal, setShowAddGameModal] = useState(false)
   const [addGameStep, setAddGameStep] = useState('platform')
   const [addGameSearchTerm, setAddGameSearchTerm] = useState('')
   const [addGameSearchResults, setAddGameSearchResults] = useState([])
   const [isAddingGame, setIsAddingGame] = useState(false)
   const [addGameSource, setAddGameSource] = useState('steam')
-  
+
   const [isGameMultiSelectMode, setIsGameMultiSelectMode] = useState(false)
   const [selectedGames, setSelectedGames] = useState([])
-  
+
   const setView = useCallback((view) => {
     setCurrentView(view)
     setIsMultiSelectMode(false)
@@ -171,35 +175,35 @@ function App() {
     setIsGameMultiSelectMode(false)
     setSelectedGames([])
   }, [])
-  
+
   const [showDeleteGameConfirm, setShowDeleteGameConfirm] = useState(false)
   const [deleteGameCallback, setDeleteGameCallback] = useState(null)
   const [deleteConfirmMode, setDeleteConfirmMode] = useState('last_screenshot')
-  
+
   const [showImportModal, setShowImportModal] = useState(false)
   const [importFiles, setImportFiles] = useState([])
   const [isImporting, setIsImporting] = useState(false)
   const [importProgress, setImportProgress] = useState(null)
   const [importResult, setImportResult] = useState(null)
-  
+
   const [showGameListMenu, setShowGameListMenu] = useState(false)
   const [showGameDetailMenu, setShowGameDetailMenu] = useState(false)
   const [showSortMenu, setShowSortMenu] = useState(false)
   const [importConfirmPath, setImportConfirmPath] = useState(null)
-  
+
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareScreenshot, setShareScreenshot] = useState(null)
   const [shareUsername, setShareUsername] = useState(() => {
     const saved = localStorage.getItem('shareUsername')
     return saved || ''
   })
-  
+
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [closeAction, setCloseAction] = useState(() => {
     const saved = localStorage.getItem('closeAction')
     return saved || ''
   })
-  
+
   const refreshDebounceRef = useRef(null)
   const isRefreshingRef = useRef(false)
   const selectedGameRef = useRef(null)
@@ -277,7 +281,7 @@ function App() {
         container.removeEventListener('scroll', handleScroll)
       }
     }
-    return () => {}
+    return () => { }
   }, [currentView])
 
 
@@ -298,10 +302,10 @@ function App() {
         pageSize: gamePageSize
       })
       addLog(`游戏数据: ${result.games ? result.games.length : 0} 条`)
-      
+
       let sortedGames = result.games || []
       const currentSort = sortType || gameSortOrder
-      
+
       if (currentSort === 'alpha_asc') {
         sortedGames.sort((a, b) => (a.display_title || a.game_title).localeCompare(b.display_title || b.game_title, 'zh-CN'))
       } else if (currentSort === 'alpha_desc') {
@@ -311,15 +315,15 @@ function App() {
       } else {
         sortedGames.sort((a, b) => (b.last_timestamp || 0) - (a.last_timestamp || 0))
       }
-      
+
       setGames(sortedGames)
       setGameTotalPages(result.total_pages)
       setGameCurrentPage(result.page)
-      
+
       if (resetScroll && gridRef.current) {
         gridRef.current.scrollTop = 0
       }
-      
+
       addLog(`游戏加载完成: 总页数=${result.total_pages}`)
     } catch (e) {
       addLog(`游戏加载失败: ${e}`)
@@ -338,10 +342,10 @@ function App() {
         pageSize: gamePageSize
       })
       addLog(`游戏数据: ${result.games ? result.games.length : 0} 条`)
-      
+
       let sortedGames = result.games || []
       const currentSort = sortOverride || gameSortOrder
-      
+
       if (currentSort === 'alpha_asc') {
         sortedGames.sort((a, b) => (a.display_title || a.game_title).localeCompare(b.display_title || b.game_title, 'zh-CN'))
       } else if (currentSort === 'alpha_desc') {
@@ -351,15 +355,15 @@ function App() {
       } else {
         sortedGames.sort((a, b) => (b.last_timestamp || 0) - (a.last_timestamp || 0))
       }
-      
+
       setGames(sortedGames)
       setGameTotalPages(result.total_pages)
       setGameCurrentPage(result.page)
-      
+
       if (resetScroll && gridRef.current) {
         gridRef.current.scrollTop = 0
       }
-      
+
       addLog(`游戏加载完成: 总页数=${result.total_pages}`)
     } catch (e) {
       addLog(`游戏加载失败: ${e}`)
@@ -372,7 +376,7 @@ function App() {
     const validPage = (typeof page === 'number' && !isNaN(page) && page > 0) ? page : 1
     try {
       addLog(`加载截图: 页码=${validPage}, 游戏ID=${gameId || '全部'}`)
-      
+
       const dfs = filters?.dateFilterStart !== undefined ? filters.dateFilterStart : dateFilterStart
       const dfe = filters?.dateFilterEnd !== undefined ? filters.dateFilterEnd : dateFilterEnd
       const ns = filters?.noteSearch !== undefined ? filters.noteSearch : noteSearch
@@ -380,14 +384,14 @@ function App() {
 
       let dateStart = null
       let dateEnd = null
-      
+
       if (dfs) {
         dateStart = Math.floor(new Date(dfs).setHours(0, 0, 0, 0) / 1000)
       }
       if (dfe) {
         dateEnd = Math.floor(new Date(dfe).setHours(23, 59, 59, 999) / 1000)
       }
-      
+
       const result = await invoke('get_screenshots_with_pagination', {
         gameId: gameId,
         sortOrder: so,
@@ -397,21 +401,21 @@ function App() {
         dateEnd: dateEnd,
         noteSearch: ns || null
       })
-      
+
       console.log(`[DEBUG] loadScreenshotsWithPagination 返回:`, {
         screenshotsCount: result.screenshots.length,
         page: result.page,
         totalPages: result.total_pages
       })
-      
+
       setScreenshots(result.screenshots)
       setCurrentPage(result.page)
       setTotalPages(result.total_pages)
-      
+
       if (resetScroll && gridRef.current) {
         gridRef.current.scrollTop = 0
       }
-      
+
       addLog(`截图加载完成: ${result.screenshots.length} 条, 当前页=${result.page}, 总页数=${result.total_pages}`)
     } catch (e) {
       addLog(`截图加载失败: ${e}`)
@@ -441,11 +445,11 @@ function App() {
   const handleBangumiAuthChange = useCallback((accessToken, cookie, shouldSave = false) => {
     setBangumiAccessToken(accessToken || '')
     setBangumiCookie(cookie || '')
-    
+
     if (shouldSave) {
-      invoke('save_bangumi_auth', { 
-        accessToken: accessToken || null, 
-        cookie: cookie || null 
+      invoke('save_bangumi_auth', {
+        accessToken: accessToken || null,
+        cookie: cookie || null
       })
         .then(() => addLog('Bangumi 认证信息已保存'))
         .catch(e => addLog(`保存 Bangumi 认证信息失败: ${e}`))
@@ -656,6 +660,30 @@ function App() {
       addLog(`窗口标题匹配已${enabled ? '启用' : '禁用'}`)
     } catch (e) {
       addLog(`保存窗口标题匹配设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const loadActiveHotkeys = useCallback(async () => {
+    try {
+      const value = await invoke('get_setting', { key: 'active_hotkeys' })
+      if (value) {
+        setActiveHotkeys(value.split(','))
+        localStorage.setItem('activeHotkeys', JSON.stringify(value.split(',')))
+      }
+    } catch (e) {
+      addLog(`加载快捷键设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const handleActiveHotkeysChange = useCallback(async (keys) => {
+    try {
+      const value = keys.join(',')
+      await invoke('set_setting', { key: 'active_hotkeys', value })
+      setActiveHotkeys(keys)
+      localStorage.setItem('activeHotkeys', JSON.stringify(keys))
+      addLog(`快捷键设置已保存: ${value}`)
+    } catch (e) {
+      addLog(`保存快捷键设置失败: ${e}`)
     }
   }, [addLog])
 
@@ -1004,7 +1032,7 @@ function App() {
         handleHistoryForward()
       }
     }
-    
+
     const handleMouseDown = (e) => {
       if (selectedScreenshotRef.current) return
       if (e.button === 3) {
@@ -1024,10 +1052,10 @@ function App() {
         handleHistoryForward()
       }
     }
-    
+
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('mousedown', handleMouseDown)
-    
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('mousedown', handleMouseDown)
@@ -1054,16 +1082,16 @@ function App() {
 
   const navigateScreenshot = useCallback((direction) => {
     if (!selectedScreenshot) return
-    
+
     const currentIndex = selectedScreenshotIndex
     let newIndex = currentIndex
-    
+
     if (direction === 'prev' && currentIndex > 0) {
       newIndex = currentIndex - 1
     } else if (direction === 'next' && currentIndex < screenshots.length - 1) {
       newIndex = currentIndex + 1
     }
-    
+
     if (newIndex !== currentIndex) {
       const newScreenshot = screenshots[newIndex]
       setSelectedScreenshot(newScreenshot)
@@ -1076,13 +1104,13 @@ function App() {
     try {
       await invoke('update_note', { id, note })
       addLog(`附注保存成功: ID=${id}`)
-      
-      setScreenshots(prev => prev.map(ss => 
+
+      setScreenshots(prev => prev.map(ss =>
         ss.id === id ? { ...ss, note } : ss
       ))
-      
+
       setSelectedScreenshot(prev => prev ? { ...prev, note } : prev)
-      
+
       showNotification(t.header.note_saved)
       closeModal()
     } catch (e) {
@@ -1093,14 +1121,14 @@ function App() {
 
   const doDeleteScreenshot = useCallback(async (id) => {
     const currentGameId = selectedGameRef.current?.game_id
-    
+
     try {
       await invoke('delete_screenshot', { id })
       addLog(`截图删除成功: ID=${id}`)
       showNotification(t.notifications.delete_success)
-      
+
       closeModal()
-      
+
       if (selectedGameRef.current) {
         await loadGames()
       }
@@ -1121,17 +1149,17 @@ function App() {
   const doDeleteSelectedScreenshots = useCallback(async () => {
     const deleteCount = selectedScreenshots.length
     const currentGameId = selectedGameRef.current?.game_id
-    
+
     try {
       setBatchProcessing(true)
       setBatchProcessingText(t.batch?.deleting || `正在删除 ${deleteCount} 张截图...`)
       await invoke('delete_screenshots', { ids: selectedScreenshots })
       addLog(`批量删除成功: ${deleteCount} 张`)
-      
+
       setIsMultiSelectMode(false)
       setSelectedScreenshots([])
       showNotification('删除成功', `已删除 ${deleteCount} 张截图`)
-      
+
       await loadGames()
       await loadScreenshotsWithPagination(1, currentGameId || null)
       refreshRecycleBinCount()
@@ -1217,11 +1245,11 @@ function App() {
         multiple: false,
         title: '选择存储目录'
       })
-      
+
       if (!selectedPath) return
-      
+
       const checkResult = await invoke('check_data_directory', { path: selectedPath })
-      
+
       if (checkResult.valid) {
         setImportConfirmPath(selectedPath)
       } else {
@@ -1230,10 +1258,10 @@ function App() {
         setMigrationTotal(0)
         setMigrationStatus('准备迁移...')
         setMigrationStats(null)
-        
+
         addLog(`开始迁移数据到: ${selectedPath}`)
         const result = await invoke('migrate_data', { newPath: selectedPath })
-        
+
         if (result.success) {
           setStoragePath(selectedPath)
           setMigrationStats(result.stats)
@@ -1267,12 +1295,12 @@ function App() {
 
   const confirmImportDirectory = useCallback(async () => {
     if (!importConfirmPath) return
-    
+
     try {
       setIsMigrating(true)
       addLog(`切换数据目录到: ${importConfirmPath}`)
       const result = await invoke('switch_data_directory', { newPath: importConfirmPath })
-      
+
       if (result.success) {
         setMigrationStats({ ...result.stats, is_import: true })
         showNotification(t.settings.import_success_msg || '数据目录已成功切换，程序将重启以加载新数据。', '')
@@ -1389,26 +1417,26 @@ function App() {
 
   const handleImport = useCallback(async () => {
     if (importFiles.length === 0 || !selectedGame) return
-    
+
     const currentGameId = selectedGame.game_id
-    
+
     setIsImporting(true)
     setImportProgress({ current: 0, total: importFiles.length, current_file: '', status: '准备中' })
     setImportResult(null)
-    
+
     let unlisten = null
     try {
       const { listen } = await import('@tauri-apps/api/event')
       unlisten = await listen('import-progress', (event) => {
         setImportProgress(event.payload)
       })
-      
+
       const result = await invoke('import_screenshots', {
         gameId: selectedGame.game_id,
         displayTitle: selectedGame.display_title || selectedGame.game_title,
         files: importFiles
       })
-      
+
       addLog(`导入完成: ${result.imported_count} 成功, ${result.skipped_count} 跳过, ${result.failed_count} 失败, 耗时 ${result.duration_ms}ms`)
       setShowImportModal(false)
       setImportFiles([])
@@ -1438,7 +1466,7 @@ function App() {
 
   useEffect(() => {
     addLog('useEffect 初始化')
-    
+
     const loadData = async () => {
       addLog('开始加载数据')
       try {
@@ -1450,20 +1478,21 @@ function App() {
         await loadTheme()
         await loadSortOrder()
         await loadGameSortOrder()
-        
+
         try {
           const enabled = await invoke('get_backup_enabled')
           setBackupEnabled(enabled)
         } catch (e) {
           addLog(`加载备份设置失败: ${e}`)
         }
-        
+
         await loadScreenshotNotification()
         await loadWindowTitleMatch()
+        await loadActiveHotkeys()
         await loadEmulatorKeywords()
-        
+
         await loadScreenshotsWithPagination(1, null)
-        
+
         try {
           const cleaned = await invoke('cleanup_expired_deleted')
           if (cleaned > 0) {
@@ -1472,9 +1501,9 @@ function App() {
         } catch (e) {
           addLog(`清理过期回收站记录失败: ${e}`)
         }
-        
+
         refreshRecycleBinCount()
-        
+
         try {
           await invoke('resume_thumbnail_generation')
           addLog('缩略图恢复生成已启动')
@@ -1485,12 +1514,12 @@ function App() {
         addLog(`数据加载失败: ${e}`)
         setError('加载数据失败: ' + String(e))
       }
-      
+
       await loadGames()
-      
+
       setIsLoading(false)
       addLog('数据加载完成')
-      
+
       const hideGuide = localStorage.getItem('hideGuide')
       if (!hideGuide) {
         try {
@@ -1498,10 +1527,10 @@ function App() {
           const savedWidth = await invoke('get_setting', { key: 'window_width' })
           const savedHeight = await invoke('get_setting', { key: 'window_height' })
           addLog(`[窗口大小] 读取到的值: width=${savedWidth}, height=${savedHeight}`)
-          
+
           await invoke('show_main_window')
           addLog('主窗口已显示（向导）')
-          
+
           if (savedWidth && savedHeight) {
             setTimeout(async () => {
               try {
@@ -1522,7 +1551,7 @@ function App() {
         addLog('启动后自动最小化到系统托盘')
       }
     }
-    
+
     loadData()
 
     const unlisten = listen('screenshot-taken', (event) => {
@@ -1533,29 +1562,29 @@ function App() {
       console.log(`[DEBUG] gameId: ${gameId}`)
       console.log(`[DEBUG] selectedGameRef.current: ${selectedGameRef.current?.game_id || 'null'}`)
       addLog(`收到截图事件，游戏ID: ${gameId || '未知'}`)
-      
+
       if (refreshDebounceRef.current) {
         console.log(`[DEBUG] 清除之前的防抖定时器`)
         clearTimeout(refreshDebounceRef.current)
       }
-      
+
       refreshDebounceRef.current = setTimeout(async () => {
         console.log(`[DEBUG] 防抖定时器触发，准备刷新`)
         console.log(`[DEBUG] isRefreshingRef.current: ${isRefreshingRef.current}`)
-        
+
         if (isRefreshingRef.current) {
           addLog('刷新进行中，跳过')
           return
         }
-        
+
         isRefreshingRef.current = true
         console.log(`[DEBUG] 开始刷新数据`)
-        
+
         try {
           const currentSelectedGame = selectedGameRef.current
           console.log(`[DEBUG] currentSelectedGame: ${currentSelectedGame?.game_id || 'null'}`)
           console.log(`[DEBUG] gameId: ${gameId}`)
-          
+
           // 如果当前在某个游戏的详情页
           if (currentSelectedGame) {
             // 只有新截图属于当前游戏时才刷新
@@ -1595,7 +1624,7 @@ function App() {
   useEffect(() => {
     const setupWindowListeners = async () => {
       const { listen } = await import('@tauri-apps/api/event')
-      
+
       const unlistenClose = await listen('close-requested', () => {
         addLog('收到关闭请求')
         if (closeAction) {
@@ -1608,7 +1637,7 @@ function App() {
           setShowCloseConfirm(true)
         }
       })
-      
+
       const unlistenFocused = await listen('window-focused', async () => {
         addLog('=== window-focused 事件触发 ===')
         await loadWindowState()
@@ -1625,7 +1654,7 @@ function App() {
           addLog(`重置未读数量失败: ${e}`)
         }
       })
-      
+
       const unlistenShown = await listen('window-shown', async () => {
         addLog('=== window-shown 事件触发 ===')
         addLog('[窗口] 准备调用 loadWindowState...')
@@ -1648,13 +1677,13 @@ function App() {
           addLog(`重置未读数量失败: ${e}`)
         }
       })
-      
+
       const unlistenNavigateSettings = await listen('navigate-to-settings', () => {
         addLog('[导航] 切换到设置页面')
         pushHistory(navStateRef.current)
         setView('settings')
       })
-      
+
       let thumbnailDebounce = null
       const unlistenThumbnailProgress = await listen('thumbnail-progress', (event) => {
         const payload = event.payload || {}
@@ -1679,7 +1708,7 @@ function App() {
           }, 200)
         }
       })
-      
+
       return () => {
         unlistenClose()
         unlistenFocused()
@@ -1688,7 +1717,7 @@ function App() {
         unlistenThumbnailProgress()
       }
     }
-    
+
     const cleanup = setupWindowListeners()
     return () => {
       cleanup.then(fn => fn())
@@ -1703,7 +1732,7 @@ function App() {
         addLog(`调试窗口: ${!showDebug ? '显示' : '隐藏'}`)
       }
     }
-    
+
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showDebug, addLog])
@@ -1711,15 +1740,15 @@ function App() {
   return (
     <ErrorBoundary>
       <style>{modalKeyframes}</style>
-      
-      <div style={{ 
-        ...styles.container, 
+
+      <div style={{
+        ...styles.container,
         flexDirection: 'column',
         paddingTop: 0
       }}>
-        <TitleBar 
-          theme={theme} 
-          t={t} 
+        <TitleBar
+          theme={theme}
+          t={t}
           onCloseConfirm={() => setShowCloseConfirm(true)}
           currentView={currentView}
           onNavigate={(view) => {
@@ -1733,7 +1762,7 @@ function App() {
           }}
           recycleBinCount={recycleBinCount}
         />
-        
+
         <main style={{ ...styles.main, flex: 1, overflow: 'auto', paddingBottom: 0 }} ref={gridRef}>
           {notification && (
             <div style={styles.notification}>
@@ -1836,8 +1865,8 @@ function App() {
               }}
               onToggleSelectGame={(game) => {
                 if (isGameMultiSelectMode) {
-                  setSelectedGames(prev => 
-                    prev.includes(game.game_id) 
+                  setSelectedGames(prev =>
+                    prev.includes(game.game_id)
                       ? prev.filter(id => id !== game.game_id)
                       : [...prev, game.game_id]
                   )
@@ -1985,6 +2014,8 @@ function App() {
               onScreenshotNotificationChange={handleScreenshotNotificationChange}
               windowTitleMatchEnabled={windowTitleMatchEnabled}
               onWindowTitleMatchChange={handleWindowTitleMatchChange}
+              activeHotkeys={activeHotkeys}
+              onActiveHotkeysChange={handleActiveHotkeysChange}
               emulatorKeywords={emulatorKeywords}
               onEmulatorKeywordsChange={handleEmulatorKeywordsChange}
               onSaveEmulatorKeywords={handleSaveEmulatorKeywords}
@@ -2109,11 +2140,11 @@ function App() {
                   <h2 style={{ marginBottom: 24, textAlign: 'center' }}>{t.search.select_source}</h2>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <button
-                      style={{ 
-                        ...styles.btn, 
-                        padding: '16px 24px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
+                      style={{
+                        ...styles.btn,
+                        padding: '16px 24px',
+                        display: 'flex',
+                        alignItems: 'center',
                         justifyContent: 'center',
                         gap: 12,
                         fontSize: 16
@@ -2125,16 +2156,16 @@ function App() {
                       }}
                     >
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
                       </svg>
                       {t.add_game.steam}
                     </button>
                     <button
-                      style={{ 
-                        ...styles.btn, 
-                        padding: '16px 24px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
+                      style={{
+                        ...styles.btn,
+                        padding: '16px 24px',
+                        display: 'flex',
+                        alignItems: 'center',
                         justifyContent: 'center',
                         gap: 12,
                         fontSize: 16
@@ -2146,19 +2177,19 @@ function App() {
                       }}
                     >
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-                        <line x1="9" y1="9" x2="9.01" y2="9"/>
-                        <line x1="15" y1="9" x2="15.01" y2="9"/>
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                        <line x1="9" y1="9" x2="9.01" y2="9" />
+                        <line x1="15" y1="9" x2="15.01" y2="9" />
                       </svg>
                       {t.add_game.bangumi}
                     </button>
                     <button
-                      style={{ 
-                        ...styles.btn, 
-                        padding: '16px 24px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
+                      style={{
+                        ...styles.btn,
+                        padding: '16px 24px',
+                        display: 'flex',
+                        alignItems: 'center',
                         justifyContent: 'center',
                         gap: 12,
                         fontSize: 16
@@ -2170,15 +2201,15 @@ function App() {
                       }}
                     >
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                       </svg>
                       {t.search.manual_input}
                     </button>
                   </div>
                 </div>
               )}
-              
+
               {searchModalStep === 'search' && (
                 <div style={{ padding: 24 }}>
                   <h2 style={{ marginBottom: 16, textAlign: 'center' }}>
@@ -2226,7 +2257,7 @@ function App() {
                       style={{ ...styles.input, flex: 1 }}
                       autoFocus
                     />
-                    <button 
+                    <button
                       style={styles.btnPrimary}
                       {...btnEvents}
                       onClick={async () => {
@@ -2266,7 +2297,7 @@ function App() {
                       {isSearching ? t.search.searching : t.search.search}
                     </button>
                   </div>
-                  <button 
+                  <button
                     style={{ ...styles.btn, width: '100%' }}
                     {...btnEvents}
                     onClick={() => setSearchModalStep('source')}
@@ -2275,14 +2306,14 @@ function App() {
                   </button>
                 </div>
               )}
-              
+
               {searchModalStep === 'results' && (
                 <div style={{ padding: 24 }}>
                   {isApplyingInfo ? (
                     <div style={{ textAlign: 'center', padding: 32 }}>
-                      <div style={{ 
-                        width: 40, 
-                        height: 40, 
+                      <div style={{
+                        width: 40,
+                        height: 40,
                         border: `3px solid ${theme.border}`,
                         borderTop: `3px solid ${theme.primary}`,
                         borderRadius: '50%',
@@ -2298,15 +2329,15 @@ function App() {
                       </p>
                       <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {steamSearchResults.map(result => (
-                          <div 
+                          <div
                             key={result.appid}
-                            style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              gap: 12, 
-                              padding: 12, 
-                              background: theme.accent, 
-                              borderRadius: 8, 
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 12,
+                              padding: 12,
+                              background: theme.accent,
+                              borderRadius: 8,
                               cursor: 'pointer',
                               transition: 'background 0.15s, box-shadow 0.15s, transform 0.1s'
                             }}
@@ -2357,8 +2388,8 @@ function App() {
                             }}
                           >
                             {result.tiny_image && (
-                              <img 
-                                src={result.tiny_image} 
+                              <img
+                                src={result.tiny_image}
                                 alt={result.name}
                                 style={{ width: 60, height: 30, objectFit: 'cover', borderRadius: 4 }}
                               />
@@ -2369,7 +2400,7 @@ function App() {
                           </div>
                         ))}
                       </div>
-                      <button 
+                      <button
                         style={{ ...styles.btn, width: '100%', marginTop: 16 }}
                         {...btnEvents}
                         onClick={() => setSearchModalStep('search')}
@@ -2421,9 +2452,9 @@ function App() {
           <div style={styles.modalOverlay}>
             <div style={{ ...styles.modalContent, maxWidth: 400 }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: 32, textAlign: 'center' }}>
-                <div style={{ 
-                  width: 48, 
-                  height: 48, 
+                <div style={{
+                  width: 48,
+                  height: 48,
                   border: `3px solid ${theme.border}`,
                   borderTop: `3px solid ${theme.primary}`,
                   borderRadius: '50%',
@@ -2431,15 +2462,15 @@ function App() {
                   margin: '0 auto 16px'
                 }} />
                 <h3 style={{ marginBottom: 16, color: theme.text }}>{t.import.importing}</h3>
-                <div style={{ 
-                  background: theme.accent, 
-                  borderRadius: 8, 
-                  padding: '12px 16px', 
-                  marginBottom: 16 
+                <div style={{
+                  background: theme.accent,
+                  borderRadius: 8,
+                  padding: '12px 16px',
+                  marginBottom: 16
                 }}>
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
                     marginBottom: 8,
                     fontSize: 14,
                     color: theme.text
@@ -2447,15 +2478,15 @@ function App() {
                     <span>{importProgress.current} / {importProgress.total}</span>
                     <span>{Math.round(importProgress.current / importProgress.total * 100)}%</span>
                   </div>
-                  <div style={{ 
-                    background: theme.border, 
-                    borderRadius: 4, 
-                    height: 8, 
-                    overflow: 'hidden' 
+                  <div style={{
+                    background: theme.border,
+                    borderRadius: 4,
+                    height: 8,
+                    overflow: 'hidden'
                   }}>
-                    <div style={{ 
-                      background: theme.primary, 
-                      height: '100%', 
+                    <div style={{
+                      background: theme.primary,
+                      height: '100%',
                       width: `${importProgress.current / importProgress.total * 100}%`,
                       transition: 'width 0.3s'
                     }} />
@@ -2475,13 +2506,13 @@ function App() {
           <div style={styles.modalOverlay} onClick={() => setImportResult(null)}>
             <div style={{ ...styles.modalContent, maxWidth: 400 }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: 32, textAlign: 'center' }}>
-                <div style={{ 
-                  width: 64, 
-                  height: 64, 
-                  borderRadius: '50%', 
-                  background: 'rgba(74, 222, 128, 0.1)', 
-                  display: 'flex', 
-                  alignItems: 'center', 
+                <div style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: '50%',
+                  background: 'rgba(74, 222, 128, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'center',
                   margin: '0 auto 20px'
                 }}>
@@ -2490,10 +2521,10 @@ function App() {
                   </svg>
                 </div>
                 <h3 style={{ marginBottom: 16, color: theme.text }}>{t.import.import_complete || '导入完成'}</h3>
-                <div style={{ 
-                  background: theme.accent, 
-                  borderRadius: 8, 
-                  padding: 16, 
+                <div style={{
+                  background: theme.accent,
+                  borderRadius: 8,
+                  padding: 16,
                   marginBottom: 16,
                   textAlign: 'left'
                 }}>
@@ -2514,7 +2545,7 @@ function App() {
                     <span style={{ color: theme.text }}>{importResult.duration_ms}ms</span>
                   </div>
                 </div>
-                <button 
+                <button
                   style={{ ...styles.btnPrimary, padding: '12px 32px' }}
                   {...btnEvents}
                   onClick={() => setImportResult(null)}
@@ -2533,13 +2564,13 @@ function App() {
           >
             <div style={{ ...styles.modalContent, maxWidth: 450 }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: 32, textAlign: 'center' }}>
-                <div style={{ 
-                  width: 64, 
-                  height: 64, 
-                  borderRadius: '50%', 
-                  background: 'rgba(239, 68, 68, 0.1)', 
-                  display: 'flex', 
-                  alignItems: 'center', 
+                <div style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: '50%',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'center',
                   margin: '0 auto 20px'
                 }}>
@@ -2550,14 +2581,14 @@ function App() {
                   {t.settings.delete_all_confirm}
                 </p>
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                  <button 
+                  <button
                     style={{ ...styles.btn, padding: '12px 24px' }}
                     {...btnEvents}
                     onClick={() => setShowDeleteConfirm(false)}
                   >
                     {t.settings.cancel || '取消'}
                   </button>
-                  <button 
+                  <button
                     style={{ ...styles.btnDanger, padding: '12px 24px' }}
                     {...btnEvents}
                     onClick={async () => {
@@ -2590,12 +2621,14 @@ function App() {
         {showDeleteGameConfirm && (
           <div style={styles.modalOverlay}
             onMouseDown={(e) => { overlayMousedownRef.current = (e.target === e.currentTarget) }}
-            onClick={() => { if (overlayMousedownRef.current) {
-              setShowDeleteGameConfirm(false)
-              if (deleteGameCallback) {
-                setDeleteGameCallback(null)
+            onClick={() => {
+              if (overlayMousedownRef.current) {
+                setShowDeleteGameConfirm(false)
+                if (deleteGameCallback) {
+                  setDeleteGameCallback(null)
+                }
               }
-            }}}
+            }}
           >
             <div style={{ ...styles.modalContent, maxWidth: 450 }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: 32, textAlign: 'center' }}>
@@ -2606,14 +2639,14 @@ function App() {
                   {deleteConfirmMode === 'delete_game' ? t.delete_game_confirm.message : t.delete_last_screenshot.message}
                 </p>
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                  <button 
+                  <button
                     style={{ ...styles.btnPrimary, padding: '12px 24px' }}
                     {...btnEvents}
                     onClick={() => deleteGameCallback && deleteGameCallback(false)}
                   >
                     {deleteConfirmMode === 'delete_game' ? t.delete_game_confirm.cancel : t.delete_last_screenshot.keep_game}
                   </button>
-                  <button 
+                  <button
                     style={{ ...styles.btnDanger, padding: '12px 24px' }}
                     {...btnEvents}
                     onClick={() => deleteGameCallback && deleteGameCallback(true)}
@@ -2638,14 +2671,14 @@ function App() {
                   {t.settings.import_warning}
                 </p>
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                  <button 
+                  <button
                     style={{ ...styles.btn, padding: '12px 24px' }}
                     {...btnEvents}
                     onClick={() => setImportConfirmPath(null)}
                   >
                     {t.settings.cancel || '取消'}
                   </button>
-                  <button 
+                  <button
                     style={{ ...styles.btnPrimary, padding: '12px 24px' }}
                     {...btnEvents}
                     onClick={confirmImportDirectory}
@@ -2737,7 +2770,7 @@ function App() {
                   </p>
                 </>
               )}
-              
+
               {guideStep === 1 && (
                 <>
                   <h3 style={{ color: currentTheme === 'night' ? '#fff' : '#333', marginBottom: 16 }}>📸 快捷截图</h3>
@@ -2749,7 +2782,7 @@ function App() {
                   </p>
                 </>
               )}
-              
+
               {guideStep === 2 && (
                 <>
                   <h3 style={{ color: currentTheme === 'night' ? '#fff' : '#333', marginBottom: 16 }}>🎮 游戏识别</h3>
@@ -2761,7 +2794,7 @@ function App() {
                   </p>
                 </>
               )}
-              
+
               {guideStep === 3 && (
                 <>
                   <h3 style={{ color: currentTheme === 'night' ? '#fff' : '#333', marginBottom: 16 }}>📁 数据管理</h3>
@@ -2776,7 +2809,7 @@ function App() {
                       onChange={(e) => setDontShowAgain(e.target.checked)}
                       style={{ width: 16, height: 16, cursor: 'pointer' }}
                     />
-                    <label htmlFor="dontShowAgain" style={{ 
+                    <label htmlFor="dontShowAgain" style={{
                       color: currentTheme === 'night' ? 'rgba(255,255,255,0.7)' : '#666',
                       cursor: 'pointer',
                       fontSize: 14
@@ -2786,7 +2819,7 @@ function App() {
                   </div>
                 </>
               )}
-              
+
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
                 {guideStep > 0 && (
                   <button
@@ -2805,7 +2838,7 @@ function App() {
                     上一步
                   </button>
                 )}
-                
+
                 {guideStep < 3 ? (
                   <button
                     onClick={() => setGuideStep(guideStep + 1)}
@@ -2855,12 +2888,12 @@ function App() {
                   </button>
                 )}
               </div>
-              
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                gap: 8, 
-                marginTop: 16 
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: 8,
+                marginTop: 16
               }}>
                 {[0, 1, 2, 3].map(i => (
                   <div
@@ -2869,8 +2902,8 @@ function App() {
                       width: 8,
                       height: 8,
                       borderRadius: '50%',
-                      background: i === guideStep 
-                        ? 'linear-gradient(135deg, #667eea, #764ba2)' 
+                      background: i === guideStep
+                        ? 'linear-gradient(135deg, #667eea, #764ba2)'
                         : currentTheme === 'night' ? 'rgba(255,255,255,0.2)' : '#ddd',
                       transition: 'all 0.2s'
                     }}
@@ -3013,13 +3046,13 @@ function App() {
               maxWidth: '90vw',
               boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
             }}>
-              <div style={{ 
-                width: 56, 
-                height: 56, 
-                borderRadius: '50%', 
-                background: 'rgba(239, 68, 68, 0.1)', 
-                display: 'flex', 
-                alignItems: 'center', 
+              <div style={{
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 16px'
               }}>
@@ -3029,7 +3062,7 @@ function App() {
                 {t.detail?.confirm_delete || '确定删除'}
               </h4>
               <p style={{ margin: '0 0 20px 0', color: theme.textMuted, fontSize: 14, lineHeight: 1.5, textAlign: 'center' }}>
-                {multiDeleteCount > 0 
+                {multiDeleteCount > 0
                   ? `确定要删除 ${multiDeleteCount} 张截图吗？`
                   : (t.detail?.confirm_delete_message || '删除后可以在回收站里恢复。')
                 }

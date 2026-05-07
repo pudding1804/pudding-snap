@@ -30,7 +30,7 @@ function RatingModal({ theme, styles, t, currentRating, onConfirm, onCancel }) {
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
     const isHalf = x < rect.width / 2
-    const newRating = isHalf ? starIndex * 2 : starIndex * 2 + 1
+    const newRating = isHalf ? starIndex * 2 + 1 : starIndex * 2 + 2
     setSelectedRating(newRating)
   }
 
@@ -38,7 +38,7 @@ function RatingModal({ theme, styles, t, currentRating, onConfirm, onCancel }) {
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
     const isHalf = x < rect.width / 2
-    setHoverRating(isHalf ? starIndex * 2 : starIndex * 2 + 1)
+    setHoverRating(isHalf ? starIndex * 2 + 1 : starIndex * 2 + 2)
   }
 
   return (
@@ -54,7 +54,7 @@ function RatingModal({ theme, styles, t, currentRating, onConfirm, onCancel }) {
         <h3 style={{ marginBottom: 20, textAlign: 'center', color: theme.text }}>
           {t.rating?.title || '评分'}
         </h3>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 16 }}>
           {[0, 1, 2, 3, 4].map(starIndex => {
             const ratingForStar = displayRating >= 0 ? displayRating : 0
             const isFull = ratingForStar >= (starIndex * 2 + 2)
@@ -70,11 +70,11 @@ function RatingModal({ theme, styles, t, currentRating, onConfirm, onCancel }) {
                 onMouseMove={(e) => handleStarHover(e, starIndex)}
                 onMouseLeave={() => setHoverRating(-1)}
               >
-                <svg width="36" height="36" viewBox="0 0 24 24" fill={emptyColor}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill={emptyColor}>
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                 </svg>
                 {(isFull || isHalf) && (
-                  <svg width="36" height="36" viewBox="0 0 24 24" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
+                  <svg width="48" height="48" viewBox="0 0 24 24" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
                     <defs>
                       <clipPath id={`clip-full-${starIndex}`}>
                         <rect x="0" y="0" width={isFull ? "24" : "12"} height="24" />

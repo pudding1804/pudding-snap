@@ -45,6 +45,8 @@ export function SettingsPanel({
   onScreenshotNotificationChange,
   windowTitleMatchEnabled,
   onWindowTitleMatchChange,
+  activeHotkeys,
+  onActiveHotkeysChange,
   emulatorKeywords,
   onEmulatorKeywordsChange,
   onSaveEmulatorKeywords,
@@ -197,8 +199,32 @@ export function SettingsPanel({
         
         <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
           <h3 style={{ marginBottom: 12 }}>{t.settings.hotkeys}</h3>
-          <p style={{ color: theme.textMuted, fontSize: 14 }}>{t.settings.hotkey_print}</p>
-          <p style={{ color: theme.textMuted, fontSize: 14 }}>{t.settings.hotkey_f12}</p>
+          {[
+            { id: 'printscreen', label: 'PrintScreen' },
+            { id: 'f11', label: 'F11' },
+            { id: 'f12', label: 'F12' },
+          ].map(key => (
+            <div key={key.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                id={`hotkey_${key.id}`}
+                checked={activeHotkeys.includes(key.id)}
+                onChange={(e) => {
+                  const newKeys = e.target.checked
+                    ? [...activeHotkeys, key.id]
+                    : activeHotkeys.filter(k => k !== key.id)
+                  onActiveHotkeysChange(newKeys)
+                }}
+                style={{ width: 18, height: 18, cursor: 'pointer' }}
+              />
+              <label htmlFor={`hotkey_${key.id}`} style={{ cursor: 'pointer', color: theme.text, fontSize: 14 }}>
+                {key.label}
+              </label>
+            </div>
+          ))}
+          <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
+            {t.settings.hotkey_hint}
+          </p>
         </div>
 
         <div style={{ background: theme.card, padding: 16, borderRadius: 8, marginBottom: 16 }}>
@@ -311,6 +337,7 @@ export function SettingsPanel({
             </p>
           </div>
           
+          {false && (
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
             <h4 style={{ marginBottom: 8, color: theme.text, fontSize: 14 }}>
               {t.settings.emulator_keywords}
@@ -349,6 +376,7 @@ export function SettingsPanel({
               </button>
             </div>
           </div>
+          )}
           
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
             <h4 style={{ marginBottom: 12 }}>{t.settings.screenshot_quality}</h4>

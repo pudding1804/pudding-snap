@@ -44,6 +44,7 @@ struct ScreenshotTask {
 #[derive(Debug)]
 enum HotkeyEvent {
     PrintScreen,
+    F11,
     F12,
 }
 
@@ -1840,7 +1841,7 @@ fn main() {
     let settings_cache = {
         let conn = db_arc.lock().unwrap();
         let mut cache = HashMap::new();
-        for key in &["shutter_sound", "screenshot_format", "screenshot_quality", "screenshot_notification", "theme", "sort_order", "game_sort_order", "backup_enabled", "data_dir", "emulator_keywords", "window_title_match"] {
+        for key in &["shutter_sound", "screenshot_format", "screenshot_quality", "screenshot_notification", "theme", "sort_order", "game_sort_order", "backup_enabled", "data_dir", "emulator_keywords", "window_title_match", "active_hotkeys"] {
             if let Some(value) = db::get_setting(&conn, key) {
                 if *key == "emulator_keywords" {
                     let emulator_names: Vec<String> = value.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
@@ -1995,6 +1996,7 @@ fn main() {
                 raw_input::start_raw_input_listener(move |event| {
                     let hotkey = match event {
                         raw_input::RawHotkeyEvent::PrintScreen => HotkeyEvent::PrintScreen,
+                        raw_input::RawHotkeyEvent::F11 => HotkeyEvent::F11,
                         raw_input::RawHotkeyEvent::F12 => HotkeyEvent::F12,
                     };
                     let _ = tx.send(hotkey);
@@ -2027,10 +2029,20 @@ fn main() {
 
                             let key_name = match hotkey {
                                 HotkeyEvent::PrintScreen => "PrintScreen",
+                                HotkeyEvent::F11 => "F11",
                                 HotkeyEvent::F12 => "F12",
                             };
                             let total_start = Instant::now();
                             println!("[热键] 检测到{}按键!", key_name);
+
+                            {
+                                let cache = settings_cache_for_hotkey.read().unwrap();
+                                let active_hotkeys = cache.get("active_hotkeys").cloned().unwrap_or_default();
+                                if !active_hotkeys.is_empty() && !active_hotkeys.to_lowercase().split(',').any(|k| k.trim() == key_name.to_lowercase()) {
+                                    println!("[热键] {} 未被启用，跳过", key_name);
+                                    continue;
+                                }
+                            }
 
                             let t = Instant::now();
                             let shutter_sound = {
@@ -2052,7 +2064,7 @@ fn main() {
                                 let cache = settings_cache_for_hotkey.read().unwrap();
                                 cache.get("window_title_match")
                                     .and_then(|v| v.parse::<bool>().ok())
-                                    .unwrap_or(false)
+                                    .unwrap_or(true)
                             };
 
                             let window_title = {

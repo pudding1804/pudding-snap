@@ -11,6 +11,7 @@ use winapi::shared::minwindef::{LPARAM, LRESULT, UINT, WPARAM};
 use winapi::shared::windef::HWND;
 
 const VK_SNAPSHOT: i32 = 0x2C;
+const VK_F11: i32 = 0x7A;
 const VK_F12: i32 = 0x7B;
 const RIM_TYPEKEYBOARD: u32 = 1;
 const WM_KEYDOWN: u32 = 0x0100;
@@ -19,6 +20,7 @@ const WM_SYSKEYDOWN: u32 = 0x0106;
 #[derive(Debug, Clone, Copy)]
 pub enum RawHotkeyEvent {
     PrintScreen,
+    F11,
     F12,
 }
 
@@ -87,6 +89,7 @@ unsafe extern "system" fn raw_input_wndproc(
                             {
                                 let event = match v_key as i32 {
                                     VK_SNAPSHOT => Some(RawHotkeyEvent::PrintScreen),
+                                    VK_F11 => Some(RawHotkeyEvent::F11),
                                     VK_F12 => Some(RawHotkeyEvent::F12),
                                     _ => None,
                                 };
