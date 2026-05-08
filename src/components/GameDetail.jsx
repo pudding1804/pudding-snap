@@ -142,6 +142,8 @@ export function GameDetail({
   onToggleSortMenu,
   onLoadPage,
   onRateGame,
+  onSelectAll,
+  onBatchShare,
 }) {
   const scrollContainerRef = useRef(null)
   const [showRatingModal, setShowRatingModal] = useState(false)
@@ -222,6 +224,17 @@ export function GameDetail({
             <>
               <button style={styles.btn} {...btnEvents} onClick={() => onToggleMultiSelect(false)}>
                 {t.header.cancel_select}
+              </button>
+              <button style={styles.btn} {...btnEvents} onClick={() => onSelectAll && onSelectAll()}>
+                {t.header.select_all}
+              </button>
+              <button
+                style={selectedScreenshots.length > 0 ? styles.btnPrimary : styles.btnDisabled}
+                {...(selectedScreenshots.length > 0 ? btnEvents : {})}
+                onClick={() => onBatchShare && onBatchShare()}
+                disabled={selectedScreenshots.length === 0}
+              >
+                {t.header.share}
               </button>
               <button
                 style={selectedScreenshots.length > 0 ? styles.btnDanger : styles.btnDisabled}

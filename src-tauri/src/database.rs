@@ -2261,6 +2261,60 @@ pub fn get_game_screenshot_count(conn: &Connection, game_id: &str) -> Result<i32
     Ok(count)
 }
 
+pub fn get_all_screenshot_ids(conn: &Connection, game_id: Option<&str>) -> Result<Vec<i32>> {
+    let sql = if game_id.is_some() {
+        "SELECT id FROM screenshots WHERE game_id = ?1 ORDER BY timestamp ASC"
+    } else {
+        "SELECT id FROM screenshots ORDER BY timestamp ASC"
+    };
+    let mut stmt = conn.prepare(sql)?;
+    let ids: Vec<i32> = if let Some(gid) = game_id {
+        stmt.query_map(params![gid], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect()
+    } else {
+        stmt.query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+    Ok(ids)
+}
+
+pub fn get_screenshots_by_ids(conn: &Connection, ids: &[i32]) -> Result<Vec<ScreenshotRecord>> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders: Vec<String> = ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect();
+    let placeholders_str = placeholders.join(",");
+    let sql = format!(
+        "SELECT s.id, s.file_path, s.thumbnail_path, s.game_id,
+                COALESCE(gc.display_title, gc.steam_name, s.game_id) as game_title,
+                COALESCE(gc.display_title, s.game_id) as display_title,
+                s.timestamp, s.note, s.game_banner_url
+         FROM screenshots s
+         LEFT JOIN game_cache gc ON s.game_id = gc.game_id
+         WHERE s.id IN ({})
+         ORDER BY s.timestamp ASC",
+        placeholders_str
+    );
+    let params: Vec<&dyn rusqlite::types::ToSql> = ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+    let mut stmt = conn.prepare(&sql)?;
+    let screenshots: Vec<ScreenshotRecord> = stmt.query_map(params.as_slice(), |row| {
+        Ok(ScreenshotRecord {
+            id: row.get(0)?,
+            file_path: row.get(1)?,
+            thumbnail_path: row.get(2)?,
+            game_id: row.get(3)?,
+            game_title: row.get(4)?,
+            display_title: row.get(5)?,
+            timestamp: row.get(6)?,
+            note: row.get(7)?,
+            game_banner_url: row.get(8)?,
+        })
+    })?.filter_map(|r| r.ok()).collect();
+    Ok(screenshots)
+}
+
 pub fn import_screenshot(
     conn: &Connection,
     file_path: &str,

@@ -409,6 +409,26 @@ fn copy_dir_with_progress(app: &AppHandle, src: &std::path::PathBuf, dst: &std::
 }
 
 #[tauri::command]
+fn get_cjk_font_base64() -> Result<String, String> {
+    use base64::{Engine as _, engine::general_purpose};
+    let font_candidates = [
+        std::path::PathBuf::from("C:\\Windows\\Fonts\\simhei.ttf"),
+        std::path::PathBuf::from("C:\\Windows\\Fonts\\msyh.ttf"),
+        std::path::PathBuf::from("C:\\Windows\\Fonts\\simsun.ttf"),
+        std::path::PathBuf::from("C:\\Windows\\Fonts\\malgun.ttf"),
+        std::path::PathBuf::from("C:\\Windows\\Fonts\\msgothic.ttf"),
+    ];
+    for path in &font_candidates {
+        if path.exists() {
+            let data = std::fs::read(path)
+                .map_err(|e| format!("读取字体文件失败: {}", e))?;
+            return Ok(general_purpose::STANDARD.encode(&data));
+        }
+    }
+    Err("未找到系统CJK字体文件".to_string())
+}
+
+#[tauri::command]
 fn check_data_directory(path: String) -> Result<db::DirectoryCheckResult, String> {
     Ok(db::check_data_directory(&path))
 }
@@ -1695,6 +1715,102 @@ fn save_share_image(image_path: String, image_data: String, format: String) -> R
 }
 
 #[tauri::command]
+fn get_all_screenshot_ids(game_id: Option<String>, state: State<AppState>) -> Result<Vec<i32>, String> {
+    let conn = state.db.lock().unwrap();
+    db::get_all_screenshot_ids(&conn, game_id.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_screenshots_by_ids(ids: Vec<i32>, state: State<AppState>) -> Result<Vec<ScreenshotRecord>, String> {
+    let conn = state.db.lock().unwrap();
+    db::get_screenshots_by_ids(&conn, &ids)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn read_files_as_base64(paths: Vec<String>) -> Result<Vec<String>, String> {
+    use base64::{Engine as _, engine::general_purpose};
+    let mut results = Vec::new();
+    for path in paths {
+        let data = std::fs::read(&path)
+            .map_err(|e| format!("读取文件失败 {}: {}", path, e))?;
+        let b64 = general_purpose::STANDARD.encode(&data);
+        results.push(b64);
+    }
+    Ok(results)
+}
+
+#[tauri::command]
+async fn read_images_for_export(paths: Vec<String>, app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    use base64::{Engine as _, engine::general_purpose};
+    use std::io::Cursor;
+
+    let total = paths.len();
+    let mut results = Vec::with_capacity(total);
+    for (i, path_str) in paths.iter().enumerate() {
+        let path = std::path::PathBuf::from(path_str);
+
+        let b64 = tokio::task::spawn_blocking(move || {
+            use image::imageops::FilterType;
+            let img = image::open(&path)
+                .map_err(|e| format!("打开图片失败 {}: {}", path.display(), e))?;
+
+            let (w, h) = (img.width(), img.height());
+            let max_dim = 1600u32;
+            let resized = if w > max_dim || h > max_dim {
+                if w >= h {
+                    let new_w = max_dim;
+                    let new_h = (h as u64 * max_dim as u64 / w as u64) as u32;
+                    img.resize_exact(new_w.max(1), new_h.max(1), FilterType::Lanczos3)
+                } else {
+                    let new_h = max_dim;
+                    let new_w = (w as u64 * max_dim as u64 / h as u64) as u32;
+                    img.resize_exact(new_w.max(1), new_h.max(1), FilterType::Lanczos3)
+                }
+            } else {
+                img
+            };
+
+            let mut buf = Cursor::new(Vec::new());
+            resized.write_to(&mut buf, image::ImageFormat::Jpeg)
+                .map_err(|e| format!("JPEG编码失败: {}", e))?;
+            let jpeg_data = buf.into_inner();
+            Ok::<String, String>(general_purpose::STANDARD.encode(&jpeg_data))
+        }).await.map_err(|e| format!("图片处理任务失败: {}", e))??;
+
+        results.push(b64);
+
+        let _ = app.emit("export-progress", serde_json::json!({
+            "current": i + 1,
+            "total": total
+        }));
+    }
+    Ok(results)
+}
+
+#[tauri::command]
+fn save_export_file(file_path: String, content: String, format: String) -> Result<(), String> {
+    let path = std::path::Path::new(&file_path);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+
+    if format == "pdf" {
+        use base64::{Engine as _, engine::general_purpose};
+        let decoded = general_purpose::STANDARD.decode(&content)
+            .map_err(|e| format!("Base64解码失败: {}", e))?;
+        std::fs::write(path, decoded)
+            .map_err(|e| format!("写入文件失败: {}", e))?;
+    } else {
+        std::fs::write(path, content.as_bytes())
+            .map_err(|e| format!("写入文件失败: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn get_file_metadata(path: String) -> Result<FileMetadata, String> {
     let metadata = std::fs::metadata(&path)
         .map_err(|e| format!("无法获取文件信息: {}", e))?;
@@ -2701,7 +2817,13 @@ fn main() {
             set_screenshot_notification,
             generate_thumbnails,
             resume_thumbnail_generation,
-            get_all_deleted_screenshot_ids
+            get_all_deleted_screenshot_ids,
+            get_all_screenshot_ids,
+            get_screenshots_by_ids,
+            read_files_as_base64,
+            read_images_for_export,
+            save_export_file,
+            get_cjk_font_base64
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

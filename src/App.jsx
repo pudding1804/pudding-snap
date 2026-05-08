@@ -21,6 +21,7 @@ import {
   RecycleBin,
   ErrorBoundary,
   ShareModal,
+  BatchShareModal,
   TitleBar
 } from './components'
 import { formatGameTitle } from './utils'
@@ -85,6 +86,7 @@ function App() {
 
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedScreenshots, setSelectedScreenshots] = useState([])
+  const [showBatchShareModal, setShowBatchShareModal] = useState(false)
 
   const [dateFilterStart, setDateFilterStart] = useState(null)
   const [dateFilterEnd, setDateFilterEnd] = useState(null)
@@ -1238,6 +1240,53 @@ function App() {
     setIsGameMultiSelectMode(enabled)
   }, [])
 
+  const handleSelectAllScreenshots = useCallback(async () => {
+    const gameId = selectedGameRef.current?.game_id
+    try {
+      const ids = await invoke('get_all_screenshot_ids', { gameId: gameId || null })
+      setSelectedScreenshots(ids)
+    } catch (e) {
+      addLog(`获取截图ID失败: ${e}`)
+    }
+  }, [addLog])
+
+  const handleBatchShare = useCallback(() => {
+    if (selectedScreenshots.length === 0) return
+    setShowBatchShareModal(true)
+  }, [selectedScreenshots])
+
+  const handleBatchShareExport = useCallback(async (format, imagesPerPage) => {
+    const screenshotData = await invoke('get_screenshots_by_ids', { ids: selectedScreenshots })
+    const imagesBase64 = await invoke('read_images_for_export', {
+      paths: screenshotData.map(s => s.file_path)
+    })
+
+    let content, ext
+    if (format === 'html') {
+      const { generateHtmlExport } = await import('./htmlExporter')
+      content = generateHtmlExport(screenshotData, imagesBase64, selectedGameRef.current, t)
+      ext = 'html'
+    } else {
+      const { generatePdfExport } = await import('./pdfExporter')
+      content = await generatePdfExport(screenshotData, imagesBase64, selectedGameRef.current, t, imagesPerPage)
+      ext = 'pdf'
+    }
+
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    const gameName = selectedGameRef.current?.display_title || selectedGameRef.current?.game_title || 'export'
+    const filePath = await save({
+      defaultPath: `${gameName}_screenshots.${ext}`,
+      filters: [{ name: ext.toUpperCase(), extensions: [ext] }]
+    })
+
+    if (!filePath) {
+      throw new Error('用户取消了保存')
+    }
+
+    await invoke('save_export_file', { filePath, content, format })
+    return filePath
+  }, [selectedScreenshots, addLog, t])
+
   const changeStoragePath = useCallback(async () => {
     try {
       const selectedPath = await open({
@@ -1951,6 +2000,8 @@ function App() {
                   addLog(`评分保存失败: ${e}`)
                 }
               }}
+              onSelectAll={handleSelectAllScreenshots}
+              onBatchShare={handleBatchShare}
             />
           ) : currentView === 'recycle-bin' ? (
             <RecycleBin
@@ -2108,6 +2159,20 @@ function App() {
                 addLog(`导出分享图片失败: ${err}`)
                 showNotification(t.share.save_failed)
               }
+            }}
+          />
+        )}
+
+        {showBatchShareModal && (
+          <BatchShareModal
+            theme={theme}
+            styles={styles}
+            t={t}
+            selectedCount={selectedScreenshots.length}
+            onExport={handleBatchShareExport}
+            onClose={() => {
+              setShowBatchShareModal(false)
+              handleToggleMultiSelectMode(false)
             }}
           />
         )}
