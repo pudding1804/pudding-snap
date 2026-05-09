@@ -232,8 +232,8 @@ function App() {
   }, [selectedGame])
 
   useEffect(() => {
-    isModalOpenRef.current = !!(showSearchModal || showDeleteConfirm || showDeleteGameConfirm || showManualInfoModal || showImportModal)
-  }, [showSearchModal, showDeleteConfirm, showDeleteGameConfirm, showManualInfoModal, showImportModal])
+    isModalOpenRef.current = !!(showSearchModal || showDeleteConfirm || showDeleteGameConfirm || showManualInfoModal || showImportModal || showGameTimeModal)
+  }, [showSearchModal, showDeleteConfirm, showDeleteGameConfirm, showManualInfoModal, showImportModal, showGameTimeModal])
 
   useEffect(() => {
     sortOrderRef.current = sortOrder
@@ -1028,6 +1028,7 @@ function App() {
           setShowDeleteGameConfirm(false)
           setShowManualInfoModal(false)
           setShowImportModal(false)
+          setShowGameTimeModal(false)
         } else {
           handleHistoryBack()
         }
@@ -1047,6 +1048,7 @@ function App() {
           setShowDeleteGameConfirm(false)
           setShowManualInfoModal(false)
           setShowImportModal(false)
+          setShowGameTimeModal(false)
         } else {
           handleHistoryBack()
         }

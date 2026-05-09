@@ -16,22 +16,21 @@ function getFirstDayOfWeek(year, month) {
 }
 
 function getHeatColor(count, theme) {
-  if (count === 0) return theme.accent
   const primary = theme.primary
   const r = parseInt(primary.slice(1, 3), 16)
   const g = parseInt(primary.slice(3, 5), 16)
   const b = parseInt(primary.slice(5, 7), 16)
 
   const levels = [
-    { threshold: 0, opacity: 0.15 },
-    { threshold: 1, opacity: 0.3 },
-    { threshold: 3, opacity: 0.5 },
-    { threshold: 5, opacity: 0.7 },
-    { threshold: 8, opacity: 0.85 },
-    { threshold: 12, opacity: 1.0 }
+    { threshold: 0, opacity: 0.05 },
+    { threshold: 1, opacity: 0.15 },
+    { threshold: 3, opacity: 0.3 },
+    { threshold: 5, opacity: 0.5 },
+    { threshold: 8, opacity: 0.7 },
+    { threshold: 12, opacity: 0.9 }
   ]
 
-  let opacity = 0.15
+  let opacity = 0.05
   for (const level of levels) {
     if (count >= level.threshold) {
       opacity = level.opacity
@@ -88,7 +87,7 @@ function MonthGrid({ year, month, counts, theme, gt }) {
     weeks.push(currentWeek)
   }
 
-  const cellSize = 14
+  const cellSize = 20
 
   return (
     <div style={{
@@ -99,12 +98,12 @@ function MonthGrid({ year, month, counts, theme, gt }) {
       flex: 1
     }}>
       <div style={{
-        fontSize: 10,
+        fontSize: 11,
         color: theme.textMuted,
         textAlign: 'center',
         marginBottom: 1,
         fontWeight: 500,
-        lineHeight: '14px'
+        lineHeight: '16px'
       }}>
         {months[month - 1]}
       </div>
@@ -112,15 +111,15 @@ function MonthGrid({ year, month, counts, theme, gt }) {
         display: 'grid',
         gridTemplateColumns: 'repeat(7, 1fr)',
         gap: 1,
-        fontSize: 7
+        fontSize: 8
       }}>
         {weekdays.map(d => (
           <div key={d} style={{
             textAlign: 'center',
             color: theme.textMuted,
-            fontSize: 6,
-            lineHeight: '10px',
-            height: 10
+            fontSize: 8,
+            lineHeight: '14px',
+            height: 14
           }}>
             {d}
           </div>
@@ -144,7 +143,7 @@ function MonthGrid({ year, month, counts, theme, gt }) {
                   borderRadius: 2,
                   background: getHeatColor(count, theme),
                   color: count >= 5 ? '#fff' : theme.textMuted,
-                  fontSize: 6,
+                  fontSize: 8,
                   lineHeight: 1,
                   cursor: 'default'
                 }}
@@ -235,7 +234,7 @@ export function GameTimeModal({ theme, styles, t, gameId, onClose }) {
       <div
         style={{
           ...styles.modalContent,
-          width: 520,
+          width: 840,
           animation: 'modalFadeIn 0.2s ease'
         }}
         onClick={e => e.stopPropagation()}
@@ -314,9 +313,9 @@ export function GameTimeModal({ theme, styles, t, gameId, onClose }) {
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
-              height: 240,
+              height: 360,
               color: theme.textMuted,
-              fontSize: 13
+              fontSize: 14
             }}>
               {t.common?.loading || '加载中...'}
             </div>
@@ -325,7 +324,7 @@ export function GameTimeModal({ theme, styles, t, gameId, onClose }) {
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
-              height: 240,
+              height: 360,
               color: theme.textMuted,
               fontSize: 13
             }}>
@@ -337,8 +336,8 @@ export function GameTimeModal({ theme, styles, t, gameId, onClose }) {
                 display: 'flex',
                 justifyContent: 'center',
                 gap: 20,
-                marginBottom: 8,
-                fontSize: 11,
+                marginBottom: 10,
+                fontSize: 13,
                 color: theme.textMuted
               }}>
                 <span>{gt.screenshots_count?.replace('{count}', totalScreenshots) || `${totalScreenshots} 张截图`}</span>
@@ -348,12 +347,12 @@ export function GameTimeModal({ theme, styles, t, gameId, onClose }) {
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 4
+                gap: 6
               }}>
                 {MONTH_LAYOUT.map((row, ri) => (
                   <div key={ri} style={{
                     display: 'flex',
-                    gap: 4
+                    gap: 6
                   }}>
                     {row.map(month => (
                       <MonthGrid
@@ -373,9 +372,9 @@ export function GameTimeModal({ theme, styles, t, gameId, onClose }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 3,
-                marginTop: 8,
-                fontSize: 9,
+                gap: 4,
+                marginTop: 10,
+                fontSize: 11,
                 color: theme.textMuted
               }}>
                 <span>{gt.legend_less || '少'}</span>
@@ -384,8 +383,8 @@ export function GameTimeModal({ theme, styles, t, gameId, onClose }) {
                     key={item.threshold}
                     title={`${item.label}`}
                     style={{
-                      width: 12,
-                      height: 12,
+                      width: 16,
+                      height: 16,
                       borderRadius: 2,
                       background: item.color,
                       border: `1px solid ${theme.border}`
