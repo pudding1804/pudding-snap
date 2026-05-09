@@ -22,6 +22,7 @@ import {
   ErrorBoundary,
   ShareModal,
   BatchShareModal,
+  GameTimeModal,
   TitleBar
 } from './components'
 import { formatGameTitle } from './utils'
@@ -87,6 +88,7 @@ function App() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedScreenshots, setSelectedScreenshots] = useState([])
   const [showBatchShareModal, setShowBatchShareModal] = useState(false)
+  const [showGameTimeModal, setShowGameTimeModal] = useState(false)
 
   const [dateFilterStart, setDateFilterStart] = useState(null)
   const [dateFilterEnd, setDateFilterEnd] = useState(null)
@@ -2002,6 +2004,7 @@ function App() {
               }}
               onSelectAll={handleSelectAllScreenshots}
               onBatchShare={handleBatchShare}
+              onOpenGameTime={() => setShowGameTimeModal(true)}
             />
           ) : currentView === 'recycle-bin' ? (
             <RecycleBin
@@ -2174,6 +2177,16 @@ function App() {
               setShowBatchShareModal(false)
               handleToggleMultiSelectMode(false)
             }}
+          />
+        )}
+
+        {showGameTimeModal && selectedGame && (
+          <GameTimeModal
+            theme={theme}
+            styles={styles}
+            t={t}
+            gameId={selectedGame.game_id}
+            onClose={() => setShowGameTimeModal(false)}
           />
         )}
 

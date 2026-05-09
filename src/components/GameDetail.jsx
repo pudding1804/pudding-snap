@@ -144,6 +144,7 @@ export function GameDetail({
   onRateGame,
   onSelectAll,
   onBatchShare,
+  onOpenGameTime,
 }) {
   const scrollContainerRef = useRef(null)
   const [showRatingModal, setShowRatingModal] = useState(false)
@@ -266,6 +267,25 @@ export function GameDetail({
                 {selectedGame?.rating != null && selectedGame.rating >= 0 && (
                   <span style={{ fontSize: 12, color: theme.textMuted }}>{selectedGame.rating}</span>
                 )}
+              </button>
+              <button
+                style={{
+                  ...styles.btn,
+                  padding: '8px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                {...btnEvents}
+                onClick={() => onOpenGameTime && onOpenGameTime()}
+                title={t.game_time?.title || '游戏时间'}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={theme.primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                </svg>
               </button>
               <div style={{ position: 'relative' }}>
                 <button

@@ -2261,6 +2261,61 @@ pub fn get_game_screenshot_count(conn: &Connection, game_id: &str) -> Result<i32
     Ok(count)
 }
 
+pub fn get_screenshot_counts_by_date(conn: &Connection, game_id: &str, year: i32) -> Result<std::collections::HashMap<String, i32>> {
+    let start_ts = chrono::NaiveDate::from_ymd_opt(year, 1, 1)
+        .and_then(|d| d.and_hms_opt(0, 0, 0))
+        .map(|dt| dt.and_utc().timestamp())
+        .unwrap_or(0);
+    let end_ts = chrono::NaiveDate::from_ymd_opt(year + 1, 1, 1)
+        .and_then(|d| d.and_hms_opt(0, 0, 0))
+        .map(|dt| dt.and_utc().timestamp())
+        .unwrap_or(i64::MAX);
+
+    let mut stmt = conn.prepare(
+        "SELECT timestamp FROM screenshots WHERE game_id = ?1 AND timestamp >= ?2 AND timestamp < ?3"
+    )?;
+    let timestamps: Vec<i64> = stmt.query_map(params![game_id, start_ts, end_ts], |row| row.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut counts: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
+    for ts in timestamps {
+        let dt = chrono::DateTime::from_timestamp(ts, 0)
+            .unwrap_or_else(|| chrono::Utc::now());
+        let date_str = dt.format("%Y-%m-%d").to_string();
+        *counts.entry(date_str).or_insert(0) += 1;
+    }
+    Ok(counts)
+}
+
+pub fn get_latest_screenshot_year(conn: &Connection, game_id: &str) -> Result<i32> {
+    let result: Result<i64, _> = conn.query_row(
+        "SELECT MAX(timestamp) FROM screenshots WHERE game_id = ?1",
+        params![game_id],
+        |row| row.get(0)
+    );
+    match result {
+        Ok(ts) => {
+            if ts > 0 {
+                let dt = chrono::DateTime::from_timestamp(ts, 0)
+                    .unwrap_or_else(|| chrono::Utc::now());
+                let year = dt.format("%Y").to_string().parse::<i32>().unwrap_or_else(|_| {
+                    let y: i32 = chrono::Utc::now().format("%Y").to_string().parse().unwrap_or(2024);
+                    y
+                });
+                Ok(year)
+            } else {
+                let current_year: i32 = chrono::Utc::now().format("%Y").to_string().parse().unwrap_or(2024);
+                Ok(current_year)
+            }
+        }
+        Err(_) => {
+            let current_year: i32 = chrono::Utc::now().format("%Y").to_string().parse().unwrap_or(2024);
+            Ok(current_year)
+        }
+    }
+}
+
 pub fn get_all_screenshot_ids(conn: &Connection, game_id: Option<&str>) -> Result<Vec<i32>> {
     let sql = if game_id.is_some() {
         "SELECT id FROM screenshots WHERE game_id = ?1 ORDER BY timestamp ASC"

@@ -324,6 +324,17 @@ export const translations = {
       file_path: '文件路径:',
       open_folder: '打开文件夹'
     },
+    game_time: {
+      title: '游戏时间',
+      confirm: '确定',
+      no_data: '暂无数据',
+      legend_less: '少',
+      legend_more: '多',
+      screenshots_count: '{count} 张截图',
+      active_days: '{count} 天活跃',
+      months: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+      weekdays: ['日', '一', '二', '三', '四', '五', '六']
+    },
     close_confirm: {
       title: '关闭确认',
       message: '您想要关闭程序还是最小化到系统托盘？',
@@ -657,6 +668,17 @@ export const translations = {
       file_path: 'File path:',
       open_folder: 'Open Folder'
     },
+    game_time: {
+      title: 'Game Time',
+      confirm: 'OK',
+      no_data: 'No Data',
+      legend_less: 'Less',
+      legend_more: 'More',
+      screenshots_count: '{count} screenshots',
+      active_days: '{count} active days',
+      months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+      weekdays: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+    },
     close_confirm: {
       title: 'Close Confirmation',
       message: 'Do you want to close the program or minimize to system tray?',
@@ -977,6 +999,17 @@ export const translations = {
       no_note: 'メモなし',
       file_path: 'ファイルパス:',
       open_folder: 'フォルダを開く'
+    },
+    game_time: {
+      title: 'ゲーム時間',
+      confirm: '確認',
+      no_data: 'データなし',
+      legend_less: '少',
+      legend_more: '多',
+      screenshots_count: '{count} 枚',
+      active_days: '{count} 日アクティブ',
+      months: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+      weekdays: ['日', '月', '火', '水', '木', '金', '土']
     },
     close_confirm: {
       title: '終了確認',

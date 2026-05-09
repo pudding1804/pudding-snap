@@ -1729,6 +1729,20 @@ fn get_screenshots_by_ids(ids: Vec<i32>, state: State<AppState>) -> Result<Vec<S
 }
 
 #[tauri::command]
+fn get_screenshot_counts_by_date(game_id: String, year: i32, state: State<AppState>) -> Result<std::collections::HashMap<String, i32>, String> {
+    let conn = state.db.lock().unwrap();
+    db::get_screenshot_counts_by_date(&conn, &game_id, year)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_latest_screenshot_year(game_id: String, state: State<AppState>) -> Result<i32, String> {
+    let conn = state.db.lock().unwrap();
+    db::get_latest_screenshot_year(&conn, &game_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn read_files_as_base64(paths: Vec<String>) -> Result<Vec<String>, String> {
     use base64::{Engine as _, engine::general_purpose};
     let mut results = Vec::new();
@@ -2820,6 +2834,8 @@ fn main() {
             get_all_deleted_screenshot_ids,
             get_all_screenshot_ids,
             get_screenshots_by_ids,
+            get_screenshot_counts_by_date,
+            get_latest_screenshot_year,
             read_files_as_base64,
             read_images_for_export,
             save_export_file,
