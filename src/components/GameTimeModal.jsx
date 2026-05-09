@@ -171,7 +171,9 @@ export function GameTimeModal({ theme, styles, t, gameId, onClose }) {
     let cancelled = false
     async function init() {
       try {
-        const latestYear = await invoke('get_latest_screenshot_year', { gameId })
+        const latestYear = gameId
+          ? await invoke('get_latest_screenshot_year', { gameId })
+          : await invoke('get_all_latest_screenshot_year')
         if (!cancelled) {
           setYear(latestYear)
         }
@@ -189,10 +191,9 @@ export function GameTimeModal({ theme, styles, t, gameId, onClose }) {
   const fetchCounts = useCallback(async (y) => {
     setLoading(true)
     try {
-      const result = await invoke('get_screenshot_counts_by_date', {
-        gameId,
-        year: y
-      })
+      const result = gameId
+        ? await invoke('get_screenshot_counts_by_date', { gameId, year: y })
+        : await invoke('get_all_screenshot_counts_by_date', { year: y })
       setCounts(result || {})
     } catch (e) {
       console.error('获取游戏时间数据失败:', e)

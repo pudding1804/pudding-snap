@@ -326,6 +326,7 @@ export const translations = {
     },
     game_time: {
       title: '游戏时间',
+      all_title: '截图热力图',
       confirm: '确定',
       no_data: '暂无数据',
       legend_less: '少',
@@ -670,6 +671,7 @@ export const translations = {
     },
     game_time: {
       title: 'Game Time',
+      all_title: 'Screenshot Heatmap',
       confirm: 'OK',
       no_data: 'No Data',
       legend_less: 'Less',
@@ -1002,6 +1004,7 @@ export const translations = {
     },
     game_time: {
       title: 'ゲーム時間',
+      all_title: 'スクリーンショットヒートマップ',
       confirm: '確認',
       no_data: 'データなし',
       legend_less: '少',

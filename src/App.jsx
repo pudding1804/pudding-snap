@@ -89,6 +89,7 @@ function App() {
   const [selectedScreenshots, setSelectedScreenshots] = useState([])
   const [showBatchShareModal, setShowBatchShareModal] = useState(false)
   const [showGameTimeModal, setShowGameTimeModal] = useState(false)
+  const [gameTimeModalGameId, setGameTimeModalGameId] = useState(null)
 
   const [dateFilterStart, setDateFilterStart] = useState(null)
   const [dateFilterEnd, setDateFilterEnd] = useState(null)
@@ -1029,6 +1030,7 @@ function App() {
           setShowManualInfoModal(false)
           setShowImportModal(false)
           setShowGameTimeModal(false)
+          setGameTimeModalGameId(null)
         } else {
           handleHistoryBack()
         }
@@ -1049,6 +1051,7 @@ function App() {
           setShowManualInfoModal(false)
           setShowImportModal(false)
           setShowGameTimeModal(false)
+          setGameTimeModalGameId(null)
         } else {
           handleHistoryBack()
         }
@@ -1870,6 +1873,7 @@ function App() {
                 else if (view === 'recycle-bin') switchToRecycleBin()
                 else { pushHistory(navStateRef.current); setView(view) }
               }}
+              onOpenGameTime={() => { setGameTimeModalGameId(null); setShowGameTimeModal(true) }}
             />
           ) : currentView === 'games' ? (
             <GameList
@@ -2006,7 +2010,7 @@ function App() {
               }}
               onSelectAll={handleSelectAllScreenshots}
               onBatchShare={handleBatchShare}
-              onOpenGameTime={() => setShowGameTimeModal(true)}
+              onOpenGameTime={() => { setGameTimeModalGameId(selectedGame?.game_id || null); setShowGameTimeModal(true) }}
             />
           ) : currentView === 'recycle-bin' ? (
             <RecycleBin
@@ -2182,13 +2186,13 @@ function App() {
           />
         )}
 
-        {showGameTimeModal && selectedGame && (
+        {showGameTimeModal && (
           <GameTimeModal
             theme={theme}
             styles={styles}
             t={t}
-            gameId={selectedGame.game_id}
-            onClose={() => setShowGameTimeModal(false)}
+            gameId={gameTimeModalGameId}
+            onClose={() => { setShowGameTimeModal(false); setGameTimeModalGameId(null) }}
           />
         )}
 
