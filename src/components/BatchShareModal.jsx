@@ -46,11 +46,16 @@ export function BatchShareModal({
   const [errorMessage, setErrorMessage] = useState('')
   const [exportStatus, setExportStatus] = useState('')
   const unlistenRef = useRef(null)
+  const cancelledRef = useRef(false)
+  const abortControllerRef = useRef(null)
 
   useEffect(() => {
     return () => {
       if (unlistenRef.current) {
         unlistenRef.current()
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
       }
     }
   }, [])
@@ -60,11 +65,19 @@ export function BatchShareModal({
     setProgressCurrent(0)
     setProgressTotal(0)
     setExportStatus('')
+    cancelledRef.current = false
+
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+
+    const sessionId = Date.now().toString()
 
     let unlistenFn = null
     try {
       const { listen } = await import('@tauri-apps/api/event')
       unlistenFn = await listen('export-progress', (event) => {
+        if (cancelledRef.current) return
+        if (event.payload?.session_id !== sessionId) return
         const { current, total } = event.payload
         setProgressCurrent(current)
         setProgressTotal(total)
@@ -73,10 +86,14 @@ export function BatchShareModal({
       unlistenRef.current = unlistenFn
 
       setExportStatus('正在获取截图数据...')
-      const filePath = await onExport(format, imagesPerPage)
+      const filePath = await onExport(format, imagesPerPage, abortController.signal, sessionId)
+
+      if (cancelledRef.current) return
+
       setExportedFilePath(filePath)
       setStep('completed')
     } catch (e) {
+      if (cancelledRef.current) return
       console.error('导出失败:', e)
       const msg = e?.message || String(e) || ''
       if (msg.includes('取消了保存') || msg.includes('cancel')) {
@@ -90,6 +107,7 @@ export function BatchShareModal({
         unlistenFn()
         unlistenRef.current = null
       }
+      abortControllerRef.current = null
     }
   }
 
@@ -102,6 +120,15 @@ export function BatchShareModal({
   }
 
   const handleClose = () => {
+    cancelledRef.current = true
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    if (unlistenRef.current) {
+      unlistenRef.current()
+      unlistenRef.current = null
+    }
     setStep('form')
     setProgressCurrent(0)
     setProgressTotal(0)
@@ -146,11 +173,10 @@ export function BatchShareModal({
           <button
             style={{
               ...styles.closeBtn,
-              opacity: isExporting ? 0.4 : 1,
-              cursor: isExporting ? 'not-allowed' : 'pointer'
+              opacity: 1,
+              cursor: 'pointer'
             }}
-            onClick={() => !isExporting && handleClose()}
-            disabled={isExporting}
+            onClick={handleClose}
           >
             ×
           </button>

@@ -173,7 +173,12 @@ export const translations = {
       emulator_keywords: '模拟器关键字',
       emulator_keywords_hint: '逗号分隔的模拟器进程名，用于识别模拟器窗口。修改后点击保存即可生效',
       emulator_keywords_save: '保存',
-      emulator_keywords_saved: '已保存'
+      emulator_keywords_saved: '已保存',
+      anti_shake: '防手抖',
+      anti_shake_hint: '设置两次截图之间的最小间隔，防止误触连续截图',
+      anti_shake_none: '无间隔',
+      anti_shake_05: '间隔0.5秒',
+      anti_shake_1: '间隔1秒'
     },
     game: {
       last_updated: '最后更新于',
@@ -518,7 +523,12 @@ export const translations = {
       emulator_keywords: 'Emulator Keywords',
       emulator_keywords_hint: 'Comma-separated emulator process names for identifying emulator windows. Click Save to apply',
       emulator_keywords_save: 'Save',
-      emulator_keywords_saved: 'Saved'
+      emulator_keywords_saved: 'Saved',
+      anti_shake: 'Anti-Shake',
+      anti_shake_hint: 'Set the minimum interval between screenshots to prevent accidental multiple captures',
+      anti_shake_none: 'No Interval',
+      anti_shake_05: '0.5s Interval',
+      anti_shake_1: '1s Interval'
     },
     game: {
       last_updated: 'Last updated',
@@ -851,7 +861,12 @@ export const translations = {
       emulator_keywords: 'エミュレータキーワード',
       emulator_keywords_hint: 'エミュレータウィンドウを識別するためのプロセス名をカンマ区切りで入力します。「保存」をクリックして適用',
       emulator_keywords_save: '保存',
-      emulator_keywords_saved: '保存済み'
+      emulator_keywords_saved: '保存済み',
+      anti_shake: '手ブレ防止',
+      anti_shake_hint: 'スクリーンショット間の最小間隔を設定し、誤操作による連続撮影を防止します',
+      anti_shake_none: '間隔なし',
+      anti_shake_05: '0.5秒間隔',
+      anti_shake_1: '1秒間隔'
     },
     game: {
       last_updated: '最終更新',

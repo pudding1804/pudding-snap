@@ -157,6 +157,7 @@ function App() {
   const [appliedGameName, setAppliedGameName] = useState('')
   const [showManualInfoModal, setShowManualInfoModal] = useState(false)
   const [screenshotNotificationEnabled, setScreenshotNotificationEnabled] = useState(true)
+  const [antiShakeInterval, setAntiShakeInterval] = useState('1000')
   const [windowTitleMatchEnabled, setWindowTitleMatchEnabled] = useState(true)
   const DEFAULT_EMULATOR_KEYWORDS = 'dosbox, dosbox-x, dosbox-staging, retroarch, pcsx2, pcsx2-qt, rpcs3, cemu, yuzu, suyu, ryujinx, dolphin, ppsspp, ppssppwindows, mame, mame64, mameui, snes9x, snes9x-x64, fusion, kega-fusion, kega, mednafen, flycast, melonds, desmume, vba, visualboyadvance, visualboyadvance-m, vbam, citra, xemu, project64, project64c, bsnes, mesen, nestopia, fceux, gens, nullDC, nulldc, redream'
   const [emulatorKeywords, setEmulatorKeywords] = useState(DEFAULT_EMULATOR_KEYWORDS)
@@ -665,6 +666,27 @@ function App() {
       addLog(`窗口标题匹配已${enabled ? '启用' : '禁用'}`)
     } catch (e) {
       addLog(`保存窗口标题匹配设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const loadAntiShakeInterval = useCallback(async () => {
+    try {
+      const value = await invoke('get_setting', { key: 'anti_shake_interval' })
+      if (value !== null && value !== undefined) {
+        setAntiShakeInterval(value)
+      }
+    } catch (e) {
+      addLog(`加载防手抖设置失败: ${e}`)
+    }
+  }, [addLog])
+
+  const handleAntiShakeIntervalChange = useCallback(async (interval) => {
+    try {
+      await invoke('set_setting', { key: 'anti_shake_interval', value: interval })
+      setAntiShakeInterval(interval)
+      addLog(`防手抖间隔已设置为: ${interval}ms`)
+    } catch (e) {
+      addLog(`保存防手抖设置失败: ${e}`)
     }
   }, [addLog])
 
@@ -1262,11 +1284,17 @@ function App() {
     setShowBatchShareModal(true)
   }, [selectedScreenshots])
 
-  const handleBatchShareExport = useCallback(async (format, imagesPerPage) => {
+  const handleBatchShareExport = useCallback(async (format, imagesPerPage, signal, sessionId) => {
     const screenshotData = await invoke('get_screenshots_by_ids', { ids: selectedScreenshots })
+
+    if (signal?.aborted) throw new Error('cancelled')
+
     const imagesBase64 = await invoke('read_images_for_export', {
-      paths: screenshotData.map(s => s.file_path)
+      paths: screenshotData.map(s => s.file_path),
+      sessionId
     })
+
+    if (signal?.aborted) throw new Error('cancelled')
 
     let content, ext
     if (format === 'html') {
@@ -1279,6 +1307,8 @@ function App() {
       ext = 'pdf'
     }
 
+    if (signal?.aborted) throw new Error('cancelled')
+
     const { save } = await import('@tauri-apps/plugin-dialog')
     const gameName = selectedGameRef.current?.display_title || selectedGameRef.current?.game_title || 'export'
     const filePath = await save({
@@ -1289,6 +1319,8 @@ function App() {
     if (!filePath) {
       throw new Error('用户取消了保存')
     }
+
+    if (signal?.aborted) throw new Error('cancelled')
 
     await invoke('save_export_file', { filePath, content, format })
     return filePath
@@ -1543,6 +1575,7 @@ function App() {
         }
 
         await loadScreenshotNotification()
+        await loadAntiShakeInterval()
         await loadWindowTitleMatch()
         await loadActiveHotkeys()
         await loadEmulatorKeywords()
@@ -2080,6 +2113,8 @@ function App() {
               onEmulatorKeywordsChange={handleEmulatorKeywordsChange}
               onSaveEmulatorKeywords={handleSaveEmulatorKeywords}
               emulatorKeywordsSaved={emulatorKeywordsSaved}
+              antiShakeInterval={antiShakeInterval}
+              onAntiShakeIntervalChange={handleAntiShakeIntervalChange}
               onNavigate={(view) => {
                 if (view === 'back') handleHistoryBack()
                 else if (view === 'time') switchToTimeView()

@@ -1770,7 +1770,7 @@ fn read_files_as_base64(paths: Vec<String>) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-async fn read_images_for_export(paths: Vec<String>, app: tauri::AppHandle) -> Result<Vec<String>, String> {
+async fn read_images_for_export(paths: Vec<String>, session_id: String, app: tauri::AppHandle) -> Result<Vec<String>, String> {
     use base64::{Engine as _, engine::general_purpose};
     use std::io::Cursor;
 
@@ -1811,7 +1811,8 @@ async fn read_images_for_export(paths: Vec<String>, app: tauri::AppHandle) -> Re
 
         let _ = app.emit("export-progress", serde_json::json!({
             "current": i + 1,
-            "total": total
+            "total": total,
+            "session_id": &session_id
         }));
     }
     Ok(results)
@@ -1985,7 +1986,7 @@ fn main() {
     let settings_cache = {
         let conn = db_arc.lock().unwrap();
         let mut cache = HashMap::new();
-        for key in &["shutter_sound", "screenshot_format", "screenshot_quality", "screenshot_notification", "theme", "sort_order", "game_sort_order", "backup_enabled", "data_dir", "emulator_keywords", "window_title_match", "active_hotkeys"] {
+        for key in &["shutter_sound", "screenshot_format", "screenshot_quality", "screenshot_notification", "theme", "sort_order", "game_sort_order", "backup_enabled", "data_dir", "emulator_keywords", "window_title_match", "active_hotkeys", "anti_shake_interval"] {
             if let Some(value) = db::get_setting(&conn, key) {
                 if *key == "emulator_keywords" {
                     let emulator_names: Vec<String> = value.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
@@ -2163,9 +2164,15 @@ fn main() {
                     match hotkey_rx.recv() {
                         Ok(hotkey) => {
                             {
+                                let anti_shake_ms: u64 = {
+                                    let cache = settings_cache_for_hotkey.read().unwrap();
+                                    cache.get("anti_shake_interval")
+                                        .and_then(|v| v.parse::<u64>().ok())
+                                        .unwrap_or(1000)
+                                };
                                 let mut last = last_hotkey_time.lock().unwrap();
-                                if last.elapsed().as_millis() < 100 {
-                                    println!("[去重] 忽略重复热键事件 ({:?})", hotkey);
+                                if last.elapsed().as_millis() < anti_shake_ms as u128 {
+                                    println!("[防手抖] 忽略重复热键事件 ({:?}), 距上次 {:?}ms < {}ms", hotkey, last.elapsed().as_millis(), anti_shake_ms);
                                     continue;
                                 }
                                 *last = Instant::now();

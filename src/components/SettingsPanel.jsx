@@ -51,6 +51,8 @@ export function SettingsPanel({
   onEmulatorKeywordsChange,
   onSaveEmulatorKeywords,
   emulatorKeywordsSaved,
+  antiShakeInterval,
+  onAntiShakeIntervalChange,
   onNavigate,
 }) {
   const [backupStatus, setBackupStatus] = useState('')
@@ -317,6 +319,48 @@ export function SettingsPanel({
             <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
               {t.settings.screenshot_notification_hint}
             </p>
+          </div>
+          
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
+            <h4 style={{ marginBottom: 8 }}>{t.settings.anti_shake}</h4>
+            <p style={{ color: theme.textMuted, fontSize: 12, marginBottom: 12 }}>
+              {t.settings.anti_shake_hint}
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[
+                { id: '0', name: t.settings.anti_shake_none },
+                { id: '500', name: t.settings.anti_shake_05 },
+                { id: '1000', name: t.settings.anti_shake_1 },
+              ].map(option => (
+                <button
+                  key={option.id}
+                  onClick={() => onAntiShakeIntervalChange(option.id)}
+                  style={{
+                    padding: '8px 16px',
+                    background: antiShakeInterval === option.id ? theme.primary : theme.accent,
+                    border: `1px solid ${antiShakeInterval === option.id ? theme.primary : theme.border}`,
+                    borderRadius: 6,
+                    color: antiShakeInterval === option.id ? '#fff' : theme.text,
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => {
+                    if (antiShakeInterval !== option.id) {
+                      e.currentTarget.style.background = theme.accent
+                      e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.1)'
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (antiShakeInterval !== option.id) {
+                      e.currentTarget.style.boxShadow = 'none'
+                    }
+                  }}
+                >
+                  {option.name}
+                </button>
+              ))}
+            </div>
           </div>
           
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
