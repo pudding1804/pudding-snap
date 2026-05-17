@@ -131,6 +131,7 @@ export function GameDetail({
   currentPage = 1,
   totalPages = 1,
   onBack,
+  onGoHome,
   onSortChange,
   onIconSizeChange,
   onToggleMultiSelect,
@@ -178,16 +179,29 @@ export function GameDetail({
         background: theme.bg,
         zIndex: 10
       }}>
-        <button
-          style={{ ...styles.btn, padding: '8px 12px' }}
-          {...btnEvents}
-          onClick={onBack}
-          title="返回游戏列表"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-        </button>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <button
+            style={{ ...styles.btn, padding: '8px 12px' }}
+            {...btnEvents}
+            onClick={onBack}
+            title="返回游戏列表"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            style={{ ...styles.btn, padding: '8px 12px' }}
+            {...btnEvents}
+            onClick={onGoHome}
+            title="返回游戏列表首页"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+          </button>
+        </div>
         <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
             width: 40,

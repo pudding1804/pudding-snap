@@ -1999,6 +1999,7 @@ function App() {
               currentPage={currentPage}
               totalPages={totalPages}
               onBack={handleHistoryBack}
+              onGoHome={backToGames}
               onSortChange={handleSortChange}
               onIconSizeChange={handleIconSizeChange}
               onToggleMultiSelect={handleToggleMultiSelectMode}
