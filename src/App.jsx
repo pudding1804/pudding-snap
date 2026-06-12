@@ -58,6 +58,9 @@ function App() {
   const [selectedScreenshot, setSelectedScreenshot] = useState(null)
   const [selectedScreenshotIndex, setSelectedScreenshotIndex] = useState(0)
   const [isModalClosing, setIsModalClosing] = useState(false)
+  const [allScreenshotIds, setAllScreenshotIds] = useState([])
+  const [globalScreenshotIndex, setGlobalScreenshotIndex] = useState(-1)
+  const [totalScreenshotCount, setTotalScreenshotCount] = useState(0)
   const [sortOrder, setSortOrder] = useState('desc')
   const [gameSortOrder, setGameSortOrder] = useState('time_desc')
   const [iconSize, setIconSize] = useState(() => {
@@ -219,6 +222,7 @@ function App() {
   const gridRef = useRef(null)
   const selectedScreenshotRef = useRef(null)
   const isRestoringRef = useRef(false)
+  const screenshotCacheRef = useRef(new Map())
 
   const { pushHistory, replaceTop, goBack, goForward, canGoBack, canGoForward, isNavigatingRef } = useNavigationHistory()
 
@@ -1108,28 +1112,107 @@ function App() {
     setTimeout(() => {
       setSelectedScreenshot(null)
       setIsModalClosing(false)
+      setAllScreenshotIds([])
+      setGlobalScreenshotIndex(-1)
+      setTotalScreenshotCount(0)
+      screenshotCacheRef.current.clear()
     }, 250)
   }, [])
 
-  const navigateScreenshot = useCallback((direction) => {
+  const openScreenshotModal = useCallback(async (screenshot, localIndex) => {
+    setSelectedScreenshot(screenshot)
+    setSelectedScreenshotIndex(localIndex)
+    setNoteText(screenshot.note || '')
+
+    try {
+      const gameId = currentView === 'game-detail' ? selectedGame?.game_id : null
+      let ids = await invoke('get_all_screenshot_ids', { gameId: gameId || null })
+      if (sortOrderRef.current === 'desc') {
+        ids = [...ids].reverse()
+      }
+      setAllScreenshotIds(ids)
+      setTotalScreenshotCount(ids.length)
+      const globalIdx = ids.indexOf(screenshot.id)
+      setGlobalScreenshotIndex(globalIdx >= 0 ? globalIdx : localIndex)
+    } catch (e) {
+      setAllScreenshotIds([])
+      setGlobalScreenshotIndex(localIndex)
+      setTotalScreenshotCount(screenshots.length)
+    }
+  }, [currentView, selectedGame, screenshots.length])
+
+  const preloadScreenshots = useCallback(async (ids) => {
+    const idsToFetch = ids.filter(id => !screenshotCacheRef.current.has(id))
+    if (idsToFetch.length === 0) return
+    try {
+      const results = await invoke('get_screenshots_by_ids', { ids: idsToFetch })
+      if (results) {
+        results.forEach(s => screenshotCacheRef.current.set(s.id, s))
+      }
+    } catch (e) {
+      addLog(`预加载截图失败: ${e}`)
+    }
+  }, [addLog])
+
+  const navigateScreenshot = useCallback(async (direction) => {
     if (!selectedScreenshot) return
 
-    const currentIndex = selectedScreenshotIndex
-    let newIndex = currentIndex
+    const currentGlobalIndex = globalScreenshotIndex
+    let newGlobalIndex = currentGlobalIndex
 
-    if (direction === 'prev' && currentIndex > 0) {
-      newIndex = currentIndex - 1
-    } else if (direction === 'next' && currentIndex < screenshots.length - 1) {
-      newIndex = currentIndex + 1
+    if (direction === 'prev' && currentGlobalIndex > 0) {
+      newGlobalIndex = currentGlobalIndex - 1
+    } else if (direction === 'next' && currentGlobalIndex < totalScreenshotCount - 1) {
+      newGlobalIndex = currentGlobalIndex + 1
     }
 
-    if (newIndex !== currentIndex) {
-      const newScreenshot = screenshots[newIndex]
-      setSelectedScreenshot(newScreenshot)
-      setSelectedScreenshotIndex(newIndex)
-      setNoteText(newScreenshot.note || '')
+    if (newGlobalIndex !== currentGlobalIndex) {
+      setGlobalScreenshotIndex(newGlobalIndex)
+
+      const targetId = allScreenshotIds[newGlobalIndex]
+      const localScreenshot = screenshots.find(s => s.id === targetId)
+
+      if (localScreenshot) {
+        const newLocalIndex = screenshots.indexOf(localScreenshot)
+        setSelectedScreenshot(localScreenshot)
+        setSelectedScreenshotIndex(newLocalIndex)
+        setNoteText(localScreenshot.note || '')
+      } else {
+        const cached = screenshotCacheRef.current.get(targetId)
+        if (cached) {
+          setSelectedScreenshot(cached)
+          setSelectedScreenshotIndex(-1)
+          setNoteText(cached.note || '')
+        } else {
+          try {
+            const batchIds = [targetId]
+            for (let offset = 1; offset <= 2; offset++) {
+              const prevId = allScreenshotIds[newGlobalIndex - offset]
+              if (prevId && !screenshots.find(s => s.id === prevId) && !screenshotCacheRef.current.has(prevId)) {
+                batchIds.push(prevId)
+              }
+              const nextId = allScreenshotIds[newGlobalIndex + offset]
+              if (nextId && !screenshots.find(s => s.id === nextId) && !screenshotCacheRef.current.has(nextId)) {
+                batchIds.push(nextId)
+              }
+            }
+            const results = await invoke('get_screenshots_by_ids', { ids: batchIds })
+            if (results && results.length > 0) {
+              results.forEach(s => screenshotCacheRef.current.set(s.id, s))
+              const target = results.find(s => s.id === targetId)
+              if (target) {
+                setSelectedScreenshot(target)
+                setSelectedScreenshotIndex(-1)
+                setNoteText(target.note || '')
+              }
+            }
+          } catch (e) {
+            addLog(`加载截图失败: ${e}`)
+          }
+        }
+      }
     }
-  }, [selectedScreenshot, selectedScreenshotIndex, screenshots])
+  }, [selectedScreenshot, globalScreenshotIndex, totalScreenshotCount, allScreenshotIds, screenshots, addLog])
 
   const saveNote = useCallback(async (id, note) => {
     try {
@@ -1886,9 +1969,7 @@ function App() {
                 if (isMultiSelectMode) {
                   toggleSelectScreenshot(id)
                 } else {
-                  setSelectedScreenshot(screenshots[index])
-                  setSelectedScreenshotIndex(index)
-                  setNoteText(screenshots[index].note || '')
+                  openScreenshotModal(screenshots[index], index)
                 }
               }}
               onLoadPage={(page) => { pushHistory(navStateRef.current); loadScreenshotsWithPagination(page, null) }}
@@ -2010,9 +2091,7 @@ function App() {
                 if (isMultiSelectMode) {
                   toggleSelectScreenshot(id)
                 } else {
-                  setSelectedScreenshot(screenshots[index])
-                  setSelectedScreenshotIndex(index)
-                  setNoteText(screenshots[index].note || '')
+                  openScreenshotModal(screenshots[index], index)
                 }
               }}
               onOpenSearch={() => {
@@ -2154,6 +2233,10 @@ function App() {
           screenshots={screenshots}
           noteText={noteText}
           isModalClosing={isModalClosing}
+          globalScreenshotIndex={globalScreenshotIndex}
+          totalScreenshotCount={totalScreenshotCount}
+          allScreenshotIds={allScreenshotIds}
+          onPreloadScreenshots={preloadScreenshots}
           onClose={closeModal}
           onNavigate={navigateScreenshot}
           onNoteChange={setNoteText}

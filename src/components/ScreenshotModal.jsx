@@ -26,6 +26,10 @@ export function ScreenshotModal({
   screenshots,
   noteText,
   isModalClosing,
+  globalScreenshotIndex,
+  totalScreenshotCount,
+  allScreenshotIds,
+  onPreloadScreenshots,
   onClose,
   onNavigate,
   onNoteChange,
@@ -52,7 +56,6 @@ export function ScreenshotModal({
     if (selectedScreenshot?.file_path) {
       setIsImageLoading(true)
       setShowFullImage(false)
-      setImageDimensions({ width: 0, height: 0 })
       
       const img = new window.Image()
       img.onload = () => {
@@ -67,27 +70,59 @@ export function ScreenshotModal({
     }
   }, [selectedScreenshot?.file_path])
 
+  const PRELOAD_RANGE = 3
+
   useEffect(() => {
-    if (selectedScreenshotIndex > 0 && screenshots[selectedScreenshotIndex - 1]) {
-      const prevImg = screenshots[selectedScreenshotIndex - 1]
-      const src = getImageSrc(prevImg.file_path)
-      if (!preloadedImages.current.has(src)) {
-        const img = new window.Image()
-        img.src = src
-        preloadedImages.current.add(src)
+    const effectiveIndex = globalScreenshotIndex >= 0 ? globalScreenshotIndex : selectedScreenshotIndex
+    const effectiveTotal = totalScreenshotCount > 0 ? totalScreenshotCount : screenshots.length
+
+    for (let offset = 1; offset <= PRELOAD_RANGE; offset++) {
+      if (effectiveIndex - offset >= 0) {
+        const prevLocalIdx = selectedScreenshotIndex - offset
+        if (prevLocalIdx >= 0 && screenshots[prevLocalIdx]) {
+          const src = getImageSrc(screenshots[prevLocalIdx].file_path)
+          if (!preloadedImages.current.has(src)) {
+            const img = new window.Image()
+            img.src = src
+            preloadedImages.current.add(src)
+          }
+        }
+      }
+
+      if (effectiveIndex + offset < effectiveTotal) {
+        const nextLocalIdx = selectedScreenshotIndex + offset
+        if (nextLocalIdx < screenshots.length && screenshots[nextLocalIdx]) {
+          const src = getImageSrc(screenshots[nextLocalIdx].file_path)
+          if (!preloadedImages.current.has(src)) {
+            const img = new window.Image()
+            img.src = src
+            preloadedImages.current.add(src)
+          }
+        }
       }
     }
-    
-    if (selectedScreenshotIndex < screenshots.length - 1 && screenshots[selectedScreenshotIndex + 1]) {
-      const nextImg = screenshots[selectedScreenshotIndex + 1]
-      const src = getImageSrc(nextImg.file_path)
-      if (!preloadedImages.current.has(src)) {
-        const img = new window.Image()
-        img.src = src
-        preloadedImages.current.add(src)
+
+    if (allScreenshotIds.length > 0 && onPreloadScreenshots) {
+      const idsToFetch = []
+      for (let offset = 1; offset <= PRELOAD_RANGE; offset++) {
+        if (effectiveIndex - offset >= 0) {
+          const prevId = allScreenshotIds[effectiveIndex - offset]
+          if (prevId && !screenshots.find(s => s.id === prevId)) {
+            idsToFetch.push(prevId)
+          }
+        }
+        if (effectiveIndex + offset < effectiveTotal) {
+          const nextId = allScreenshotIds[effectiveIndex + offset]
+          if (nextId && !screenshots.find(s => s.id === nextId)) {
+            idsToFetch.push(nextId)
+          }
+        }
+      }
+      if (idsToFetch.length > 0) {
+        onPreloadScreenshots(idsToFetch)
       }
     }
-  }, [selectedScreenshotIndex, screenshots])
+  }, [globalScreenshotIndex, selectedScreenshotIndex, screenshots, totalScreenshotCount, allScreenshotIds, onPreloadScreenshots])
 
   const calculateModalWidth = () => {
     const { width, height } = imageDimensions
@@ -124,14 +159,18 @@ export function ScreenshotModal({
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault()
-          if (selectedScreenshotIndex > 0) {
+          if ((globalScreenshotIndex >= 0 ? globalScreenshotIndex : selectedScreenshotIndex) > 0) {
             onNavigate('prev')
           }
           break
         case 'ArrowRight':
           e.preventDefault()
-          if (selectedScreenshotIndex < screenshots.length - 1) {
-            onNavigate('next')
+          {
+            const idx = globalScreenshotIndex >= 0 ? globalScreenshotIndex : selectedScreenshotIndex
+            const total = totalScreenshotCount > 0 ? totalScreenshotCount : screenshots.length
+            if (idx < total - 1) {
+              onNavigate('next')
+            }
           }
           break
         case 'Escape':
@@ -187,11 +226,13 @@ export function ScreenshotModal({
       e.preventDefault()
       
       if (e.deltaY > 0) {
-        if (selectedScreenshotIndex < screenshots.length - 1) {
+        const idx = globalScreenshotIndex >= 0 ? globalScreenshotIndex : selectedScreenshotIndex
+        const total = totalScreenshotCount > 0 ? totalScreenshotCount : screenshots.length
+        if (idx < total - 1) {
           onNavigate('next')
         }
       } else if (e.deltaY < 0) {
-        if (selectedScreenshotIndex > 0) {
+        if ((globalScreenshotIndex >= 0 ? globalScreenshotIndex : selectedScreenshotIndex) > 0) {
           onNavigate('prev')
         }
       }
@@ -205,7 +246,12 @@ export function ScreenshotModal({
       window.removeEventListener('mousedown', handleMouseDown)
       window.removeEventListener('wheel', handleWheel)
     }
-  }, [selectedScreenshotIndex, screenshots.length, selectedScreenshot, onNavigate, onClose, onDelete])
+  }, [globalScreenshotIndex, totalScreenshotCount, selectedScreenshot, onNavigate, onClose, onDelete])
+
+  const effectiveGlobalIndex = globalScreenshotIndex >= 0 ? globalScreenshotIndex : selectedScreenshotIndex
+  const effectiveTotalCount = totalScreenshotCount > 0 ? totalScreenshotCount : screenshots.length
+  const canGoPrev = effectiveGlobalIndex > 0
+  const canGoNext = effectiveGlobalIndex < effectiveTotalCount - 1
 
   if (!selectedScreenshot) return null
 
@@ -247,7 +293,7 @@ export function ScreenshotModal({
             </span>
             <span style={{ fontSize: 12, color: theme.textMuted }}>|</span>
             <span style={{ fontSize: 12, color: theme.textMuted }}>
-              {imageDimensions.width} × {imageDimensions.height}
+              {imageDimensions.width > 0 ? `${imageDimensions.width} × ${imageDimensions.height}` : ''}
             </span>
           </div>
           <button style={styles.closeBtn} onClick={onClose}>×</button>
@@ -325,29 +371,29 @@ export function ScreenshotModal({
                 width: 28,
                 height: 28,
                 borderRadius: 6,
-                background: selectedScreenshotIndex > 0 ? theme.accent : 'transparent',
-                border: `1px solid ${selectedScreenshotIndex > 0 ? theme.border : 'transparent'}`,
-                color: selectedScreenshotIndex > 0 ? theme.text : theme.textMuted,
-                cursor: selectedScreenshotIndex > 0 ? 'pointer' : 'default',
+                background: canGoPrev ? theme.accent : 'transparent',
+                border: `1px solid ${canGoPrev ? theme.border : 'transparent'}`,
+                color: canGoPrev ? theme.text : theme.textMuted,
+                cursor: canGoPrev ? 'pointer' : 'default',
                 fontSize: 14,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'all 0.15s',
-                opacity: selectedScreenshotIndex > 0 ? 1 : 0.4
+                opacity: canGoPrev ? 1 : 0.4
               }}
               onMouseEnter={e => {
-                if (selectedScreenshotIndex > 0) {
+                if (canGoPrev) {
                   e.currentTarget.style.background = theme.border
                 }
               }}
               onMouseLeave={e => {
-                if (selectedScreenshotIndex > 0) {
+                if (canGoPrev) {
                   e.currentTarget.style.background = theme.accent
                 }
               }}
               onClick={() => onNavigate('prev')}
-              disabled={selectedScreenshotIndex === 0}
+              disabled={!canGoPrev}
             >
               ‹
             </button>
@@ -358,36 +404,36 @@ export function ScreenshotModal({
               textAlign: 'center',
               fontVariantNumeric: 'tabular-nums'
             }}>
-              {selectedScreenshotIndex + 1} / {screenshots.length}
+              {effectiveGlobalIndex + 1} / {effectiveTotalCount}
             </span>
             <button
               style={{
                 width: 28,
                 height: 28,
                 borderRadius: 6,
-                background: selectedScreenshotIndex < screenshots.length - 1 ? theme.accent : 'transparent',
-                border: `1px solid ${selectedScreenshotIndex < screenshots.length - 1 ? theme.border : 'transparent'}`,
-                color: selectedScreenshotIndex < screenshots.length - 1 ? theme.text : theme.textMuted,
-                cursor: selectedScreenshotIndex < screenshots.length - 1 ? 'pointer' : 'default',
+                background: canGoNext ? theme.accent : 'transparent',
+                border: `1px solid ${canGoNext ? theme.border : 'transparent'}`,
+                color: canGoNext ? theme.text : theme.textMuted,
+                cursor: canGoNext ? 'pointer' : 'default',
                 fontSize: 14,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'all 0.15s',
-                opacity: selectedScreenshotIndex < screenshots.length - 1 ? 1 : 0.4
+                opacity: canGoNext ? 1 : 0.4
               }}
               onMouseEnter={e => {
-                if (selectedScreenshotIndex < screenshots.length - 1) {
+                if (canGoNext) {
                   e.currentTarget.style.background = theme.border
                 }
               }}
               onMouseLeave={e => {
-                if (selectedScreenshotIndex < screenshots.length - 1) {
+                if (canGoNext) {
                   e.currentTarget.style.background = theme.accent
                 }
               }}
               onClick={() => onNavigate('next')}
-              disabled={selectedScreenshotIndex === screenshots.length - 1}
+              disabled={!canGoNext}
             >
               ›
             </button>
