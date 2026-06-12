@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { formatGameTitle } from '../utils'
 
@@ -41,12 +41,31 @@ export function ScreenshotModal({
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 })
   const [isImageLoading, setIsImageLoading] = useState(false)
   const [showFullImage, setShowFullImage] = useState(false)
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+  const [windowHeight, setWindowHeight] = useState(window.innerHeight)
   const imgRef = useRef(null)
   const preloadedImages = useRef(new Set())
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [showRestoreBtn, setShowRestoreBtn] = useState(false)
+  const [cursorVisible, setCursorVisible] = useState(false)
+  const fullscreenOverlayRef = useRef(null)
+  const hideRestoreTimerRef = useRef(null)
+  const cursorTimerRef = useRef(null)
+  const isFullscreenRef = useRef(false)
 
   const thumbnailSrc = useMemo(() => {
     return selectedScreenshot?.thumbnail_path ? getImageSrc(selectedScreenshot.thumbnail_path) : null
   }, [selectedScreenshot?.thumbnail_path])
+
+  // Track window dimensions to recalculate modal width on fullscreen exit
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth)
+      setWindowHeight(window.innerHeight)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const fullImageSrc = useMemo(() => {
     return selectedScreenshot?.file_path ? getImageSrc(selectedScreenshot.file_path) : null
@@ -124,12 +143,100 @@ export function ScreenshotModal({
     }
   }, [globalScreenshotIndex, selectedScreenshotIndex, screenshots, totalScreenshotCount, allScreenshotIds, onPreloadScreenshots])
 
+  // Fullscreen functions
+  const enterFullscreen = useCallback(() => {
+    setIsFullscreen(true)
+    setCursorVisible(true)
+    clearTimeout(cursorTimerRef.current)
+    cursorTimerRef.current = setTimeout(() => setCursorVisible(false), 3000)
+  }, [])
+
+  const exitFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {})
+    }
+    setIsFullscreen(false)
+    setShowRestoreBtn(false)
+    setCursorVisible(false)
+    clearTimeout(hideRestoreTimerRef.current)
+    clearTimeout(cursorTimerRef.current)
+  }, [])
+
+  // Sync isFullscreenRef
+  useEffect(() => {
+    isFullscreenRef.current = isFullscreen
+  }, [isFullscreen])
+
+  // Request W3C fullscreen after overlay renders
+  useEffect(() => {
+    if (isFullscreen) {
+      requestAnimationFrame(() => {
+        const el = fullscreenOverlayRef.current
+        if (el && !document.fullscreenElement) {
+          el.requestFullscreen().catch(() => {})
+        }
+      })
+    }
+  }, [isFullscreen])
+
+  // Listen for fullscreen changes (e.g., browser native Esc exit)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && isFullscreenRef.current) {
+        setIsFullscreen(false)
+        setShowRestoreBtn(false)
+        setCursorVisible(false)
+        clearTimeout(hideRestoreTimerRef.current)
+        clearTimeout(cursorTimerRef.current)
+      }
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
+  // Mouse tracking in fullscreen: cursor auto-hide + restore button in top-right
+  useEffect(() => {
+    if (!isFullscreen) return
+
+    const handleMouseMove = (e) => {
+      setCursorVisible(true)
+      clearTimeout(cursorTimerRef.current)
+      cursorTimerRef.current = setTimeout(() => setCursorVisible(false), 3000)
+
+      const { x, y } = e
+      const threshold = 80
+      if (x > window.innerWidth - threshold && y < threshold) {
+        setShowRestoreBtn(true)
+        clearTimeout(hideRestoreTimerRef.current)
+      } else {
+        clearTimeout(hideRestoreTimerRef.current)
+        hideRestoreTimerRef.current = setTimeout(() => setShowRestoreBtn(false), 1500)
+      }
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      clearTimeout(cursorTimerRef.current)
+      clearTimeout(hideRestoreTimerRef.current)
+    }
+  }, [isFullscreen])
+
+  // Cleanup fullscreen on unmount
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {})
+      }
+    }
+  }, [])
+
   const calculateModalWidth = () => {
     const { width, height } = imageDimensions
     if (width === 0 || height === 0) return 1200
     
-    const maxHeight = window.innerHeight * 0.75
-    const maxWidth = window.innerWidth * 0.95
+    const maxHeight = windowHeight * 0.75
+    const maxWidth = windowWidth * 0.95
     
     const aspectRatio = width / height
     
@@ -173,7 +280,29 @@ export function ScreenshotModal({
             }
           }
           break
+        case 'Enter':
+          if (e.altKey) {
+            e.preventDefault()
+            if (isFullscreenRef.current) {
+              exitFullscreen()
+            } else {
+              enterFullscreen()
+            }
+          }
+          break
         case 'Escape':
+          if (document.fullscreenElement) {
+            // Browser will handle exiting fullscreen natively
+            // Don't close the modal - second Esc will close it
+            return
+          }
+          e.preventDefault()
+          if (isFullscreenRef.current) {
+            exitFullscreen()
+          } else {
+            onClose()
+          }
+          break
         case 'Backspace':
           e.preventDefault()
           onClose()
@@ -246,7 +375,7 @@ export function ScreenshotModal({
       window.removeEventListener('mousedown', handleMouseDown)
       window.removeEventListener('wheel', handleWheel)
     }
-  }, [globalScreenshotIndex, totalScreenshotCount, selectedScreenshot, onNavigate, onClose, onDelete])
+  }, [globalScreenshotIndex, totalScreenshotCount, selectedScreenshot, onNavigate, onClose, onDelete, enterFullscreen, exitFullscreen])
 
   const effectiveGlobalIndex = globalScreenshotIndex >= 0 ? globalScreenshotIndex : selectedScreenshotIndex
   const effectiveTotalCount = totalScreenshotCount > 0 ? totalScreenshotCount : screenshots.length
@@ -256,13 +385,81 @@ export function ScreenshotModal({
   if (!selectedScreenshot) return null
 
   return (
-    <div 
-      style={{
-        ...styles.modal,
-        animation: isModalClosing ? 'modalFadeOut 0.25s ease-in forwards' : 'modalFadeIn 0.3s ease-out'
-      }} 
-      onClick={onClose}
-    >
+    <>
+      {/* Fullscreen overlay - always in DOM for W3C fullscreen API, visibility controlled */}
+      <div 
+        ref={fullscreenOverlayRef}
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: '#000',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+          cursor: cursorVisible ? 'default' : 'none',
+          opacity: isFullscreen ? 1 : 0,
+          pointerEvents: isFullscreen ? 'auto' : 'none',
+          transition: isFullscreen ? 'opacity 0.3s ease-in-out' : 'none',
+        }}
+      >
+        {selectedScreenshot && (
+          <img 
+            src={fullImageSrc} 
+            alt="截图" 
+            style={{ 
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              userSelect: 'none',
+            }} 
+          />
+        )}
+        {isFullscreen && showRestoreBtn && (
+          <button
+            onClick={exitFullscreen}
+            style={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              background: 'rgba(255,255,255,0.45)',
+              border: 'none',
+              color: '#fff',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background 0.15s, opacity 0.3s',
+              opacity: showRestoreBtn ? 1 : 0,
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.65)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.45)'}
+            title="退出全屏 (Alt+Enter)"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 14h3v3"/>
+              <path d="M20 10h-3V7"/>
+              <path d="M14 21h3a2 2 0 0 0 2-2v-3"/>
+              <path d="M10 3H7a2 2 0 0 0-2 2v3"/>
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Normal modal */}
+      <div 
+        style={{
+          ...styles.modal,
+          animation: isModalClosing ? 'modalFadeOut 0.25s ease-in forwards' : 'modalFadeIn 0.3s ease-out'
+        }} 
+        onClick={onClose}
+      >
       <div 
         style={{
           ...styles.modalContent,
@@ -296,7 +493,41 @@ export function ScreenshotModal({
               {imageDimensions.width > 0 ? `${imageDimensions.width} × ${imageDimensions.height}` : ''}
             </span>
           </div>
-          <button style={styles.closeBtn} onClick={onClose}>×</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button
+              onClick={enterFullscreen}
+              style={{
+                width: 28,
+                height: 28,
+                background: 'transparent',
+                border: 'none',
+                color: theme.textMuted,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 4,
+                transition: 'color 0.15s, background 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = theme.text
+                e.currentTarget.style.background = theme.accent
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = theme.textMuted
+                e.currentTarget.style.background = 'transparent'
+              }}
+              title="全屏 (Alt+Enter)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
+                <path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
+                <path d="M3 16v3a2 2 0 0 0 2 2h3"/>
+                <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+              </svg>
+            </button>
+            <button style={styles.closeBtn} onClick={onClose}>×</button>
+          </div>
         </div>
         
         <div style={{ 
@@ -572,5 +803,6 @@ export function ScreenshotModal({
         }
       `}</style>
     </div>
+    </>
   )
 }
